@@ -151,6 +151,18 @@ class AbstractParser(b3.parser.Parser):
     #                                                                                                                  #
     ####################################################################################################################
 
+    @property
+    def _connectingSlots(self):
+        """
+        Client slots currently being connected (one list per parser instance: used by the q3,
+        oa081 and smg11 parsers to avoid connecting the same slot twice at once).
+        """
+        try:
+            return self.__connecting_slots
+        except AttributeError:
+            self.__connecting_slots = []
+            return self.__connecting_slots
+
     def startup(self):
         """
         Called after the parser is created before run().

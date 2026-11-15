@@ -28,6 +28,7 @@ creates a connection to a Homefront gameserver
 """
 
 import asyncore
+from b3.parsers.frostbite2.protocol import ThreadSafeDispatcherWithSend
 import socket
 import time
 
@@ -147,10 +148,10 @@ class Packet(object):
         return "[Message: %s], [Channel: %s], [Data: %s]" % (self.getMessageTypeAsStr(), self.getChannelTypeAsStr(), self.data)
 
 
-class Client(asyncore.dispatcher_with_send):
+class Client(ThreadSafeDispatcherWithSend):
 
     def __init__(self, console, host, port, password, keepalive=False):
-        asyncore.dispatcher_with_send.__init__(self)
+        ThreadSafeDispatcherWithSend.__init__(self)
         self.console = console
         self._host = host
         self._port = port

@@ -141,6 +141,10 @@ class BattleyeServer(Thread):
 
         self.pending_command = None             # holds the current command we are waitting a response for
         self.pending_command_response = None    # holds the current command full response once received
+        self.pending_command_seq = None         # BattlEye sequence number the current command was sent with
+        self._pending_command_token = None      # identifies the command currently waited for (see writing_thread)
+        self._pending_lock = Lock()             # protects the pending_command_* attributes
+        self._multi_packet_seq = None           # sequence number of the multi-packet response being reassembled
         self.command_timeout = 3                # after how long should the thread waiting for the command response
                                                 # decides that no response will ever come
 
@@ -252,9 +256,9 @@ class BattleyeServer(Thread):
                         pass
                     self.crc_error_count = 0
                     if data[0:1] == b'\x00' and len(data) >= 3:
-                        data = self._handle_multipacket_part(data[1], data[2], data[3:])
+                        data = self._handle_multipacket_part(data[1], data[2], data[3:], sequence)
                     if data:
-                        self._on_command_response(data.decode('UTF-8', 'replace'))
+                        self._on_command_response(data.decode('UTF-8', 'replace'), sequence)
                 elif tp == 255:
                     #CRC Error
                     self.crc_error_count += 1
@@ -271,8 +275,16 @@ class BattleyeServer(Thread):
         self.write_seq = 0
         self.last_write_time = time.time()
 
-        def enqueue_packet(data):
-            self.write_queue.append(self.encode_packet(1, self.write_seq, data))
+        def enqueue_packet(data, token=None):
+            seq = self.write_seq
+            if token is not None:
+                # remember which sequence number the waited-for command is sent with so its response can be
+                # told apart from late responses to previous (timed out) commands. This must happen before the
+                # packet is queued for sending, or the response could arrive before we know its sequence number
+                with self._pending_lock:
+                    if token is self._pending_command_token:
+                        self.pending_command_seq = seq
+            self.write_queue.append(self.encode_packet(1, seq, data))
             self.last_write_time = time.time()
             self.write_seq += 1
             if self.write_seq > 255:
@@ -280,7 +292,12 @@ class BattleyeServer(Thread):
 
         while self._isconnected and not self.isStopped():
             try:
-                enqueue_packet(self.command_queue.get(timeout=2))
+                item = self.command_queue.get(timeout=2)
+                if isinstance(item, tuple):
+                    # (command, token) : a command whose response is waited for
+                    enqueue_packet(item[0], item[1])
+                else:
+                    enqueue_packet(item)
             except queue.Empty:
                 if self.last_write_time + 30 < time.time():
                     enqueue_packet(None) # keep connection alive
@@ -364,9 +381,15 @@ class BattleyeServer(Thread):
         Send command to the BattlEye server in a synchronous way.
         Calling this method will block until we receive the command response from the server or until we reach the timeout.
         """
-        self.pending_command = cmd
-        self.pending_command_response = None
-        self._command_no_wait(cmd)
+        token = object()
+        with self._pending_lock:
+            self.pending_command = cmd
+            self.pending_command_response = None
+            self.pending_command_seq = None
+            self._pending_command_token = token
+            # clear the event before sending so that a fast response cannot be missed
+            self._command_reply_event.clear()
+        self.command_queue.put((cmd, token))
         response = self._wait_for_response(timeout)
         if response == "Unknown command":
             raise CommandFailedError("unknown command: %s" % cmd)
@@ -383,14 +406,18 @@ class BattleyeServer(Thread):
             timeout = self.command_timeout
 
         self.getLogger().debug("waiting response for command: %s " % self.pending_command)
-        self._command_reply_event.clear()
         self._command_reply_event.wait(timeout)
 
-        cmd = self.pending_command
-        self.pending_command = None
+        with self._pending_lock:
+            cmd = self.pending_command
+            self.pending_command = None
 
-        response = self.pending_command_response
-        self.pending_command_response = None
+            response = self.pending_command_response
+            self.pending_command_response = None
+
+            # from now on, any response to this command is stale and must be dropped
+            self.pending_command_seq = None
+            self._pending_command_token = None
 
         if not response:
             # then we stopped waitting because the timeout is reached
@@ -451,10 +478,14 @@ class BattleyeServer(Thread):
         #self.getLogger().debug("Request is type : %s" % type(request))
         return request
 
-    def _handle_multipacket_part(self, total_num_packets, current_packet_index, data):
+    def _handle_multipacket_part(self, total_num_packets, current_packet_index, data, sequence=None):
         """
         Command responses can be received over multiple packest.
         """
+        if sequence is not None and sequence != self._multi_packet_seq:
+            # parts of a different command response: drop whatever was left from a previous one
+            self._multi_packet_response = {}
+            self._multi_packet_seq = sequence
         self._multi_packet_response[current_packet_index] = data
         if current_packet_index == total_num_packets - 1:
             # we got all the packets that make a full command response
@@ -484,13 +515,25 @@ class BattleyeServer(Thread):
         for func in self.observers:
             func(message)
 
-    def _on_command_response(self, message):
+    def _on_command_response(self, message, sequence=None):
         """
         We received a full Command response message (one or more type 1 BattlEye packets).
+        :param message: the response
+        :param sequence: the BattlEye sequence number of the response packet(s)
         """
-        self.getLogger().debug("received BattlEye command response : %s" % message)
-        self.pending_command_response = message
-        self._command_reply_event.set() # notify the waitting thread that a response is ready
+        self.getLogger().debug("received BattlEye command response #%s : %s" % (sequence, message))
+        with self._pending_lock:
+            if self._pending_command_token is None:
+                self.getLogger().debug("dropping BattlEye command response #%s: no command is waiting for "
+                                       "a response" % sequence)
+                return
+            if sequence is not None and sequence != self.pending_command_seq:
+                # most likely the late response to a command which timed out
+                self.getLogger().debug("dropping BattlEye command response #%s: waiting for response #%s" %
+                                       (sequence, self.pending_command_seq))
+                return
+            self.pending_command_response = message
+            self._command_reply_event.set() # notify the waitting thread that a response is ready
 
     def __getattr__(self, name):
         if name == 'connected':

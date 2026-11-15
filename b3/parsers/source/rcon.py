@@ -22,6 +22,8 @@
 #                                                                     #
 # ################################################################### #
 
+import re
+
 from queue import Queue
 from socket import timeout
 from threading import Event
@@ -34,6 +36,43 @@ from b3.lib.sourcelib.SourceRcon import SERVERDATA_AUTH
 
 __version__ = '1.3'
 __author__ = 'Courgette'
+
+########################################################################################################################
+##                                                                                                                    ##
+##  RCON ARGUMENTS SANITIZATION                                                                                       ##
+##                                                                                                                    ##
+########################################################################################################################
+
+# control characters (including CR/LF which end a command) and DEL
+_RE_RCON_CONTROL_CHARS = re.compile(r'[\x00-\x1f\x7f]')
+
+
+def sanitize_rcon_arg(value):
+    """
+    Make a piece of text safe to be interpolated in a Source engine rcon command line.
+
+    The Source engine command buffer treats ';' and line breaks (outside of quotes) as command separators and '"'
+    starts/ends a quoted argument. Text coming from players (names, chat), from config files or from the web (RSS
+    headlines...) must never be able to end the current command and inject another one (sm_rcon, rcon_password,
+    exec, quit...). Therefore:
+     - '"' is replaced with "'"
+     - ';' is replaced with ':'
+     - control characters (CR, LF, TAB, NUL...) are replaced with a space
+    The result can be used both as an unquoted trailing argument and inside double quotes.
+    """
+    if value is None:
+        return ''
+    text = str(value)
+    text = text.replace('"', "'").replace(';', ':')
+    return _RE_RCON_CONTROL_CHARS.sub(' ', text)
+
+
+def quote_rcon_arg(value):
+    """
+    Sanitize the given value (see sanitize_rcon_arg) and enclose it in double quotes.
+    """
+    return '"%s"' % sanitize_rcon_arg(value)
+
 
 ########################################################################################################################
 ##                                                                                                                    ##

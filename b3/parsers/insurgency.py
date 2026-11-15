@@ -39,6 +39,8 @@ from b3.functions import time2minutes
 from b3.functions import getStuffSoundingLike
 from b3.parser import Parser
 from b3.parsers.source.rcon import Rcon
+from b3.parsers.source.rcon import quote_rcon_arg
+from b3.parsers.source.rcon import sanitize_rcon_arg
 
 __author__ = 'Courgette'
 __version__ = '0.17'
@@ -655,7 +657,7 @@ class InsurgencyParser(Parser):
             else:
                 msg = prefixText([self.msgPrefix], msg)
             for line in self.getWrap(msg):
-                self.output.write(template % line)
+                self.output.write(template % sanitize_rcon_arg(line))
 
     def saybig(self, msg, *args):
         """
@@ -670,7 +672,7 @@ class InsurgencyParser(Parser):
             else:
                 msg = prefixText([self.msgPrefix], msg)
             for line in self.getWrap(msg):
-                self.output.write(template % line)
+                self.output.write(template % sanitize_rcon_arg(line))
 
     def message(self, client, msg, *args):
         """
@@ -687,7 +689,8 @@ class InsurgencyParser(Parser):
                 else:
                     msg = prefixText([self.msgPrefix], msg)
                 for line in self.getWrap(msg):
-                    self.output.write(template % {'guid': client.guid, 'msg': line})
+                    self.output.write(template % {'guid': sanitize_rcon_arg(client.guid),
+                                                  'msg': sanitize_rcon_arg(line)})
 
     def kick(self, client, reason='', admin=None, silent=False, *kwargs):
         """
@@ -863,7 +866,7 @@ class InsurgencyParser(Parser):
         if next_map:
             self.saybig('Changing to next map : %s' % next_map)
             time.sleep(1)
-            self.output.write('map %s' % next_map)
+            self.output.write('map %s' % sanitize_rcon_arg(next_map))
 
     def changeMap(self, map_name, gamemode_name=''):
         """
@@ -876,7 +879,7 @@ class InsurgencyParser(Parser):
         else:
             self.saybig('Changing map to: %s - %s' % (map_name, gamemode_name))
             time.sleep(5)
-            self.output.write('changelevel %s %s' % (map_name, gamemode_name))
+            self.output.write('changelevel %s %s' % (sanitize_rcon_arg(map_name), sanitize_rcon_arg(gamemode_name)))
 
     def checkGameMode(self, map_name, gamemode_name):
         if gamemode_name in ('hunt',):
@@ -1089,6 +1092,9 @@ class InsurgencyParser(Parser):
         if not cvarName:
             self.warning('trying to query empty cvar %r' % cvarName)
             return None
+        if not re.match(r'^[a-z0-9_.]+$', cvarName, re.I):
+            self.error('%r is not a valid cvar name' % cvarName)
+            return None
         rv = self.output.write(cvarName)
         m = re.search(RE_CVAR, rv)
         if m:
@@ -1118,9 +1124,9 @@ class InsurgencyParser(Parser):
             self.warning("trying to kick %s which has no slot id" % client)
         else:
             if reason:
-                self.output.write('sm_kick #%s %s' % (client.cid, reason))
+                self.output.write('sm_kick #%s %s' % (sanitize_rcon_arg(client.cid), sanitize_rcon_arg(reason)))
             else:
-                self.output.write("sm_kick #%s" % client.cid)
+                self.output.write("sm_kick #%s" % sanitize_rcon_arg(client.cid))
             client.disconnect()
 
     def do_ban(self, client, reason=None):
@@ -1131,9 +1137,9 @@ class InsurgencyParser(Parser):
         """
         # sm_addban <time> <steamid> [reason]
         if reason:
-            self.output.write('sm_addban %s "%s" %s' % (0, client.guid, reason))
+            self.output.write('sm_addban %s %s %s' % (0, quote_rcon_arg(client.guid), sanitize_rcon_arg(reason)))
         else:
-            self.output.write('sm_addban %s "%s"' % (0, client.guid))
+            self.output.write('sm_addban %s %s' % (0, quote_rcon_arg(client.guid)))
         self.do_kick(client, reason)
 
     def do_tempban(self, client, duration=2, reason=None):
@@ -1144,10 +1150,12 @@ class InsurgencyParser(Parser):
         :param reason: The reason for the tempban
         """
         # sm_addban <time> <steamid> [reason]
+        # with SourceMod a ban duration of 0 minutes means a PERMANENT ban: a tempban must last 1 minute at least
+        minutes = max(1, int(time2minutes(duration)))
         if reason:
-            self.output.write('sm_addban %s "%s" %s' % (int(time2minutes(duration)), client.guid, reason))
+            self.output.write('sm_addban %s %s %s' % (minutes, quote_rcon_arg(client.guid), sanitize_rcon_arg(reason)))
         else:
-            self.output.write('sm_addban %s "%s"' % (int(time2minutes(duration)), client.guid))
+            self.output.write('sm_addban %s %s' % (minutes, quote_rcon_arg(client.guid)))
         self.do_kick(client, reason)
 
     def do_unban_by_steamid(self, client):
@@ -1156,7 +1164,7 @@ class InsurgencyParser(Parser):
         :param client: The client to unban
         """
         # sm_unban <steamid|ip>
-        self.output.write('sm_unban "%s"' % client.guid)
+        self.output.write('sm_unban %s' % quote_rcon_arg(client.guid))
 
     def do_unban_by_ip(self, client):
         """
@@ -1164,7 +1172,7 @@ class InsurgencyParser(Parser):
         :param client: The client to unban
         """
         # sm_unban <steamid|ip>
-        self.output.write('sm_unban %s' % client.ip)
+        self.output.write('sm_unban %s' % sanitize_rcon_arg(client.ip))
 
     def is_sourcemod_installed(self):
         """

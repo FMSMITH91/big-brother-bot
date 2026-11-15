@@ -68,11 +68,15 @@ class CustomcommandsPlugin(Plugin):
             self._adminPlugin.unregisterCommand(cmd_name)
 
         # register our custom commands
-        for group_name in ("guest", "user", "regular", "mod", "admin", "fulladmin", "senioradmin", "superadmin"):
-            if not self.config.has_section("%s commands" % group_name):
-                self.debug("no section [%s commands] found in config file" % group_name)
+        # the group keyword of regular players is 'reg' (the section [regular commands] is accepted too)
+        for section_group_name, group_keyword in (("guest", "guest"), ("user", "user"), ("reg", "reg"),
+                                                  ("regular", "reg"), ("mod", "mod"), ("admin", "admin"),
+                                                  ("fulladmin", "fulladmin"), ("senioradmin", "senioradmin"),
+                                                  ("superadmin", "superadmin")):
+            if not self.config.has_section("%s commands" % section_group_name):
+                self.debug("no section [%s commands] found in config file" % section_group_name)
             else:
-                self._load_conf_commands_for_group(group_name)
+                self._load_conf_commands_for_group(group_keyword, section_group_name)
 
     def onStartup(self):
         """
@@ -96,12 +100,16 @@ class CustomcommandsPlugin(Plugin):
     #                                                                                                                  #
     ####################################################################################################################
 
-    def _load_conf_commands_for_group(self, b3_group_name):
+    def _load_conf_commands_for_group(self, b3_group_name, section_group_name=None):
         """
         load custom commands defined in the config file for a given b3 group
+        :param b3_group_name: the keyword of the B3 group required to use the commands
+        :param section_group_name: the group name used in the config section name (defaults to b3_group_name)
         """
+        if section_group_name is None:
+            section_group_name = b3_group_name
         self.debug("loading custom commands for group %s" % b3_group_name)
-        for command_name in self.config.options("%s commands" % b3_group_name):
+        for command_name in self.config.options("%s commands" % section_group_name):
             self.debug("loading command %r" % command_name)
 
             try:
@@ -111,7 +119,7 @@ class CustomcommandsPlugin(Plugin):
                 self.error(str(err))
                 continue
 
-            command_template = self.config.get("%s commands" % b3_group_name, command_name)
+            command_template = self.config.get("%s commands" % section_group_name, command_name)
 
             try:
                 self._validate_cmd_template(command_template)
@@ -204,7 +212,7 @@ class CustomcommandsPlugin(Plugin):
         m = _re_arg_opt.search(command)
         if m:
             replacement = data or m.group(1)
-            command = _re_arg_opt.sub(replacement, command)
+            command = _re_arg_opt.sub(lambda _: replacement, command)
 
         # <ARG:FIND_MAP>
         if "<ARG:FIND_MAP>" in command:
@@ -240,7 +248,7 @@ class CustomcommandsPlugin(Plugin):
                     replacement = "@%s" % target_client.id
                 else:
                     raise AssertionError("unsupported placeholder %r" % m.group(0))
-                command = _re_find_player.sub(replacement, command)
+                command = _re_find_player.sub(lambda _: replacement, command)
             else:
                 return
 
@@ -273,7 +281,7 @@ class CustomcommandsPlugin(Plugin):
                 replacement = "@%s" % killer.id
             else:
                 raise AssertionError("unsupported placeholder %r" % m.group(0))
-            command = _re_last_killer.sub(replacement, command)
+            command = _re_last_killer.sub(lambda _: replacement, command)
 
         # <LAST_VICTIM:*>
         _re_last_victim = re.compile("<LAST_VICTIM:(PID|PBID|GUID|NAME|EXACTNAME|B3ID)>")
@@ -296,7 +304,7 @@ class CustomcommandsPlugin(Plugin):
                 replacement = "@%s" % victim.id
             else:
                 raise AssertionError("unsupported placeholder %r" % m.group(0))
-            command = _re_last_victim.sub(replacement, command)
+            command = _re_last_victim.sub(lambda _: replacement, command)
 
         # <PLAYER:ADMINGROUP_*>
         if "<PLAYER:ADMINGROUP_SHORT>" in command:

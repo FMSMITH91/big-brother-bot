@@ -198,6 +198,28 @@ class Test_get_PlayerStats(XlrstatsTestCase):
         self.assertEqual("", s2.fixed_name)
         self.assertEqual("", s2.id_token)
 
+    def test_kfactor_counts_deaths(self):
+        # GIVEN a veteran whose confrontations exceed Kswitch_confrontations only when deaths are counted
+        self.p1.says("!register")
+        s = self.p.get_PlayerStats(client=self.p1)
+        s.kills = 1
+        s.deaths = self.p.Kswitch_confrontations + 10
+        self.p.save_Stat(s)
+        # WHEN
+        s2 = self.p.get_PlayerStats(client=self.p1)
+        # THEN
+        self.assertEqual(self.p.Kswitch_confrontations + 10, s2.deaths)
+        self.assertEqual(self.p.Kfactor_low, s2.Kfactor)
+
+    def test_kfactor_high_for_newbie(self):
+        self.p1.says("!register")
+        s = self.p.get_PlayerStats(client=self.p1)
+        s.kills = 1
+        s.deaths = 1
+        self.p.save_Stat(s)
+        s2 = self.p.get_PlayerStats(client=self.p1)
+        self.assertEqual(self.p.Kfactor_high, s2.Kfactor)
+
 
 class Test_cmd_xlrstats(XlrstatsTestCase):
 

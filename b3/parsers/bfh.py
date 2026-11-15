@@ -192,15 +192,15 @@ class BfhParser(AbstractParser):
         'roundStartPlayerCount',          # <numPlayers>  Set minimum numbers of players to go from warm-up to pre-/inround
         'roundWarmupTimeout',             # <time>  Set time to transition in to game round after player requirement has been met
         'roundTimeLimit',                 # <modifier: percent>  Set percentage of the default time limit value
-        'roundPlayersReadyBypassTimer'    # <time> amount of seconds after which the ready screen is bypassed
-        'roundPlayersReadyMinCount'       # <count> minimum number of players per team which have to confirm ready state
-        'roundPlayersReadyPercent'        # <modifier:percent>
+        'roundPlayersReadyBypassTimer',   # <time> amount of seconds after which the ready screen is bypassed
+        'roundPlayersReadyMinCount',      # <count> minimum number of players per team which have to confirm ready state
+        'roundPlayersReadyPercent',       # <modifier:percent>
         'serverDescription',              # <description>  Set server description
         'serverMessage',                  # <message>  Set the server welcome message
         'serverName',                     # <name>  Set the server name
         'serverType',                     # <type>  Set the server type: Official, Ranked, Unranked or Private
         'soldierHealth',                  # <modifier: percent>  Set soldier max health scale factor
-        'teamFactionOverride ',           # <factionId: integer> Set the faction of team 1
+        'teamFactionOverride',            # <factionId: integer> Set the faction of team 1
         'teamKillCountForKick',           # <count>  Set number of teamkills allowed during a round
         'teamKillKickForBan',             # <count>  Set number of team-kill kicks that will lead to permaban
         'teamKillValueDecreasePerSecond', # <count>  Set kill-value decrease per second
@@ -209,7 +209,7 @@ class BfhParser(AbstractParser):
         'ticketBleedRate',                # <modifier: percent> Set the percentage of the ticket bleed rate
         'vehicleSpawnAllowed',            # <bool>  Set whether vehicles should spawn in-game
         'vehicleSpawnDelay',              # <modifier: percent>  Set vehicle spawn delay scale factor
-        'unlockMode'                      # which set of unlocks is available on an unranked server (all/common/stats/none)
+        'unlockMode',                     # which set of unlocks is available on an unranked server (all/common/stats/none)
     )
 
     # gamemodes aliases {alias: actual game mode name}
@@ -557,7 +557,7 @@ class BfhParser(AbstractParser):
         self.game['serverName'] = get_cvar('serverName')
         self.game['serverType'] = get_cvar('serverType')
         self.game['soldierHealth'] = get_cvar('soldierHealth', 'int')
-        self.game['teamFactionOverride '] = get_cvar('teamFactionOverride ', 'string')
+        self.game['teamFactionOverride'] = get_cvar('teamFactionOverride', 'string')
         self.game['teamKillCountForKick'] = get_cvar('teamKillCountForKick', 'int')
         self.game['teamKillKickForBan'] = get_cvar('teamKillKickForBan', 'int')
         self.game['teamKillValueDecreasePerSecond'] = get_cvar('teamKillValueDecreasePerSecond', 'float')

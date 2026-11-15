@@ -43,8 +43,16 @@ except ImportError as ee:
                  "paramiko from http://www.lag.net/paramiko/")
     raise ee
 
-__version__ = '1.3'
+__version__ = '1.4'
 __author__ = 'Courgette'
+
+
+class UnknownHostKeyError(paramiko.SSHException):
+    """
+    Raised when the SSH host key of the sFTP server cannot be found in the known_hosts file and
+    connecting to hosts with an unknown key is not allowed.
+    """
+    pass
 
 
 class SftpytailPlugin(b3.plugin.Plugin):
@@ -80,6 +88,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
         self.sftpconfig = None
         self.known_hosts_file = None
         self.private_key_file = None
+        self.allow_unknown_host_key = False
 
     def onStartup(self):
         """
@@ -165,6 +174,19 @@ class SftpytailPlugin(b3.plugin.Plugin):
             self.error('could not load settings/private_key_file config value: %s' % e)
             self.debug('private_key_file set to: %r' % self.private_key_file )
 
+        try:
+            self.allow_unknown_host_key = self.config.getboolean('settings', 'allow_unknown_host_key')
+            self.debug('loaded settings/allow_unknown_host_key: %s' % self.allow_unknown_host_key)
+        except (NoOptionError, KeyError):
+            self.allow_unknown_host_key = False
+        except ValueError as e:
+            self.allow_unknown_host_key = False
+            self.error('could not load settings/allow_unknown_host_key config value: %s' % e)
+            self.debug('using default value (%s) for settings/allow_unknown_host_key' % self.allow_unknown_host_key)
+        if self.allow_unknown_host_key:
+            self.warning('settings/allow_unknown_host_key is enabled: the sFTP server identity will NOT be verified '
+                         'when its host key is not in the known_hosts file (vulnerable to man-in-the-middle attacks)')
+
     def init_thread(self, ftpfiledsn):
         self.sftpconfig = functions.splitDSN(ftpfiledsn)
         thread1 = threading.Thread(target=self.update)
@@ -206,13 +228,21 @@ class SftpytailPlugin(b3.plugin.Plugin):
                     remotesize = sftp.stat(self.sftpconfig['path']).st_size
                     #self.verbose("Remote file size is %s" % remoteSize)
                 except IOError as err:
-                    self.critical(err)
-                    raise err
+                    # the file can be briefly missing while the game server rotates it: handled below
+                    self.warning('cannot stat remote game log file %s: %s' % (self.sftpconfig['path'], err))
+                    raise
                 if self._remoteFileOffset is None:
                     self._remoteFileOffset = remotesize
                 if remotesize < self._remoteFileOffset:
                     self.debug("remote file rotation detected")
                     self._remoteFileOffset = 0
+                    # with rename based rotation the open handle still points to the old file: reopen it
+                    if rfile is not None:
+                        try:
+                            rfile.close()
+                        except Exception:
+                            pass
+                        rfile = None
                 if remotesize > self._remoteFileOffset:
                     if (remotesize - self._remoteFileOffset) > self._maxGap:
                         gap = remotesize - self._remoteFileOffset
@@ -234,8 +264,12 @@ class SftpytailPlugin(b3.plugin.Plugin):
                     if self.console._paused:
                         self.console.unpause()
                         self.debug('Unpausing')
-            except paramiko.SSHException as err:
-                self.warning(str(err))
+            except (paramiko.SSHException, EOFError, OSError) as err:
+                # OSError (IOError, socket errors): remote file briefly missing (log rotation), dropped socket, ...
+                if isinstance(err, UnknownHostKeyError):
+                    self.error(str(err))
+                else:
+                    self.warning('%s: %s' % (err.__class__.__name__, err))
                 self._nbConsecutiveConnFailure += 1
                 self.verbose('lost connection to server: pausing until updated properly')
                 if self.console._paused is False:
@@ -253,16 +287,16 @@ class SftpytailPlugin(b3.plugin.Plugin):
                     self.file = open(self.lgame_log, 'wb')
                 self.file.close()
                 self.file = open(self.lgame_log, 'ab')
-                try:
-                    if rfile is not None:
-                        rfile.close()
-                    if transport is not None:
-                        transport.close()
-                    self.debug('sFTP connection closed')
-                except IOError:
-                    pass
+                for resource in (rfile, transport):
+                    try:
+                        if resource is not None:
+                            resource.close()
+                    except Exception:
+                        pass
+                self.debug('sFTP connection closed')
                 rfile = None
                 sftp = None
+                transport = None
                 
                 if self._nbConsecutiveConnFailure <= 30:
                     time.sleep(1)
@@ -273,18 +307,12 @@ class SftpytailPlugin(b3.plugin.Plugin):
 
         self.verbose("B3 is down: stopping sFtpytail thread")
 
-        try:
-            rfile.close()
-        except IOError:
-            pass
-        try:
-            transport.close()
-        except IOError:
-            pass
-        try:
-            self.file.close()
-        except IOError:
-            pass
+        for resource in (rfile, transport, self.file):
+            try:
+                if resource is not None:
+                    resource.close()
+            except Exception:
+                pass
     
     def sftpconnect(self):
         """
@@ -295,28 +323,69 @@ class SftpytailPlugin(b3.plugin.Plugin):
         username = self.sftpconfig['user']
         password = self.sftpconfig['password']
         
-        # get host key, if we know one
-        hostkey = None
-        host_keys = self.get_host_keys()
-        if hostname in host_keys:
-            hostkeytype = list(host_keys[hostname].keys())[0]
-            hostkey = host_keys[hostname][hostkeytype]
-            self.info('using host key of type %s' % hostkeytype)
+        # get host key: paramiko does not verify the server identity when no host key is given
+        hostkey = self.get_host_key(hostname, port)
+        if hostkey is None:
+            if not self.allow_unknown_host_key:
+                raise UnknownHostKeyError(
+                    "refusing to connect to %(host)s: its SSH host key is not in the known_hosts file (%(file)s) so "
+                    "the server identity cannot be verified. Add the server key to that file, for instance by running "
+                    "'ssh-keyscan -p %(port)s %(host)s >> ~/.ssh/known_hosts' (then check the key fingerprint with the "
+                    "server administrator) or by connecting once with the OpenSSH client, or set the known_hosts_file "
+                    "setting of the sftpytail plugin. To connect anyway without verifying the server identity (NOT "
+                    "recommended) set allow_unknown_host_key: yes in the sftpytail plugin config file" % {
+                        'host': hostname, 'port': port, 'file': self.get_host_keys_file()})
+            self.warning('SSH host key for %s is unknown: connecting WITHOUT verifying the server identity '
+                         '(allow_unknown_host_key is enabled)' % self._known_hosts_name(hostname, port))
 
         self.info('connecting to %s ...', self.sftpconfig["host"])
         # now, connect and use paramiko Transport to negotiate SSH2 across the connection
         t = paramiko.Transport((hostname, port))
-        private_key = self.get_private_key(password)
-        if private_key is None:
-            t.connect(username=username, password=password, hostkey=hostkey)
-        else:
-            t.connect(username=username, hostkey=hostkey, pkey=private_key)
+        try:
+            private_key = self.get_private_key(password)
+            if private_key is None:
+                t.connect(username=username, password=password, hostkey=hostkey)
+            else:
+                t.connect(username=username, hostkey=hostkey, pkey=private_key)
+        except Exception:
+            t.close()
+            raise
         sftp = paramiko.SFTPClient.from_transport(t)
         channel = sftp.get_channel()
         channel.settimeout(self._connectionTimeout)
         self.console.clients.sync()
         self.info("connection successful")
         return t, sftp
+
+    @staticmethod
+    def _known_hosts_name(hostname, port):
+        """
+        Return the name under which OpenSSH stores the key of a host in the known_hosts file.
+        """
+        if port is None or int(port) == 22:
+            return hostname
+        return '[%s]:%s' % (hostname, port)
+
+    def get_host_key(self, hostname, port):
+        """
+        Return the known host key of the given host (or None if unknown).
+        OpenSSH stores keys of hosts on non standard ports as '[host]:port'.
+        """
+        host_keys = self.get_host_keys()
+        candidates = [self._known_hosts_name(hostname, port)]
+        if candidates[0] != hostname:
+            # compatibility: known_hosts entries without port written by hand for a non standard port
+            candidates.append(hostname)
+        for name in candidates:
+            try:
+                keys = host_keys[name]
+            except KeyError:
+                continue
+            if keys:
+                hostkeytype = list(keys.keys())[0]
+                self.info('using host key of type %s found for %s' % (hostkeytype, name))
+                return keys[hostkeytype]
+        return None
 
     def get_host_keys_file(self):
         """
@@ -337,6 +406,9 @@ class SftpytailPlugin(b3.plugin.Plugin):
     def get_host_keys(self):
         host_keys_file = self.get_host_keys_file()
         host_keys = {}
+        if host_keys_file is None:
+            self.warning("no known_hosts file found: set the known_hosts_file setting of the sftpytail plugin")
+            return host_keys
         try:
             host_keys = paramiko.util.load_host_keys(host_keys_file)
         except Exception as err:

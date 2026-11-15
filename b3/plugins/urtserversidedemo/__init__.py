@@ -341,8 +341,9 @@ class DemoManager(object):
         """
         for guid, starter in list(self._demo_starters.items()):
             starter.cancel()
-        for guid, stopper in self._auto_stop_timers:
+        for guid, stopper in list(self._auto_stop_timers.items()):
             stopper.cancel()
+        self._auto_stop_timers.clear()
 
     def on_player_disconnect(self, player):
         """
@@ -389,6 +390,7 @@ class DemoManager(object):
             # stop eventually existing auto-stop timer for that player
             t.cancel()
         t = self._auto_stop_timers[client.guid] = Timer(duration, self._autostop_recording_player, [client])
+        t.daemon = True  # a pending auto-stop timer must never prevent B3 from exiting
         t.start()
         if admin:
            admin.message("demo for %s will stop in %s" % (client.name, str_duration))
@@ -400,7 +402,7 @@ class DemoManager(object):
     def _autostop_recording_player(self, client):
         self.plugin.debug("auto-stopping demo for %s" % client.name)
         self.plugin.stop_recording_player(client)
-        del self._auto_stop_timers[client.guid]
+        self._auto_stop_timers.pop(client.guid, None)
 
 
 class DemoStarter(Thread):

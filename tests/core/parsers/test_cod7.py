@@ -23,7 +23,7 @@
 # ################################################################### #
 
 import logging
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from mockito import mock, when, any as anything
 import unittest
 from b3.config import XmlConfigParser
@@ -98,3 +98,46 @@ num score ping guid   name            lastmsg address               qport rate
         self.assertDictContainsSubset({'slot': '2', 'score': '1360', 'ping': '61', 'guid': '56089378', 'name': 'fresh breeze^7', 'last': '0', 'ip': '11.11.11.11', 'port': '-27409', 'qport': '7422', 'rate': '25000', 'pbid': None}, rv.get("2", {}))
         self.assertDictContainsSubset({'slot': '3', 'score': '470', 'ping': '97', 'guid': '69406003', 'name': 'kossi__86^7', 'last': '0', 'ip': '11.11.11.11', 'port': '524', 'qport': '24017', 'rate': '25000', 'pbid': None}, rv.get("3", {}))
 
+
+
+class Test_parseLine(Cod7TestCase):
+
+    KILL = '1:23 K;otherGuid;5;axis;Jack;theGuid;4;allies;theName;mp40_mp;100;MOD_RIFLE_BULLET;head'
+
+    def queued_events(self, line):
+        with patch.object(self.console, 'queueEvent') as queueEvent:
+            self.console.parseLine(line)
+        return [c[0][0] for c in queueEvent.call_args_list]
+
+    def test_actor_damage_is_translated_to_client_action(self):
+        events = self.queued_events('1:23 AD;theGuid;4;theName;dog')
+        self.assertEqual(1, len(events))
+        self.assertEqual(self.console.getEventID('EVT_CLIENT_ACTION'), events[0].type)
+        self.assertEqual('ad', events[0].data)
+        self.assertIs(self.player, events[0].client)
+
+    def test_kills_are_ignored_during_prematch(self):
+        self.console._preMatch = True
+        with patch.object(self.console, 'OnK') as OnK:
+            self.console.parseLine(self.KILL)
+        self.assertFalse(OnK.called)
+
+    def test_kills_are_handled_outside_prematch(self):
+        self.console._preMatch = False
+        with patch.object(self.console, 'OnK', return_value=None) as OnK:
+            self.console.parseLine(self.KILL)
+        self.assertTrue(OnK.called)
+
+    def test_duplicate_initgame_is_ignored(self):
+        with patch.object(self.console, 'OnInitgame', return_value=None) as OnInitgame:
+            self.console.parseLine('0:00 InitGame: \\g_gametype\\tdm\\mapname\\mp_cairo')
+            self.console.parseLine('0:00 InitGame: \\g_gametype\\tdm\\mapname\\mp_cairo')
+        self.assertEqual(1, OnInitgame.call_count)
+
+
+class Test_pluginsStarted(Cod7TestCase):
+
+    def test_admin_plugin_is_not_patched(self):
+        with patch.object(self.console, 'patch_b3_admin_plugin') as patch_b3_admin_plugin:
+            self.console.pluginsStarted()
+        self.assertFalse(patch_b3_admin_plugin.called)

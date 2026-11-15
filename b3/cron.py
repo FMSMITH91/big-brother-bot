@@ -103,13 +103,15 @@ class CronTab(object):
         return self._hour
 
     def _set_day(self, value):
-        self._day = self._getRate(value, 31)
+        # days of the month are 1-31 (as in time.struct_time.tm_mday)
+        self._day = self._getRate(value, 32, 1)
 
     def _get_day(self):
         return self._day
 
     def _set_month(self, value):
-        self._month = self._getRate(value, 12)
+        # months are 1-12 (as in time.struct_time.tm_mon)
+        self._month = self._getRate(value, 13, 1)
 
     def _get_month(self):
         return self._month
@@ -127,8 +129,12 @@ class CronTab(object):
     month = property(_get_month, _set_month)
     dow = property(_get_dow, _set_dow)
 
-    def _getRate(self, rate, maxrate=None):
+    def _getRate(self, rate, maxrate=None, minrate=0):
         """
+        Parse a cron rate: accepted values are in the range minrate..maxrate-1
+        :param rate: The rate to parse (int, float or crontab-like string)
+        :param maxrate: The upper bound of the accepted values (exclusive)
+        :param minrate: The lower bound of the accepted values (inclusive)
         >>> o = CronTab(lambda: None)
         >>> o._getRate('*/5', 60)
         [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
@@ -147,7 +153,7 @@ class CronTab(object):
                 # 5,7,9,11,30,40,41,42 = [5-12/2, 30, 40-42]
                 myset = {}
                 for fragment in rate.split(','):
-                    result = self._getRateFromFragment(fragment.strip(), maxrate)
+                    result = self._getRateFromFragment(fragment.strip(), maxrate, minrate)
                     if isinstance(result, int):
                         myset[result] = None
                     else:
@@ -159,33 +165,35 @@ class CronTab(object):
                 mylist.sort()
                 return mylist
             else:
-                return self._getRateFromFragment(rate, maxrate)
+                return self._getRateFromFragment(rate, maxrate, minrate)
         elif isinstance(rate, int):
-            if rate < 0 or rate >= maxrate:
-                raise ValueError('accepted range is 0-%s' % (maxrate - 1))
+            if rate < minrate or rate >= maxrate:
+                raise ValueError('accepted range is %s-%s' % (minrate, maxrate - 1))
             return rate
         elif isinstance(rate, float):
-            if int(rate) < 0 or int(rate) >= maxrate:
-                raise ValueError('accepted range is 0-%s' % (maxrate - 1))
+            if int(rate) < minrate or int(rate) >= maxrate:
+                raise ValueError('accepted range is %s-%s' % (minrate, maxrate - 1))
             return int(rate)
 
         raise TypeError('"%s" is not a known cron rate type' % rate)
 
     @staticmethod
-    def _getRateFromFragment(rate, maxrate):
+    def _getRateFromFragment(rate, maxrate, minrate=0):
         r = ReMatcher()
         if rate == '*':
             return -1
         elif r.match(r'^([0-9]+)$', rate):
             if int(rate) >= maxrate:
                 raise ValueError('%s cannot be over %s' % (rate, maxrate-1))
+            if int(rate) < minrate:
+                raise ValueError('%s cannot be under %s' % (rate, minrate))
             return int(rate)
         elif r.match(r'^\*/([0-9]+)$', rate):
-            # */10 = [0, 10, 20, 30, 40, 50]
+            # */10 = [0, 10, 20, 30, 40, 50] (starting from minrate, i.e: months */6 = [1, 7])
             step = int(r.results.group(1))
-            if step > maxrate:
+            if step > maxrate - minrate:
                 raise ValueError('%s cannot be over every %s' % (rate, maxrate-1))
-            return list(range(0, maxrate, step))
+            return list(range(minrate, maxrate, step))
         elif r.match(r'^(?P<lmin>[0-9]+)-(?P<lmax>[0-9]+)(/(?P<step>[0-9]+))?$', rate):
             # 10-20 = [0, 10, 20, 30, 40, 50]
             lmin = int(r.results.group('lmin'))
@@ -195,10 +203,10 @@ class CronTab(object):
                 step = 1
             else:
                 step = int(step)
-            if step > maxrate:
-                raise ValueError('%s is out of accepted range 0-%s' % (step, maxrate))
-            if lmin < 0 or lmax > maxrate:
-                raise ValueError('%s is out of accepted range 0-%s' % (rate, maxrate-1))
+            if step > maxrate - minrate:
+                raise ValueError('%s is out of accepted range %s-%s' % (step, minrate, maxrate - 1))
+            if lmin < minrate or lmax >= maxrate:
+                raise ValueError('%s is out of accepted range %s-%s' % (rate, minrate, maxrate - 1))
             if lmin > lmax:
                 raise ValueError('%s cannot be greater than %s in %s' % (lmin, lmax, rate))
             return list(range(lmin, lmax + 1, step))
@@ -358,6 +366,16 @@ class Cron(object):
                         c.numRuns += 1
                         try:
                             c.run()
+                        except SystemExit as e:
+                            # raised by Parser.critical() (or by a command calling sys.exit()): if B3 is shutting
+                            # down the scheduler has been stopped already and we can exit the loop, otherwise do
+                            # not let the exception silently kill the cron thread (all the scheduled tasks would stop)
+                            if self._stopEvent.is_set():
+                                self.console.info('Crontab %s requested B3 to exit (code %s)', c.command, e.code)
+                                break
+                            self.console.error('Crontab %s raised SystemExit (code %s) while B3 is still running: '
+                                               'ignoring it\n%s', c.command, e.code,
+                                               traceback.extract_tb(sys.exc_info()[2]))
                         except Exception as msg:
                             self.console.error('Exception raised while executing crontab %s: %s\n%s', c.command,
                                                msg, traceback.extract_tb(sys.exc_info()[2]))

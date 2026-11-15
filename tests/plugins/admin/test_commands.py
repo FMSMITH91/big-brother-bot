@@ -2109,3 +2109,239 @@ class Test_cmd_spam(Admin_functional_test):
         self.assertListEqual([call('^3Rule #1: No racism of any kind')], saybig_mock.mock_calls)
         self.assertListEqual([], self.joe.message_history)
 
+
+
+class Test_group_commands_rank(Admin_functional_test):
+    """
+    !putgroup / !ungroup must only let an admin change the groups of lower level players.
+    """
+
+    def setUp(self):
+        Admin_functional_test.setUp(self)
+        self.init("""
+[commands]
+putgroup: mod
+ungroup: mod
+[messages]
+group_unknown: Unkonwn group: %(group_name)s
+group_beyond_reach: You can't assign players to group %(group_name)s
+groups_already_in: %s is already in group %s
+groups_put: %s put in group %s
+""")
+        self.joe.connects(0)  # superadmin
+        self.mike.connects(1)  # user
+        self.senior = FakeClient(self.console, name="Senior", guid="seniorguid", groupBits=64, team=TEAM_RED)
+        self.senior.connects(2)
+        self.senior2 = FakeClient(self.console, name="Elder", guid="elderguid", groupBits=64, team=TEAM_RED)
+        self.senior2.connects(3)
+
+    def test_putgroup_cannot_demote_higher_level_admin(self):
+        self.senior.clearMessageHistory()
+        self.senior.says('!putgroup joe admin')
+        self.assertListEqual(['You cannot change the groups of Joe'], self.senior.message_history)
+        self.assertEqual('superadmin', self.joe.maxGroup.keyword)
+
+    def test_putgroup_cannot_change_same_level_admin(self):
+        self.senior.clearMessageHistory()
+        self.senior.says('!putgroup elder user')
+        self.assertListEqual(['You cannot change the groups of Elder'], self.senior.message_history)
+        self.assertEqual('senioradmin', self.senior2.maxGroup.keyword)
+
+    def test_putgroup_cannot_demote_not_logged_in_higher_level_admin(self):
+        # a superadmin temporarily demoted by the login plugin until he logs in
+        self.joe.restrictGroups(2)
+        self.senior.clearMessageHistory()
+        self.senior.says('!putgroup joe admin')
+        self.assertListEqual(['You cannot change the groups of Joe'], self.senior.message_history)
+        self.assertEqual(128, self.joe.realGroupBits)
+
+    def test_putgroup_lower_level_player(self):
+        self.senior.clearMessageHistory()
+        self.senior.says('!putgroup mike admin')
+        self.assertListEqual(['Mike put in group Admin'], self.senior.message_history)
+        self.assertEqual('admin', self.mike.maxGroup.keyword)
+
+    def test_ungroup_cannot_remove_higher_level_admin(self):
+        self.joe.addGroup(Group(id=1))  # superadmin + user
+        self.senior.clearMessageHistory()
+        self.senior.says('!ungroup joe user')
+        self.assertListEqual(['You cannot change the groups of Joe'], self.senior.message_history)
+        self.assertEqual(129, self.joe.groupBits)
+
+    def test_ungroup_group_beyond_reach(self):
+        self.senior.clearMessageHistory()
+        self.senior.says('!ungroup joe superadmin')
+        self.assertListEqual(["You can't assign players to group Super Admin"], self.senior.message_history)
+        self.assertEqual('superadmin', self.joe.maxGroup.keyword)
+
+    def test_ungroup_lower_level_player(self):
+        self.mike.addGroup(Group(id=16))  # user + admin
+        self.senior.clearMessageHistory()
+        self.senior.says('!ungroup mike admin')
+        self.assertListEqual(['Mike removed from group Admin'], self.senior.message_history)
+        self.assertEqual('user', self.mike.maxGroup.keyword)
+
+    def test_superadmin_can_manage_superadmin(self):
+        jack = FakeClient(self.console, name="Jack", guid="jackguid", groupBits=128, team=TEAM_RED)
+        jack.connects(4)
+        self.joe.clearMessageHistory()
+        self.joe.says('!putgroup jack senioradmin')
+        self.assertListEqual(['Jack put in group Senior Admin'], self.joe.message_history)
+        self.assertEqual('senioradmin', jack.maxGroup.keyword)
+
+
+@patch("time.sleep")
+class Test_penalties_issued_by_higher_admin(Admin_functional_test):
+    """
+    !unban, !warnremove and !warnclear must not remove penalties issued by a higher level admin.
+    """
+
+    def setUp(self):
+        Admin_functional_test.setUp(self)
+        self.init(r"""
+[commands]
+warn: user
+warnremove: user
+warnclear: user
+tempban: user
+unban: user
+[messages]
+warn_too_fast: Only one warning every %(num_second)s seconds can be given
+warn_self: %s, you cannot give yourself a warning
+warn_denied: %s, %s is a higher level admin, you can't warn him
+[warn]
+tempban_num: 10
+duration_divider: 30
+max_duration: 1d
+alert: ^1ALERT^7: $name^7 auto-kick from warnings if not cleared [^3$warnings^7] $reason
+alert_kick_num: 10
+reason: ^7too many warnings: $reason
+message: ^1WARNING^7 [^3$warnings^7]: $reason
+""")
+        self.p.warn_delay = 0
+        self.joe.connects(0)  # superadmin
+        self.mike.connects(1)  # user
+        self.jack = FakeClient(self.console, name="Jack", guid="jackguid", groupBits=32, team=TEAM_RED)  # fulladmin
+        self.jack.connects(2)
+        self.say_patcher = patch.object(self.console, "say")
+        self.say_patcher.start()
+
+    def tearDown(self):
+        self.say_patcher.stop()
+        Admin_functional_test.tearDown(self)
+
+    def test_warnremove_warning_from_higher_admin(self, sleep_mock):
+        self.joe.says('!warn mike')
+        self.assertEqual(1, self.mike.numWarnings)
+        self.jack.clearMessageHistory()
+        self.jack.says('!warnremove mike')
+        self.assertListEqual(['You cannot clear a warning from Joe'], self.jack.message_history)
+        self.assertEqual(1, self.mike.numWarnings)
+
+    def test_warnremove_own_warning(self, sleep_mock):
+        self.jack.says('!warn mike')
+        self.jack.clearMessageHistory()
+        self.jack.says('!warnremove mike')
+        self.assertEqual(0, self.mike.numWarnings)
+        self.assertEqual(1, len(self.jack.message_history))
+        self.assertTrue(self.jack.message_history[0].startswith('Mike last warning cleared'))
+
+    def test_warnclear_leaves_warnings_from_higher_admin(self, sleep_mock):
+        self.joe.says('!warn mike')
+        self.jack.says('!warn mike')
+        self.jack.says('!warn mike')
+        self.assertEqual(3, self.mike.numWarnings)
+        self.jack.clearMessageHistory()
+        self.jack.says('!warnclear mike')
+        self.assertListEqual(['Cleared 2 warnings and left 1 warnings for Mike'], self.jack.message_history)
+        self.assertEqual(1, self.mike.numWarnings)
+
+    def test_unban_ban_from_higher_admin(self, sleep_mock):
+        self.joe.says('!tempban mike 5h test reason')
+        self.assertEqual(1, self.mike.numBans)
+        self.jack.clearMessageHistory()
+        self.jack.says('!unban @%s' % self.mike.id)
+        self.assertListEqual(['You cannot clear a ban from Joe'], self.jack.message_history)
+        self.assertEqual(1, self.mike.numBans)
+
+
+class Test_command_secretLevel(Admin_TestCase):
+
+    def test_given_secretLevel_is_stored(self):
+        cmd = Command(self.p, 'foo', 0, lambda *args: None, secretLevel=60)
+        self.assertEqual(60, cmd.secretLevel)
+
+    def test_default_secretLevel(self):
+        cmd = Command(self.p, 'foo', 0, lambda *args: None, secretLevel=None)
+        self.assertEqual(100, cmd.secretLevel)
+
+    def test_registerCommand_uses_hidecmd_level(self):
+        self.init()
+        self.p._hidecmd_level = 80
+        self.p.registerCommand(self.p, 'zzqfoo', 0, lambda *args: None)
+        self.p.registerCommand(self.p, 'zzqbar', 0, lambda *args: None, secretLevel=1)
+        self.assertEqual(80, self.p._commands['zzqfoo'].secretLevel)
+        self.assertEqual(1, self.p._commands['zzqbar'].secretLevel)
+
+
+class Test_cmd_clientinfo_sensitive_fields(Admin_functional_test):
+
+    def setUp(self):
+        Admin_functional_test.setUp(self)
+        self.init("""
+[commands]
+clientinfo: mod
+""")
+        self.joe.password = 'ec0e2603172c73a8b644bb9456c1ff6e'
+        self.joe.connects(0)
+        self.senior = FakeClient(self.console, name="Senior", guid="seniorguid", groupBits=64, team=TEAM_RED)
+        self.senior.connects(1)
+
+    def test_password_is_not_disclosed(self):
+        for field in ('password', '_password', 'PASSWORD', '_pluginData'):
+            self.senior.clearMessageHistory()
+            self.senior.says('!clientinfo joe %s' % field)
+            self.assertListEqual(['Unrecognized field %s' % field], self.senior.message_history)
+
+    def test_other_field(self):
+        self.senior.clearMessageHistory()
+        self.senior.says('!clientinfo joe name')
+        self.assertListEqual(['Joe: name is Joe'], self.senior.message_history)
+
+
+class Test_sensitive_commands_logging(Admin_functional_test):
+
+    def setUp(self):
+        Admin_functional_test.setUp(self)
+        self.init()
+        self.joe.connects(0)
+
+    def test_mask_sensitive_command(self):
+        self.assertEqual('!login ********', self.p.mask_sensitive_command('!login secret'))
+        self.assertEqual('!SetPassword ********', self.p.mask_sensitive_command('!SetPassword secret jack'))
+        self.assertEqual('!login', self.p.mask_sensitive_command('!login'))
+        self.assertEqual('!help login', self.p.mask_sensitive_command('!help login'))
+        self.assertEqual('hello world', self.p.mask_sensitive_command('hello world'))
+
+    def test_password_not_logged(self):
+        with patch.object(self.p, 'debug') as debug_mock:
+            self.joe.says('!login s3cr3tpassw0rd')
+            self.joe.says('!setpassword s3cr3tpassw0rd mike')
+        self.assertTrue(debug_mock.called)
+        self.assertNotIn('s3cr3tpassw0rd', str(debug_mock.mock_calls))
+
+
+class Test_cmd_confirm(Admin_functional_test):
+
+    def setUp(self):
+        Admin_functional_test.setUp(self)
+        self.init()
+        self.mike.connects(1)
+
+    def test_confirm_is_harmless(self):
+        with patch('urllib.request.urlopen') as urlopen, patch.object(self.console, 'say') as say_mock:
+            self.mike.clearMessageHistory()
+            self.mike.says('!confirm')
+        self.assertFalse(urlopen.called)
+        self.assertFalse(say_mock.called)
+        self.assertListEqual(['The B3 developer confirmation service is no longer available'], self.mike.message_history)

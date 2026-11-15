@@ -543,11 +543,11 @@ class XlrstatsPlugin(b3.plugin.Plugin):
             s.id = r['id']
             s.client_id = r['client_id']
             s.kills = r['kills']
+            s.deaths = r['deaths']
             if (s.kills + s.deaths) > self.Kswitch_confrontations:
                 s.Kfactor = self.Kfactor_low
             else:
                 s.Kfactor = self.Kfactor_high
-            s.deaths = r['deaths']
             s.teamkills = r['teamkills']
             s.teamdeaths = r['teamdeaths']
             s.suicides = r['suicides']

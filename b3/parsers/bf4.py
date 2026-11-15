@@ -539,11 +539,11 @@ class Bf4Parser(AbstractParser):
         'vehicleSpawnAllowed',      # <bool>  Set whether vehicles should spawn in-game
         'vehicleSpawnDelay',        # <modifier: percent>  Set vehicle spawn delay scale factor
         'preset',                   # allows you to set the server to either normal, hardcore infantry or custom
-        'unlockMode'                # which set of unlocks is available on an unranked server (all/common/stats/none)
-        'ticketBleedRate'           # controls the rate of tickets drop
-        'roundPlayersReadyBypassTimer'  # <time> amount of seconds after which the ready screen is bypassed
-        'roundPlayersReadyMinCount'     # <count> minimum number of players per team which have to confirm ready state
-        'roundPlayersReadyPercent'  # <modifier:percent>
+        'unlockMode',               # which set of unlocks is available on an unranked server (all/common/stats/none)
+        'ticketBleedRate',          # controls the rate of tickets drop
+        'roundPlayersReadyBypassTimer', # <time> amount of seconds after which the ready screen is bypassed
+        'roundPlayersReadyMinCount',    # <count> minimum number of players per team which have to confirm ready state
+        'roundPlayersReadyPercent', # <modifier:percent>
     )
 
     # gamemodes aliases {alias: actual game mode name}

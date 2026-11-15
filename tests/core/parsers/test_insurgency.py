@@ -40,6 +40,7 @@ from b3.config import CfgConfigParser
 from b3.fake import FakeClient
 from b3.parsers.insurgency import InsurgencyParser
 from b3.plugins.admin import AdminPlugin
+from tests.core.parsers.source_rcon_injection import RconInjectionChecks
 from b3 import __file__ as b3_module__file__
 
 ADMIN_CONFIG_FILE = os.path.normpath(os.path.join(os.path.dirname(b3_module__file__), "conf/plugin_admin.ini"))
@@ -498,3 +499,9 @@ class Test_getClientOrCreate(InsurgencyTestCase):
         assertTeam(TEAM_BLUE, "#Team_Insurgent")
         assertTeam(TEAM_UNKNOWN, "#Team_Unassigned")
         assertTeam(TEAM_RED, "#Team_Security")
+
+class Test_rcon_injection_and_tempban_duration(RconInjectionChecks, InsurgencyTestCase):
+    def setUp(self):
+        InsurgencyTestCase.setUp(self)
+        self.parser.msgPrefix = "[Pre]"
+        self.player = Client(console=self.parser, cid="2", name="courgette", guid="STEAM_1:0:1111111")

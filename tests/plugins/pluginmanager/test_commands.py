@@ -24,6 +24,7 @@
 
 import b3
 import b3.cron
+import types
 
 from unittest.mock import Mock
 from mockito import when
@@ -301,7 +302,75 @@ class Test_commands(PluginmanagerTestCase):
         # THEN
         self.assertListEqual(['Missing fake plugin python module', 'Please put the plugin module in @b3/extplugins/'], superadmin.message_history)
 
-    # TODO: add test cases for successful plugin load
+    def _fake_plugin_module(self, name, requires=None):
+        """
+        Build a fake plugin module (no configuration file needed) and make console.pluginImport return it.
+        """
+        clazz = type('%sPlugin' % name.title(), (Plugin,), {'requiresConfigFile': False,
+                                                           'requiresPlugins': list(requires or [])})
+        module = types.ModuleType(name)
+        setattr(module, '%sPlugin' % name.title(), clazz)
+        module.__version__ = '1.0'
+        module.__author__ = 'tester'
+        when(self.console).pluginImport(name).thenReturn(module)
+        return module
+
+    def _loaded_events(self):
+        return [e.data for e in self.queued_events if e.type == self.console.getEventID('EVT_PLUGIN_LOADED')]
+
+    def _spy_events(self):
+        self.queued_events = []
+        original = self.console.queueEvent
+        def queueEvent(event, expire=10):
+            self.queued_events.append(event)
+            return original(event, expire)
+        self.console.queueEvent = queueEvent
+
+    def test_cmd_plugin_load_succeed(self):
+        # GIVEN
+        self._fake_plugin_module('zzqfoo')
+        self._spy_events()
+        superadmin = FakeClient(self.console, name="superadmin", guid="superadminguid", groupBits=128)
+        superadmin.connects("1")
+        # WHEN
+        superadmin.clearMessageHistory()
+        superadmin.says("!plugin load zzqfoo")
+        # THEN
+        self.assertListEqual(['Plugin zzqfoo (1.0 - tester) loaded'], superadmin.message_history)
+        self.assertIn('zzqfoo', self.console._plugins)
+        self.assertListEqual(['zzqfoo'], self._loaded_events())
+
+    def test_cmd_plugin_load_with_already_loaded_requirement(self):
+        # GIVEN
+        self._fake_plugin_module('zzqfoo', requires=['admin'])
+        self._spy_events()
+        superadmin = FakeClient(self.console, name="superadmin", guid="superadminguid", groupBits=128)
+        superadmin.connects("1")
+        # WHEN
+        superadmin.clearMessageHistory()
+        superadmin.says("!plugin load zzqfoo")
+        # THEN
+        self.assertListEqual(['Plugin zzqfoo (1.0 - tester) loaded'], superadmin.message_history)
+        self.assertIn('zzqfoo', self.console._plugins)
+        self.assertListEqual(['zzqfoo'], self._loaded_events())
+
+    def test_cmd_plugin_load_with_missing_requirement_loads_it_first(self):
+        # GIVEN
+        self._fake_plugin_module('zzqfoo', requires=['zzqbar'])
+        self._fake_plugin_module('zzqbar')
+        self._spy_events()
+        superadmin = FakeClient(self.console, name="superadmin", guid="superadminguid", groupBits=128)
+        superadmin.connects("1")
+        # WHEN
+        superadmin.clearMessageHistory()
+        superadmin.says("!plugin load zzqfoo")
+        # THEN
+        self.assertListEqual(['Plugin zzqfoo relies on other plugins to work: they will be automatically loaded',
+                              'Plugin zzqbar (1.0 - tester) loaded',
+                              'Plugin zzqfoo (1.0 - tester) loaded'], superadmin.message_history)
+        self.assertIn('zzqbar', self.console._plugins)
+        self.assertIn('zzqfoo', self.console._plugins)
+        self.assertListEqual(['zzqbar', 'zzqfoo'], self._loaded_events())
 
     ####################################################################################################################
     #                                                                                                                  #

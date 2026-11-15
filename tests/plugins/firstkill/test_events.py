@@ -153,3 +153,23 @@ class Test_events(FirstKillCase):
         self.console.queueEvent(self.console.getEvent('EVT_CLIENT_KILL_TEAM', client=self.mike, target=self.mark, data=(100, self.console.UT_MOD_DEAGLE, self.console.HL_HEAD)))
         # THEN
         self.assertFalse(self.p.announce_first_teamkill.called)
+
+class Test_commands_status(FirstKillCase):
+
+    def assert_status(self, func, attr, label):
+        from unittest.mock import Mock
+        for value, expected in ((True, '^2ON'), (False, '^1OFF')):
+            setattr(self.p, attr, value)
+            cmd = Mock()
+            client = Mock()
+            func(None, client, cmd)
+            cmd.sayLoudOrPM.assert_called_once_with(client, '^7%s: %s' % (label, expected))
+
+    def test_firstkill_status(self):
+        self.assert_status(self.p.cmd_firstkill, '_firstkill', 'Firstkill')
+
+    def test_firsttk_status(self):
+        self.assert_status(self.p.cmd_firsttk, '_firsttk', 'First Teamkill')
+
+    def test_firsths_status(self):
+        self.assert_status(self.p.cmd_firsths, '_firsths', 'First Kill by Headshot')

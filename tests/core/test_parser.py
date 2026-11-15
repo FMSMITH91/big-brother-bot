@@ -215,3 +215,94 @@ class Test_read_game_log(B3TestCase):
         # FakeConsole and older code paths feed str lines
         self.assertEqual(['x\n'], self.console.completeLines(['x\n', 'partial']))
         self.assertEqual(['partial rest\n'], self.console.completeLines([' rest\n']))
+
+
+class Test_getWrap_only_color_codes(unittest.TestCase):
+    """
+    Text made only of color codes (or whitespace) wraps to nothing: on parsers which strip color codes
+    (csgo, insurgency, ravaged...) this used to raise IndexError.
+    """
+
+    def setUp(self):
+        self.parser = DummyParser()
+        self.parser._line_length = 40
+        self.parser._line_color_prefix = ''
+
+    def test_only_color_codes_without_color_codes_support(self):
+        self.parser._use_color_codes = False
+        self.assertListEqual([], self.parser.getWrap('^7'))
+        self.assertListEqual([], self.parser.getWrap('   '))
+
+    def test_only_color_codes_without_color_codes_support_multiline(self):
+        self.parser._use_color_codes = False
+        self.parser._multiline = True
+        self.assertListEqual([], self.parser.getWrap('^7'))
+
+
+class Test_formatTime(B3TestCase):
+
+    def setUp(self):
+        B3TestCase.setUp(self)
+        self.console.config._config_parser.add_section('b3')
+        self.console.config._config_parser.set('b3', 'time_format', '%Y-%m-%d %H:%M')
+
+    def test_numeric_offset_is_in_hours(self):
+        # !time +4 at 1970-01-01 00:00 UTC
+        self.assertEqual('1970-01-01 04:00', self.console.formatTime(0, '+4'))
+        self.assertEqual('1970-01-01 05:30', self.console.formatTime(0, '5.5'))
+        self.assertEqual('1969-12-31 21:00', self.console.formatTime(0, '-3'))
+
+    def test_timezone_name(self):
+        self.assertEqual('1970-01-01 01:00', self.console.formatTime(0, 'CET'))
+
+
+class Test_load_config_delays(B3TestCase):
+
+    def setUp(self):
+        B3TestCase.setUp(self)
+        self.console.config._config_parser.add_section('server')
+
+    def load(self, delay):
+        self.console.config._config_parser.set('server', 'delay', delay)
+        self.console.load_config_delays()
+        return self.console.delay
+
+    def test_valid_delay(self):
+        self.assertEqual(0.5, self.load('0.5'))
+
+    def test_negative_delay_falls_back_to_default(self):
+        # time.sleep(-1) would crash the main loop
+        self.assertEqual(Parser.delay, self.load('-1'))
+
+    def test_zero_delay_falls_back_to_default(self):
+        # the main loop would busy-spin
+        self.assertEqual(Parser.delay, self.load('0'))
+
+
+class Test_critical(unittest.TestCase):
+    """
+    Parser.critical() must shut down B3 properly before exiting: the logger used to call sys.exit() itself so
+    shutdown()/finalize() never ran.
+    """
+
+    def test_output_handler_critical_does_not_exit(self):
+        import b3.output
+        logger = b3.output.OutputHandler('test_critical')
+        logger.addHandler(logging.NullHandler())
+        logger.critical('something bad happened')  # must not raise SystemExit
+
+    def test_parser_critical_shuts_down(self):
+        from unittest.mock import patch
+        import b3.output
+        parser = DummyParser()
+        parser.log = b3.output.OutputHandler('test_parser_critical')
+        parser.log.addHandler(logging.NullHandler())
+        with patch.object(parser, 'shutdown') as shutdown_mock, \
+                patch.object(parser, 'finalize') as finalize_mock, \
+                patch('b3.parser.time.sleep'):
+            with self.assertRaises(SystemExit) as ctx:
+                parser.critical('something bad happened')
+        self.assertEqual(220, ctx.exception.code)
+        self.assertEqual(220, parser.exitcode)
+        shutdown_mock.assert_called_once_with()
+        finalize_mock.assert_called_once_with()

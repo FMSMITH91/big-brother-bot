@@ -716,3 +716,41 @@ class test_functional(unittest.TestCase):
             admin.says("!map chasm")
         # THEN
         write_mock.assert_has_calls([call("addmap Thrust_Chasm 1"), call("nextmap")])
+
+class Test_run_loop(RavagedTestCase):
+
+    def test_connection_setup_failing_after_connecting_is_retried(self):
+        import queue as queue_module
+        from b3.parsers.ravaged.ravaged_rcon import RavagedServerCommandError
+        connections = []
+        setup_calls = {'n': 0}
+        gets = {'n': 0}
+
+        def setup_game_connection():
+            setup_calls['n'] += 1
+            conn = Mock()
+            conn.connected = True
+            connections.append(conn)
+            self.parser._serverConnection = conn
+            if setup_calls['n'] == 1:
+                # e.g.: 'enableevents true' failing after the connection was established
+                raise RavagedServerCommandError("enableevents true failed")
+
+        def get(timeout=None):
+            gets['n'] += 1
+            if gets['n'] >= 2:
+                self.parser.working = False
+            raise queue_module.Empty()
+
+        self.parser.setup_game_connection = Mock(side_effect=setup_game_connection)
+        self.parser.game_event_queue = Mock()
+        self.parser.game_event_queue.get = Mock(side_effect=get)
+        self.parser.screen = Mock()
+        self.parser.updateDocumentation = Mock()
+        self.parser.exitcode = None
+        self.parser.working = True
+        with patch('time.sleep'):
+            self.parser.run()
+        # THEN the half initialized connection was closed and the setup was run again
+        self.assertEqual(2, setup_calls['n'])
+        self.assertTrue(connections[0].stop.called)

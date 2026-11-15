@@ -206,36 +206,39 @@ class PluginmanagerPlugin(b3.plugin.Plugin):
                 :param p_data: A PluginData containing plugin information
                 :return: list[PluginData] a list of PluginData of plugins needed by the current one
                 """
-                # check for correct B3 version
-                if p_data.clazz.requiresVersion and B3version(p_data.clazz.requiresVersion) > B3version(currentVersion):
-                    raise MissingRequirement('plugin %s requires B3 version %s (you have version %s) : please update your '
-                                             'B3 if you want to run this plugin' % (p_data.name, p_data.clazz.requiresVersion, currentVersion))
+                if p_data.clazz:
 
-                # check if the current game support this plugin (this may actually exclude more than one plugin
-                # in case a plugin is built on top of an incompatible one, due to plugin dependencies)
-                if p_data.clazz.requiresParsers and self.console.gameName not in p_data.clazz.requiresParsers:
-                    raise MissingRequirement('plugin %s is not compatible with %s parser : supported games are : %s' % (
-                                             p_data.name, self.console.gameName, ', '.join(p_data.clazz.requiresParsers)))
+                    # check for correct B3 version
+                    if p_data.clazz.requiresVersion and B3version(p_data.clazz.requiresVersion) > B3version(currentVersion):
+                        raise MissingRequirement('plugin %s requires B3 version %s (you have version %s) : please update your '
+                                                 'B3 if you want to run this plugin' % (p_data.name, p_data.clazz.requiresVersion, currentVersion))
 
-                # check if the plugin needs a particular storage protocol to work
-                if p_data.clazz.requiresStorage and self.console.storage.protocol not in p_data.clazz.requiresStorage:
-                    raise MissingRequirement('plugin %s is not compatible with the storage protocol being used (%s) : '
-                                             'supported protocols are : %s' % (p_data.name, self.console.storage.protocol,
-                                                                               ', '.join(p_data.clazz.requiresStorage)))
+                    # check if the current game support this plugin (this may actually exclude more than one plugin
+                    # in case a plugin is built on top of an incompatible one, due to plugin dependencies)
+                    if p_data.clazz.requiresParsers and self.console.gameName not in p_data.clazz.requiresParsers:
+                        raise MissingRequirement('plugin %s is not compatible with %s parser : supported games are : %s' % (
+                                                 p_data.name, self.console.gameName, ', '.join(p_data.clazz.requiresParsers)))
 
-                if p_data.clazz.requiresPlugins:
-                    collection = []
-                    for r in p_data.requiresPlugins:
-                        if r not in self.console._plugins and r not in plugin_required:
-                            try:
-                                # missing requirement, try to load it
-                                self.warning('plugin %s has unmet dependency : %s : trying to load plugin %s...' % (p_data.name, r, r))
-                                collection += _get_plugin_data(PluginData(name=r))
-                                self.debug('plugin %s dependency satisfied: %s' % r)
-                            except Exception as err:
-                                raise MissingRequirement('missing required plugin: %s' % r, err)
+                    # check if the plugin needs a particular storage protocol to work
+                    if p_data.clazz.requiresStorage and self.console.storage.protocol not in p_data.clazz.requiresStorage:
+                        raise MissingRequirement('plugin %s is not compatible with the storage protocol being used (%s) : '
+                                                 'supported protocols are : %s' % (p_data.name, self.console.storage.protocol,
+                                                                                   ', '.join(p_data.clazz.requiresStorage)))
 
-                    return collection
+                    if p_data.clazz.requiresPlugins:
+                        # DFS: look first at the whole requirement tree and try to load from ground up
+                        collection = [p_data]
+                        for r in p_data.clazz.requiresPlugins:
+                            if r not in self.console._plugins and r not in plugin_required:
+                                try:
+                                    # missing requirement, try to load it
+                                    self.warning('plugin %s has unmet dependency : %s : trying to load plugin %s...' % (p_data.name, r, r))
+                                    collection += _get_plugin_data(PluginData(name=r))
+                                    self.debug('plugin %s dependency satisfied: %s' % (p_data.name, r))
+                                except Exception as err:
+                                    raise MissingRequirement('missing required plugin: %s' % r, err)
+
+                        return collection
 
                 # plugin has not been loaded manually nor a previous automatic load attempt has been done
                 if p_data.name not in self.console._plugins and p_data.name not in plugin_required:
@@ -256,7 +259,10 @@ class PluginmanagerPlugin(b3.plugin.Plugin):
 
                 plugin_list = _get_plugin_data(plugin_data)     # generate a list of PluginData (also requirements)
                 plugin_dict = {x.name: x for x in plugin_list}  # dict(str, PluginData)
-                sorted_list = [y for y in topological_sort([(x.name, set(x.clazz.requiresPlugins)) for x in plugin_list])]
+                # only sort on the requirements being loaded now: those already loaded are not part of the list
+                # (and would otherwise be reported as a missing dependency by topological_sort)
+                sorted_list = [y for y in topological_sort([(x.name, set(r for r in x.clazz.requiresPlugins
+                                                                         if r in plugin_dict)) for x in plugin_list])]
 
                 if len(sorted_list) > 1:
                     client.message('^7Plugin ^3%s ^7relies on other plugins to work: they will be automatically loaded' % name)
@@ -271,7 +277,7 @@ class PluginmanagerPlugin(b3.plugin.Plugin):
                     v = getattr(p.module, '__version__', 'unknown')
                     a = getattr(p.module, '__author__', 'unknown')
                     self.bot('plugin %s (%s - %s) loaded', p.name, v, a)
-                    client.message('^7Plugin ^2%s ^7(^3%s ^7- ^3%s^7) loaded' % p.name, v, a)
+                    client.message('^7Plugin ^2%s ^7(^3%s ^7- ^3%s^7) loaded' % (p.name, v, a))
                     # queue an event so other plugins may react on this change (for example if 2 plugins provide the
                     # same functionalities, one of them can be disabled not to do duplicated work)
                     self.console.queueEvent(self.console.getEvent('EVT_PLUGIN_LOADED', data=p.name))

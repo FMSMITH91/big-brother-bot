@@ -564,7 +564,7 @@ class AdminPlugin(b3.plugin.Plugin):
         """
         Handle EVT_CLIENT_SAY
         """
-        self.debug('OnSay handle %s:"%s"', event.type, event.data)
+        self.debug('OnSay handle %s:"%s"', event.type, self.mask_sensitive_command(event.data))
 
         if len(event.data) >= 3 and event.data[:1] == '#':
             if self.console.debug:
@@ -642,13 +642,13 @@ class AdminPlugin(b3.plugin.Plugin):
         elif len(event.data) >= 2 and event.data[:1] in (self.cmdPrefix, self.cmdPrefixLoud,
                                                          self.cmdPrefixBig, self.cmdPrefixPrivate):
 
-            # catch the confirm command for identification of the B3 devs
+            # the confirm command used to identify B3 devs: the confirmation service no longer exists, just
+            # tell the player who asked (privately: anyone can issue it, it must not be usable to spam the server)
             if event.data[1:] == 'confirm':
-                self.debug('checking confirmation...')
-                self.console.say(functions.confirm(event.client))
+                event.client.message(functions.confirm(event.client))
                 return
             else:
-                self.debug('handle command %s' % event.data)
+                self.debug('handle command %s' % self.mask_sensitive_command(event.data))
 
             if event.data[1:2] in (self.cmdPrefix, self.cmdPrefixLoud, self.cmdPrefixBig, self.cmdPrefixPrivate):
                 # self.is the alias for say
@@ -922,6 +922,23 @@ class AdminPlugin(b3.plugin.Plugin):
             kword = 'default'
         return self.warn_reasons.get(kword)
 
+    def getAdminFromStorage(self, admin_id):
+        """
+        Return the client (fetched from the storage) who issued a penalty, or None if it can't be found.
+        The returned client has the console set, so that its groups (and thus its level) can be computed.
+        :param admin_id: The database id of the admin who issued the penalty
+        """
+        if not admin_id:
+            return None
+        try:
+            admin = self.console.storage.getClient(Client(id=admin_id))
+        except Exception as e:
+            self.debug('could not find admin @%s in storage: %s', admin_id, e)
+            return None
+        # client object needs console to get groups (set after loading: the client data is not to be altered)
+        admin.console = self.console
+        return admin
+
     def clearAll(self, sclient, client=None):
         """
         Clear a client of all warnings.
@@ -929,15 +946,8 @@ class AdminPlugin(b3.plugin.Plugin):
         :param client: The client removing the warnings
         """
         for w in sclient.warnings:
-            admin = None
-            try:
-                admin = self.console.storage.getClient(Client(id=w.adminId))
-                # client object needs console to get groups
-                admin.console = self.console
-            except Exception:
-                # warning given by the bot (censor, tk, etc) have adminId = 0 which match no client in storage
-                pass
-
+            # warning given by the bot (censor, tk, etc) have adminId = 0 which match no client in storage
+            admin = self.getAdminFromStorage(w.adminId)
             if admin is None or admin.maxLevel <= client.maxLevel:
                 w.inactive = 1
                 self.console.storage.setClientPenalty(w)
@@ -1544,6 +1554,19 @@ class AdminPlugin(b3.plugin.Plugin):
                     else:
                         client.message('^7%s^7 is not in group %s' % (sclient.exactName, group_reg.name))
 
+    @staticmethod
+    def canChangeGroupsOf(sclient, client):
+        """
+        Return True if client may change the groups of sclient: the client must outrank the target (superadmins
+        may manage anyone, as they may already put players in the superadmin group). The target's real level is
+        used (e.g. a privileged player who did not !login yet is temporarily demoted by the login plugin).
+        :param sclient: The client whose groups are to be changed
+        :param client: The client changing the groups
+        """
+        if client.maxLevel >= 100:
+            return True
+        return sclient.realMaxLevel < client.maxLevel
+
     def cmd_putgroup(self, data, client, cmd=None):
         """
         <client> <group> - add a client to a group
@@ -1566,7 +1589,9 @@ class AdminPlugin(b3.plugin.Plugin):
             else:
                 sclient = self.findClientPrompt(cid, client)
                 if sclient:
-                    if sclient.inGroup(group):
+                    if not self.canChangeGroupsOf(sclient, client):
+                        client.message('^7You cannot change the groups of %s' % sclient.exactName)
+                    elif sclient.inGroup(group):
                         client.message(self.getMessage('groups_already_in', sclient.exactName, group.name))
                     else:
                         sclient.setGroup(group)
@@ -1596,9 +1621,14 @@ class AdminPlugin(b3.plugin.Plugin):
             except KeyError:
                 client.message(self.getMessage('group_unknown', {'group_name': keyword}))
             else:
+                if group.level >= client.maxLevel and client.maxLevel < 100:
+                    client.message(self.getMessage('group_beyond_reach', {'group_name': group.name}))
+                    return
                 sclient = self.findClientPrompt(cid, client)
                 if sclient:
-                    if sclient.inGroup(group):
+                    if not self.canChangeGroupsOf(sclient, client):
+                        client.message('^7You cannot change the groups of %s' % sclient.exactName)
+                    elif sclient.inGroup(group):
                         sclient.remGroup(group)
                         sclient.save()
                         cmd.sayLoudOrPM(client, '^7%s ^7removed from group %s' % (sclient.exactName, group.name))
@@ -1716,12 +1746,51 @@ class AdminPlugin(b3.plugin.Plugin):
             client.message(self.getMessage('invalid_parameters'))
         else:
             cid, field = m
+            field = field.strip()
+            if not self._clientinfo_field_allowed(field):
+                client.message('^7Unrecognized field %s' % field)
+                return
             sclient = self.findClientPrompt(cid, client)
             if sclient:
                 try:
                     cmd.sayLoudOrPM(client, '%s^7: %s^7 is %s' % (sclient.exactName, field, getattr(sclient, field)))
                 except AttributeError:
                     client.message('^7Unrecognized field %s' % field)
+
+    # fields !clientinfo must never disclose (password hashes and the like, and anything private/internal)
+    _CLIENTINFO_DENIED_FIELD = re.compile(r'(passw|pwd|secret|token|hash|salt|key|console|clients)', re.I)
+
+    def _clientinfo_field_allowed(self, field):
+        """
+        Tell whether !clientinfo may show the given client attribute.
+        :param field: The client attribute name
+        """
+        if not field or field.startswith('_') or not re.match(r'^[a-z][a-z0-9_]*$', field, re.I):
+            return False
+        return not self._CLIENTINFO_DENIED_FIELD.search(field)
+
+    # commands whose arguments are secret (passwords) and must not end up in the log file
+    _SENSITIVE_COMMANDS = ('login', 'setpassword')
+
+    def mask_sensitive_command(self, text):
+        """
+        Return the given chat text with the arguments of password related commands masked, for logging purposes.
+        :param text: The text said by a player
+        """
+        try:
+            prefixes = (self.cmdPrefix, self.cmdPrefixLoud, self.cmdPrefixBig, self.cmdPrefixPrivate)
+            if not text or len(text) < 2 or text[:1] not in prefixes:
+                return text
+            parts = text[1:].split(None, 1)
+            if len(parts) < 2:
+                return text
+            name = parts[0].lower()
+            command = self._commands.get(name)
+            if name in self._SENSITIVE_COMMANDS or (command and command.command in self._SENSITIVE_COMMANDS):
+                return '%s%s ********' % (text[:1], parts[0])
+        except Exception:
+            pass
+        return text
 
     def cmd_kick(self, data, client=None, cmd=None):
         """
@@ -2005,14 +2074,10 @@ class AdminPlugin(b3.plugin.Plugin):
         sclient = self.findClientPrompt(cid, client)
         if sclient:
             for w in sclient.bans:
-                if w.adminId:
-                    try:
-                        admin = self.console.storage.getClient(Client(id=w.adminId))
-                        if admin.maxLevel > client.maxLevel:
-                            client.message('^7You cannot clear a ban from %s' % admin.exactName)
-                            return
-                    except Exception:
-                        pass
+                admin = self.getAdminFromStorage(w.adminId)
+                if admin and admin.maxLevel > client.maxLevel:
+                    client.message('^7You cannot clear a ban from %s' % admin.exactName)
+                    return
 
             sclient.unban(reason, client)
 
@@ -2118,14 +2183,10 @@ class AdminPlugin(b3.plugin.Plugin):
                 client.message('^7No warnings found for %s' % sclient.exactName)
                 return
 
-            if w.adminId:
-                try:
-                    admin = self.console.storage.getClient(Client(id=w.adminId))
-                    if admin.maxLevel > client.maxLevel:
-                        client.message('^7You cannot clear a warning from %s' % admin.exactName)
-                    return
-                except Exception:
-                    pass
+            admin = self.getAdminFromStorage(w.adminId)
+            if admin and admin.maxLevel > client.maxLevel:
+                client.message('^7You cannot clear a warning from %s' % admin.exactName)
+                return
 
             w.inactive = 1
             self.console.storage.setClientPenalty(w)
@@ -2150,14 +2211,11 @@ class AdminPlugin(b3.plugin.Plugin):
             cleared = 0
             failed = 0
             for w in sclient.warnings:
-                if w.adminId:
-                    try:
-                        admin = self.console.storage.getClient(Client(id=w.adminId))
-                        if admin.maxLevel > client.maxLevel:
-                            failed += 1
-                        break
-                    except Exception:
-                        pass
+                admin = self.getAdminFromStorage(w.adminId)
+                if admin and admin.maxLevel > client.maxLevel:
+                    # warning issued by a higher level admin: leave it
+                    failed += 1
+                    continue
 
                 cleared += 1
                 w.inactive = 1
@@ -2165,7 +2223,7 @@ class AdminPlugin(b3.plugin.Plugin):
 
             if failed and cleared:
                 cmd.sayLoudOrPM(client, '^7Cleared ^3%s ^7warnings and left ^3%s ^7warnings for %s' % (
-                                        failed, cleared, sclient.exactName))
+                                        cleared, failed, sclient.exactName))
             elif failed:
                 client.message('^7Could not clear ^3%s ^7warnings for %s' % (failed, sclient.exactName))
             else:
@@ -2407,7 +2465,10 @@ class Command(object):
         else:
             self.level = (int(level), 100)
 
-        if secretLevel is None:
+        # level required to issue this command as a hidden (private) command
+        try:
+            self.secretLevel = 100 if secretLevel is None else int(secretLevel)
+        except (TypeError, ValueError):
             self.secretLevel = 100
 
     def canUse(self, client):

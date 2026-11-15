@@ -88,7 +88,6 @@ class Q3Parser(AbstractParser):
     gameName = 'q3a'
     PunkBuster = None
 
-    _connectingSlots = []
     _empty_name_default = 'EmptyNameDefault'
     _maplist = None
 
@@ -403,9 +402,14 @@ class Q3Parser(AbstractParser):
     ####################################################################################################################
         
     def OnClientconnect(self, action, data, match=None):
-        client = self.clients.getByCID(data)
-        self.debug('OnClientConnect: %s, %s' % (data, client))
-        self.OnClientuserinfochanged(action, data, match)
+        # data is only the client slot number here (ClientConnect: 3): it is not a userinfo string
+        cid = data.strip()
+        client = self.clients.getByCID(cid)
+        self.debug('OnClientConnect: %s, %s' % (cid, client))
+        if not client:
+            # query the server for the userinfo so we can create the client right away
+            self.OnClientuserinfochanged(action, self.queryClientUserInfoByCid(cid), match)
+            client = self.clients.getByCID(cid)
         return self.getEvent('EVT_CLIENT_JOIN', client=client)
 
     def OnClientuserinfochanged(self, action, data, match=None):
@@ -425,49 +429,50 @@ class Q3Parser(AbstractParser):
                 return
             
             self._connectingSlots.append(cid)
-            client = self.clients.getByCID(cid)
+            try:
+                client = self.clients.getByCID(cid)
 
-            if client:
-                # update existing client
-                for k, v in bclient.items():
-                    setattr(client, k, v)
-                # use the full client as reference now
-                bclient = client
-            else:
-                if not 'name' in bclient:
-                    bclient['name'] = self._empty_name_default
-
-                guid = None
-                if 'guid' in bclient:
-                    guid = bclient['guid']
+                if client:
+                    # update existing client
+                    for k, v in bclient.items():
+                        setattr(client, k, v)
+                    # use the full client as reference now
+                    bclient = client
                 else:
-                    if 'skill' in bclient:
-                        guid = 'BOT' + str(cid)
-                        self.verbose('BOT connected!')
-                        self.clients.newClient(cid, name=bclient['name'], ip='0.0.0.0', state=b3.STATE_ALIVE,
-                                               guid=guid, data={'guid': guid}, team=bclient['team'], bot=True, money=20)
-                        self._connectingSlots.remove(cid)
-                        return None
-                    #else:
-                        #self.info('We are missing the guid but this is not a bot either, dumpuser')
-                        #self._connectingSlots.remove(cid)
-                        #self.OnClientuserinfochanged(None, self.queryClientUserInfoByCid(cid))
-                        #return
+                    if not 'name' in bclient:
+                        bclient['name'] = self._empty_name_default
 
-                if not 'ip' in bclient:
-                    infoclient = self.parseUserInfo(self.queryClientUserInfoByCid(cid))
-                    if 'ip' in infoclient:
-                        bclient['ip'] = infoclient['ip']
+                    guid = None
+                    if 'guid' in bclient:
+                        guid = bclient['guid']
                     else:
-                        self.warning('Failed to get client ip')
-                
-                if 'ip' in bclient:
-                    self.clients.newClient(cid, name=bclient['name'], ip=bclient['ip'], state=b3.STATE_ALIVE,
-                                           guid=guid, data={'guid': guid}, team=bclient['team'], bot=False, money=20)
-                else:
-                    self.warning('Failed to get connect client')
-                    
-            self._connectingSlots.remove(cid)
+                        if 'skill' in bclient:
+                            guid = 'BOT' + str(cid)
+                            self.verbose('BOT connected!')
+                            self.clients.newClient(cid, name=bclient['name'], ip='0.0.0.0', state=b3.STATE_ALIVE,
+                                                   guid=guid, data={'guid': guid}, team=bclient['team'], bot=True, money=20)
+                            return None
+                        #else:
+                            #self.info('We are missing the guid but this is not a bot either, dumpuser')
+                            #self.OnClientuserinfochanged(None, self.queryClientUserInfoByCid(cid))
+                            #return
+
+                    if not 'ip' in bclient:
+                        userinfo = self.queryClientUserInfoByCid(cid)
+                        infoclient = self.parseUserInfo(userinfo) if userinfo else {}
+                        if 'ip' in infoclient:
+                            bclient['ip'] = infoclient['ip']
+                        else:
+                            self.warning('Failed to get client ip')
+
+                    if 'ip' in bclient:
+                        self.clients.newClient(cid, name=bclient['name'], ip=bclient['ip'], state=b3.STATE_ALIVE,
+                                               guid=guid, data={'guid': guid}, team=bclient['team'], bot=False, money=20)
+                    else:
+                        self.warning('Failed to get connect client')
+
+            finally:
+                self._connectingSlots.remove(cid)
                 
         return None
 
@@ -485,7 +490,7 @@ class Q3Parser(AbstractParser):
             return None
 
         ## Fix attacker
-        if match.group('aweap') in self.Suicides:
+        if weapon.isdigit() and int(weapon) in self.Suicides:
             # those kills should be considered suicides
             self.debug('OnKill: fixed attacker, suicide detected: %s' % match.group('text'))
             attacker = victim

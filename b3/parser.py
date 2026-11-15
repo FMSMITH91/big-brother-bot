@@ -108,6 +108,7 @@ class Parser(object):
     clients = None
     config = None  # parser configuration file instance
     delay = 0.33  # time between each game log lines fetching
+    _min_delay = 0.01  # minimum accepted value for the configured delay (avoid busy-spinning)
     delay2 = 0.02  # time between each game log line processing: max number of lines processed in one second
     encoding = 'latin-1'
     game = None
@@ -297,17 +298,8 @@ class Parser(object):
 
         self.msgPrefix = self.prefix
 
-        # delay between log reads
-        if self.config.has_option('server', 'delay'):
-            delay = self.config.getfloat('server', 'delay')
-            if self.delay > 0:
-                self.delay = delay
-
-        # delay between each log's line processing
-        if self.config.has_option('server', 'lines_per_second'):
-            delay2 = self.config.getfloat('server', 'lines_per_second')
-            if delay2 > 0:
-                self.delay2 = 1/delay2
+        # delay between log reads and between each log's line processing
+        self.load_config_delays()
 
         try:
             # setup storage module
@@ -787,26 +779,35 @@ class Parser(object):
         plugin_list.remove(plugin_data)                     # remove admin plugin from unsorted list
         sorted_plugin_list.append(plugin_data)              # put admin plugin as first and discard from the sorting
 
-        # sort remaining plugins according to their inclusion requirements
+        # sort remaining plugins according to their inclusion requirements: since the admin plugin is always loaded
+        # first it is removed from the dependency sets (a plugin requiring 'admin' is otherwise reported as having a
+        # missing dependency, the admin plugin not being part of the sorting)
         self.bot('Sorting plugins according to their dependency tree...')
         sorted_list = [y for y in \
-                        topological_sort([(x.name, set(x.clazz.requiresPlugins + [z for z in \
+                        topological_sort([(x.name, set([r for r in x.clazz.requiresPlugins if r != 'admin'] + [z for z in \
                             x.clazz.loadAfterPlugins if z in plugin_dict])) for x in plugin_list])]
 
         for plugin_name in sorted_list:
             sorted_plugin_list.append(plugin_dict[plugin_name])
 
-        # make sure that required plugins are enabled (both if loaded in b3.ini or loaded automatically)
+        # make sure that required plugins are enabled (both if loaded in b3.ini or loaded automatically): the admin
+        # plugin can never be disabled, while a plugin that requires a disabled plugin is itself loaded as disabled
+        # (with a warning) since it cannot work without its requirement. The explicit configuration (disabling the
+        # required plugin) is honoured rather than silently overridden. The list is sorted by dependency, so the
+        # check propagates down the whole dependency chain.
+        disabled_names = set()
         for plugin_data in sorted_plugin_list:
+            if plugin_data.name == 'admin':
+                plugin_data.disabled = False
+                continue
+            if not plugin_data.disabled:
+                disabled_reqs = [r for r in plugin_data.clazz.requiresPlugins if r in disabled_names]
+                if disabled_reqs:
+                    self.warning('Plugin %s requires plugin(s) %s which are disabled: plugin %s will be disabled too',
+                                 plugin_data.name, ', '.join(disabled_reqs), plugin_data.name)
+                    plugin_data.disabled = True
             if plugin_data.disabled:
-                if plugin_data.name == 'admin':
-                    plugin_data.enabled = True
-                else:
-                    if plugin_data.clazz.requiresPlugins:
-                        for req in plugin_data.clazz.requiresPlugins:
-                            plugin_dict = {x.name: x for x in sorted_plugin_list}
-                            if req in plugin_dict and plugin_dict[req].enabled:
-                                plugin_data.enabled = True
+                disabled_names.add(plugin_data.name)
 
         # notice in log for later inspection
         self.bot('Ready to create plugin instances: %s' % ', '.join([x.name for x in sorted_plugin_list]))
@@ -1055,6 +1056,28 @@ class Parser(object):
         group = self.getGroup(data)
         return group.level
 
+    def load_config_delays(self):
+        """
+        Load the delay between log reads (server::delay) and between each log line
+        processing (server::lines_per_second) from the main configuration file.
+        """
+        if self.config.has_option('server', 'delay'):
+            delay = self.config.getfloat('server', 'delay')
+            if delay >= self._min_delay:
+                self.delay = delay
+            else:
+                # a negative delay would crash run() (time.sleep raises ValueError) and a zero delay would
+                # make the main loop busy-spin: keep a sane minimum
+                fallback = max(self._min_delay, self.delay)
+                self.warning('Invalid value for server::delay (%s): must be at least %s, using %s',
+                             delay, self._min_delay, fallback)
+                self.delay = fallback
+
+        if self.config.has_option('server', 'lines_per_second'):
+            delay2 = self.config.getfloat('server', 'lines_per_second')
+            if delay2 > 0:
+                self.delay2 = 1/delay2
+
     def getTzOffsetFromName(self, tz_name=None):
         """
         Returns the timezone offset given its name.
@@ -1090,8 +1113,9 @@ class Parser(object):
             # if a timezone name has been specified try to use it to format the given gmttime
             tz_name = str(tz_name).strip().upper()
             try:
-                # used when the user manually specifies the offset (i.e: !time +4)
-                tz_offset = float(tz_name) * 3600
+                # used when the user manually specifies the offset (i.e: !time +4): the offset is expressed
+                # in hours, like the one returned by getTzOffsetFromName (converted to seconds below)
+                tz_offset = float(tz_name)
             except ValueError:
                 # treat it as a timezone name (can potentially fallback to autodetection mode)
                 tz_offset, tz_name = self.getTzOffsetFromName(tz_name)
@@ -1404,6 +1428,10 @@ class Parser(object):
         else:
             wrapped_text = self.wrapper.wrap(text)
 
+        if not wrapped_text:
+            # the text was made only of whitespace (and/or color codes which have been stripped)
+            return []
+
         if self._use_color_codes:
             lines = []
             color = self._line_color_prefix
@@ -1487,10 +1515,12 @@ class Parser(object):
         Log a CRITICAL message and shutdown B3.
         """
         self.log.critical(msg, *args, **kwargs)
+        # set the exit code before shutting down: shutdown() ends the main loop which will then
+        # exit with this code (see run()) when critical() is invoked from a thread other than the main one
+        self.exitcode = 220
         self.shutdown()
         self.finalize()
         time.sleep(2)
-        self.exitcode = 220
         raise SystemExit(self.exitcode)
 
     @staticmethod

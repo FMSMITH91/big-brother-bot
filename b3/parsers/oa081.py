@@ -38,7 +38,6 @@ class Oa081Parser(AbstractParser):
     gameName = 'oa081'
     PunkBuster = None
 
-    _connectingSlots = []
     _empty_name_default = 'EmptyNameDefault'
     _maplist = None
 
@@ -374,46 +373,51 @@ class Oa081Parser(AbstractParser):
                 return
             
             self._connectingSlots.append(cid)
-            client = self.clients.getByCID(cid)
+            requery = False
+            try:
+                client = self.clients.getByCID(cid)
 
-            if client:
-                # update existing client
-                for k, v in bclient.items():
-                    setattr(client, k, v)
-            else:
-                if not 'name' in bclient:
-                    bclient['name'] = self._empty_name_default
-
-                if 'guid' in bclient:
-                    guid = bclient['guid']
+                if client:
+                    # update existing client
+                    for k, v in bclient.items():
+                        setattr(client, k, v)
                 else:
-                    if 'skill' in bclient:
-                        guid = 'BOT' + str(cid)
-                        self.verbose('BOT connected!')
-                        self.clients.newClient(cid, name=bclient['name'], ip='0.0.0.0', state=b3.STATE_ALIVE,
-                                               guid=guid, data={'guid': guid}, team=bclient['team'], bot=True, money=20)
-                        self._connectingSlots.remove(cid)
+                    if not 'name' in bclient:
+                        bclient['name'] = self._empty_name_default
+
+                    if 'guid' in bclient:
+                        guid = bclient['guid']
+                    else:
+                        if 'skill' in bclient:
+                            guid = 'BOT' + str(cid)
+                            self.verbose('BOT connected!')
+                            self.clients.newClient(cid, name=bclient['name'], ip='0.0.0.0', state=b3.STATE_ALIVE,
+                                                   guid=guid, data={'guid': guid}, team=bclient['team'], bot=True, money=20)
+                        elif action is not None:
+                            # only retry once: the retry is made with action=None
+                            self.info('We are missing the guid but this is not a bot either, dumpuser')
+                            requery = True
+                        else:
+                            self.warning('Cannot connect player because he has no guid and is not a bot either')
                         return None
+
+                    if not 'ip' in bclient:
+                        userinfo = self.queryClientUserInfoByCid(cid)
+                        infoclient = self.parseUserInfo(userinfo) if userinfo else {}
+                        if 'ip' in infoclient:
+                            bclient['ip'] = infoclient['ip']
+                        else:
+                            self.warning('Failed to get client ip')
+
+                    if 'ip' in bclient:
+                        self.clients.newClient(cid, name=bclient['name'], ip=bclient['ip'], state=b3.STATE_ALIVE,
+                                               guid=guid, data={'guid': guid}, team=bclient['team'], bot=False, money=20)
                     else:
-                        self.info('We are missing the guid but this is not a bot either, dumpuser')
-                        self._connectingSlots.remove(cid)
-                        self.OnClientuserinfochanged(None, self.queryClientUserInfoByCid(cid))
-                        return
-                
-                if not 'ip' in bclient:
-                    infoclient = self.parseUserInfo(self.queryClientUserInfoByCid(cid))
-                    if 'ip' in infoclient:
-                        bclient['ip'] = infoclient['ip']
-                    else:
-                        self.warning('Failed to get client ip')
-                
-                if 'ip' in bclient:
-                    self.clients.newClient(cid, name=bclient['name'], ip=bclient['ip'], state=b3.STATE_ALIVE,
-                                           guid=guid, data={'guid': guid}, team=bclient['team'], bot=False, money=20)
-                else:
-                    self.warning('Failed to get connect client')
-                    
-            self._connectingSlots.remove(cid)
+                        self.warning('Failed to get connect client')
+            finally:
+                self._connectingSlots.remove(cid)
+                if requery:
+                    self.OnClientuserinfochanged(None, self.queryClientUserInfoByCid(cid))
                 
         return None
 
@@ -431,7 +435,7 @@ class Oa081Parser(AbstractParser):
             return None
 
         ## Fix attacker
-        if match.group('aweap') in self.Suicides:
+        if weapon.isdigit() and int(weapon) in self.Suicides:
             # those kills should be considered suicides
             self.debug('OnKill: fixed attacker, suicide detected: %s' % match.group('text'))
             attacker = victim

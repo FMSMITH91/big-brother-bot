@@ -23,7 +23,7 @@
 # ################################################################### #
 
 import logging
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from mockito import mock, when, any as anything
 import unittest
 from b3.config import XmlConfigParser
@@ -102,3 +102,36 @@ num score ping guid       name            lastmsg address               qport  r
         self.assertDictEqual({'slot': '4', 'score': '410', 'ping': '129', 'guid': '281198399', 'name': 'xRedoxX^7', 'last': '0', 'ip': '11.11.11.11', 'port': '29195', 'qport': '-28834', 'rate': '25000', 'pbid': None}, rv.get("4", {}))
         self.assertDictEqual({'slot': '5', 'score': '0', 'ping': '999', 'guid': '1359560555', 'name': 'MikeIsDaBomb^7', 'last': '0', 'ip': '11.11.11.11', 'port': '28960', 'qport': '-20411', 'rate': '25000', 'pbid': None}, rv.get("5", {}))
 
+
+
+class Test_kickbyfullname(Cod5TestCase):
+
+    def test_kickbyfullname(self):
+        # GIVEN
+        self.console.write = Mock(return_value='Joe^7 was kicked.\n')
+        admin = Mock()
+        # WHEN
+        self.console.kickbyfullname('Joe', 'spam', admin)
+        # THEN
+        self.console.write.assert_called_once_with('kick Joe')
+        admin.message.assert_called_once_with('^7Player kicked using full exact name')
+
+
+class Test_action_translation(Cod5TestCase):
+
+    def queued_events(self, line):
+        with patch.object(self.console, 'queueEvent') as queueEvent:
+            self.console.parseLine(line)
+        return [c[0][0] for c in queueEvent.call_args_list]
+
+    def test_bomb_planted(self):
+        events = self.queued_events('1:23 BP;theGuid;4;theName;planted')
+        self.assertEqual(1, len(events))
+        self.assertEqual(self.console.getEventID('EVT_CLIENT_ACTION'), events[0].type)
+        self.assertEqual('bp', events[0].data)
+        self.assertIs(self.player, events[0].client)
+
+    def test_unknown_action(self):
+        events = self.queued_events('1:23 ZZ;theGuid;4;theName;whatever')
+        self.assertEqual(1, len(events))
+        self.assertEqual(self.console.getEventID('EVT_UNKNOWN'), events[0].type)

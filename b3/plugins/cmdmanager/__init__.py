@@ -30,8 +30,11 @@ import b3.plugin
 import b3.plugins.admin
 import b3.events
 import types
+import io
 import os
 import re
+import shutil
+import tempfile
 
 from configparser import ConfigParser
 from configparser import NoOptionError
@@ -168,9 +171,9 @@ class CmdmanagerPlugin(b3.plugin.Plugin):
         """
         Write the new command configuration in the plugin configuration file
         """
-        # read the config file
-        config = ConfigParser()
-        config.read(command.plugin.config.fileName)
+        # read the config file (no interpolation: B3 config values contain bare '%' characters, e.g. message templates)
+        config = ConfigParser(interpolation=None, strict=False, allow_no_value=True)
+        config.read(command.plugin.config.fileName, encoding='utf-8')
 
         # if there is no commands section
         if not config.has_section('commands'):
@@ -189,9 +192,10 @@ class CmdmanagerPlugin(b3.plugin.Plugin):
         self.debug('%s command <%s> in plugin <%s> config file', 'updated' if found else 'created new entry for',
                                                                  command.command, data['plugin_name'])
 
-        # write the updated configuration file
-        with open(command.plugin.config.fileName, 'wb') as configfile:
-            config.write(configfile)
+        # build the whole new content first so that a failure can't leave the config file truncated
+        buf = io.StringIO()
+        config.write(buf)
+        self._write_file(command.plugin.config.fileName, buf.getvalue())
 
     def write_xml_config_file(self, command, data):
         """
@@ -234,9 +238,8 @@ class CmdmanagerPlugin(b3.plugin.Plugin):
         if not changed:
             raise NoSectionError('could not find <commands> section in plugin <%s> config file' % data['plugin_name'])
 
-        # update the configuration file
-        with open(command.plugin.config.fileName, 'w') as f:
-            f.write(self._prettyxml(document))
+        # update the configuration file (content is built before the file is opened, so it's never truncated on error)
+        self._write_file(command.plugin.config.fileName, self._prettyxml(document))
 
     def write_config_file(self, command, client):
         """
@@ -298,9 +301,34 @@ class CmdmanagerPlugin(b3.plugin.Plugin):
     @staticmethod
     def _prettyxml(xml):
         """
-        Return a correctly formatted XML document.
+        Return a correctly formatted XML document (as a str, to be written UTF-8 encoded).
         """
-        return '\n'.join([x for x in xml.toprettyxml(encoding='UTF-8', indent='    ').split('\n') if x.strip()])
+        content = xml.toprettyxml(encoding='UTF-8', indent='    ').decode('UTF-8')
+        return '\n'.join([x for x in content.split('\n') if x.strip()])
+
+    @staticmethod
+    def _write_file(filename, content):
+        """
+        Replace the content of the given file: the content is written to a temporary file in the same directory
+        which is then moved over the original one, so the original file is left untouched if anything goes wrong.
+        """
+        filename = os.path.realpath(filename)  # replace the target of a symlink, not the link itself
+        directory = os.path.dirname(filename)
+        fd, tmpname = tempfile.mkstemp(dir=directory, prefix='.%s.' % os.path.basename(filename), suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(content)
+            try:
+                shutil.copymode(filename, tmpname)
+            except OSError:
+                pass
+            os.replace(tmpname, filename)
+        except BaseException:
+            try:
+                os.remove(tmpname)
+            except OSError:
+                pass
+            raise
 
     @staticmethod
     def get_plugin_name(plugin):

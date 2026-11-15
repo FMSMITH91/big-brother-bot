@@ -231,3 +231,26 @@ class TestConfig(unittest.TestCase):
         ]
         self.assertListEqual(expected_result, conf_xml.get_plugins())
         self.assertListEqual(expected_result, conf_cfg.get_plugins())
+
+
+class Test_xml_plugins_disabled(unittest.TestCase):
+    """
+    Must-have plugins (i.e: admin) cannot be disabled from the XML configuration file.
+    """
+
+    def get_plugins(self, xml):
+        xml_parser = XmlConfigParser()
+        xml_parser.loadFromString(xml)
+        return {p['name']: p['disabled'] for p in MainConfig(xml_parser).get_plugins()}
+
+    def test_admin_cannot_be_disabled(self):
+        plugins = self.get_plugins(dedent(r"""
+            <configuration>
+                <plugins>
+                    <plugin name="admin" config="@conf/plugin_admin.ini" disabled="yes"/>
+                    <plugin name="welcome" config="@conf/plugin_welcome.ini" disabled="yes"/>
+                    <plugin name="spamcontrol" config="@conf/plugin_spamcontrol.ini"/>
+                </plugins>
+            </configuration>
+        """))
+        self.assertDictEqual({'admin': False, 'welcome': True, 'spamcontrol': False}, plugins)

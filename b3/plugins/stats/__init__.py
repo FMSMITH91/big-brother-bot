@@ -427,7 +427,6 @@ class StatsPlugin(b3.plugin.Plugin):
         """
         - list the top 5 map-stats players
         """
-        self.debug('Haha')
         scores = []
         for c in self.console.clients.getList():
             if c.isvar(self, 'points'):
@@ -452,8 +451,11 @@ class StatsPlugin(b3.plugin.Plugin):
                 client.message('^3Top Stats:^7 %s' % ', '.join(results))
             else:
                 self.console.say('^3Top Stats:^7 %s' % ', '.join(results))
-        else:
+        elif client:
             client.message('^3Stats: ^7No top players')
+        else:
+            # called from onShowAwards (no client to reply to): nothing to announce
+            self.debug('no top players to announce')
 
     def cmd_topxp(self, data, client=None, cmd=None):
         """
@@ -483,5 +485,8 @@ class StatsPlugin(b3.plugin.Plugin):
                 client.message('^3Top Experienced Players:^7 %s' % ', '.join(results))
             else:
                 self.console.say('^3Top Experienced Players:^7 %s' % ', '.join(results))
-        else:
+        elif client:
             client.message('^3Stats: ^7No top experienced players')
+        else:
+            # called from onShowAwards (no client to reply to): nothing to announce
+            self.debug('no top experienced players to announce')

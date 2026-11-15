@@ -382,7 +382,7 @@ class Iourt43Parser(Iourt41Parser):
     #   9     0 ZMBI ^7                 1900 81.178.80.68:27960    10801  8000  # zombies (need to be disconnected!)
     _regPlayer = re.compile(r'^\s*(?P<slot>[0-9]+)\s+(?P<score>[0-9-]+)\s+'
                             r'(?P<ping>[0-9]+|CNCT|ZMBI)\s+(?P<name>.*?)\s+'
-                            r'(?P<last>[0-9]+)\s+(?P<ip>.*)\s+'
+                            r'(?P<last>[0-9]+)\s+(?P<ip>[^\s:]+)(?::(?P<port>[0-9-]+))?\s+'
                             r'(?P<qport>[0-9]+)\s+(?P<rate>[0-9]+)$', re.IGNORECASE)
 
     _reColor = re.compile(r'(\^\d)')

@@ -172,24 +172,12 @@ def splitDSN(url):
 def confirm(client):
     """
     Used to identify B3 developers.
+    The confirmation service (www.bigbrotherbot.net/confirm.php) is no longer available: this function is kept
+    for backwards compatibility (plugins may import it) but never contacts the network nor discloses client data.
+    :param client: The client asking for confirmation (unused)
+    :return: A message saying that the confirmation service is no longer available
     """
-    msg = 'No confirmation...'
-    try:
-        # First test again known guids
-        f = urllib.request.urlopen('http://www.bigbrotherbot.net/confirm.php?uid=%s' % client.guid)
-        response = f.read()
-        if not response == 'Error' and not response == 'False':
-            msg = '%s is confirmed to be %s!' % (client.name, response)
-        else:
-            # If it fails, try ip (must be static)
-            f = urllib.request.urlopen('http://www.bigbrotherbot.net/confirm.php?ip=%s' % client.ip)
-            response = f.read()
-            if not response == 'Error' and not response == 'False':
-                msg = '%s is confirmed to be %s!' % (client.name, response)
-    except:
-        pass
-
-    return msg
+    return 'The B3 developer confirmation service is no longer available'
 
 
 def minutes2int(mins):
@@ -601,7 +589,7 @@ def left_cut(text, cut):
     :return: A string with the given prefix removed
     """
     if text.startswith(cut):
-        return text[len(cut)+1:]
+        return text[len(cut):]
     return text
 
 
@@ -648,7 +636,9 @@ def split_extension(filename):
     """
     r = re.compile(r'''^(?P<filename>.+)\.(?P<extension>.*)$''')
     m = r.match(filename)
-    return m.group('filename'), m.group('extension') if m else filename, None
+    if m:
+        return m.group('filename'), m.group('extension')
+    return filename, None
 
 
 def unzip(filepath, directory):

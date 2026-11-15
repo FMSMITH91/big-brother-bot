@@ -23,6 +23,7 @@
 # ################################################################### #
 
 import asyncore
+from b3.parsers.frostbite2.protocol import ThreadSafeDispatcherWithSend
 import logging
 import re
 import time
@@ -302,13 +303,13 @@ class RavagedServerPacketHandler(Thread):
 MIN_MESSAGE_LENGTH = 4 # minimal response is "(1):"
 RE_COMMAND_RESPONSE = re.compile(r'''^(?P<command>[\S^:]+):(?P<response>.*)$''', re.DOTALL)
 
-class RavagedDispatcher(asyncore.dispatcher_with_send):
+class RavagedDispatcher(ThreadSafeDispatcherWithSend):
     """
     This asyncore dispatcher provides the send_command method to write to the socket
     and exposes a Queue.Queue that stores the received full packets.
     """
     def __init__(self, host, port, packet_queue=None):
-        asyncore.dispatcher_with_send.__init__(self)
+        ThreadSafeDispatcherWithSend.__init__(self)
         self.log = logging.getLogger("RavagedDispatcher")
         self._buffer_in = b''
         self.packet_queue = packet_queue if packet_queue else Queue()

@@ -31,6 +31,7 @@ import b3.events
 import b3.plugin
 import codecs
 import gzip
+import http.client
 import os
 import random
 import re
@@ -44,6 +45,9 @@ from configparser import NoOptionError
 
 
 user_agent =  "B3 Banlist plugin/%s" % __version__
+
+DOWNLOAD_TIMEOUT = 30                  # seconds
+MAX_BANLIST_SIZE = 32 * 1024 * 1024    # max size (in bytes) of a downloaded banlist (compressed and decompressed)
 
 
 class BanlistPlugin(b3.plugin.Plugin):
@@ -83,16 +87,14 @@ class BanlistPlugin(b3.plugin.Plugin):
 
         self.registerEvent('EVT_CLIENT_AUTH', self.onAuth)
 
-        if self._banlists:
-            for banlist in self._banlists:
-                if banlist._cronTab :
-                    # remove existing crontab
-                    self.console.cron - banlist._cronTab
-        if self._whitelists:
-            for whitelist in self._whitelists:
-                if whitelist._cronTab :
-                    # remove existing crontab
-                    self.console.cron - whitelist._cronTab
+    def _remove_crontabs(self):
+        """
+        Remove the auto update crontabs of the currently loaded banlists and whitelists.
+        """
+        for banlist in (self._banlists or []) + (self._whitelists or []):
+            if banlist._cronTab:
+                self.console.cron - banlist._cronTab
+                banlist._cronTab = None
 
     def onLoadConfig(self):
         """
@@ -110,6 +112,10 @@ class BanlistPlugin(b3.plugin.Plugin):
 
         self.info('immunity level : %s' % self._immunity_level)
         self.info('auto update : %s' % self._auto_update)
+
+        # onLoadConfig is called before onStartup and again on !reconfig: remove the auto update crontabs of the
+        # previously loaded lists (if any) before loading the new ones, which add their own crontab
+        self._remove_crontabs()
 
         # load banlists from config
         self._banlists = []
@@ -293,6 +299,10 @@ class BanlistPlugin(b3.plugin.Plugin):
 
             if info == 'time':
                 msg = self.console.formatTime(b.getModifiedTime())
+            elif info == 'force_ip_range':
+                msg = getattr(b, '_forceRange', None)
+                if msg is None:
+                    msg = 'n/a'
             else:
                 msg = getattr(b, info)
             if client:
@@ -440,13 +450,21 @@ class Banlist(object):
                 req.add_header('If-None-Match', self.remote_etag)
             opener = urllib.request.build_opener()
             self.plugin.debug('headers : %r', req.headers)
-            webFile =  opener.open(req)
-            result = webFile.read()
-            webFile.close()
+            webFile =  opener.open(req, timeout=DOWNLOAD_TIMEOUT)
+            try:
+                result = webFile.read(MAX_BANLIST_SIZE + 1)
+            finally:
+                webFile.close()
+            if len(result) > MAX_BANLIST_SIZE:
+                self.remote_etag = self.remote_lastmodified = None
+                return "remote banlist is too big (more than %s bytes)" % MAX_BANLIST_SIZE
             if webFile.headers.get('content-encoding', '') == 'gzip':
-                result = io.BytesIO(result)
-                gzipper = gzip.GzipFile(fileobj=result)
-                result = gzipper.read()
+                with gzip.GzipFile(fileobj=io.BytesIO(result)) as gzipper:
+                    # limit the decompressed size (protects against gzip bombs)
+                    result = gzipper.read(MAX_BANLIST_SIZE + 1)
+                if len(result) > MAX_BANLIST_SIZE:
+                    self.remote_etag = self.remote_lastmodified = None
+                    return "remote banlist is too big once decompressed (more than %s bytes)" % MAX_BANLIST_SIZE
             self.remote_lastmodified = webFile.headers.get('Last-Modified') 
             self.remote_etag = webFile.headers.get('ETag') 
             self.plugin.debug('received headers : %s', webFile.info())
@@ -467,7 +485,8 @@ class Banlist(object):
         except urllib.error.URLError as err:
             self.remote_etag = self.remote_lastmodified = None
             return "%s" % err
-        except IOError as e:
+        except (IOError, EOFError, http.client.HTTPException) as e:
+            # IOError includes socket timeouts and bad gzip data
             self.remote_etag = self.remote_lastmodified = None
             if hasattr(e, 'reason'):
                 return "%s" % e.reason
@@ -482,7 +501,10 @@ class Banlist(object):
     def getMessage(self, client):
         """
         Return the message with pattern $name replaced with the banlist's name.
+        The message is optional: return an empty string if the banlist has none.
         """
+        if not self.message:
+            return ''
         return self.message.replace('$name','%s' % client.name)\
             .replace('$ip','%s' % client.ip)\
             .replace('$guid','%s' % client.guid)\

@@ -46,7 +46,7 @@ class Cod4Parser(b3.parsers.cod2.Cod2Parser):
         'ban': 'banclient %(cid)s',
         'unban': 'unbanuser %(name)s',
         'tempban': 'clientkick %(cid)s',
-        'kickbyfullname': 'kick %(cid)s'
+        'kickbyfullname': 'kick %(name)s'
     }
 
     # num score ping guid                             name            lastmsg address               qport rate

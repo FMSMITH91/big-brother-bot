@@ -71,8 +71,8 @@ class Cod7Parser(b3.parsers.cod5.Cod5Parser):
     # different approach on actions). While IW put all EVT_CLIENT_ACTION in the A;
     # action, Treyarch creates a different action for each EVT_CLIENT_ACTION.
     _actionMap = (
-        'AD', # Actor Damage (dogs)
-        'VD'  # Vehicle Damage
+        'ad',  # Actor Damage (dogs)
+        'vd'   # Vehicle Damage
     )
 
     # num score ping guid                             name            lastmsg address               qport rate
@@ -154,7 +154,7 @@ class Cod7Parser(b3.parsers.cod5.Cod5Parser):
         self.setVersionExceptions()
         self.debug('parser started')
 
-    def plugins_started(self):
+    def pluginsStarted(self):
         """
         Called after the parser loaded and started all plugins.
         """
@@ -166,7 +166,7 @@ class Cod7Parser(b3.parsers.cod5.Cod5Parser):
     #                                                                                                                  #
     ####################################################################################################################
 
-    def parse_line(self, line):
+    def parseLine(self, line):
         """
         Parse a log line creating necessary events.
         :param line: The log line to be parsed

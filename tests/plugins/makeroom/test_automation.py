@@ -125,3 +125,47 @@ def test_no_kick_non_member_when_off(plugin, superadmin, joe):
     joe.connects(1)
     # THEN
     assert [] == joe.kick.mock_calls
+
+
+def test_automation_without_admin_does_not_crash(plugin, superadmin, joe):
+    # GIVEN the automation frees a slot: cmd_makeroom is called without client
+    plugin._retain_free_duration = 0
+    joe.kick = Mock()
+    superadmin.connects(0)
+    joe.connects(1)
+    # WHEN
+    plugin.cmd_makeroom()
+    # THEN
+    assert [call(admin=None, reason='to free a slot', silent=True, keyword='makeroom')] == joe.kick.mock_calls
+    assert plugin._kick_in_progress.acquire(False)
+    plugin._kick_in_progress.release()
+
+
+def test_automation_without_admin_with_retain_free_duration(plugin, superadmin, joe):
+    plugin._retain_free_duration = 30
+    joe.kick = Mock()
+    superadmin.connects(0)
+    joe.connects(1)
+    # WHEN
+    plugin.cmd_makeroom()
+    # THEN
+    assert 1 == len(joe.kick.mock_calls)
+    assert plugin._retain_free_slot_info['admin'] is None
+    # a 2nd request while the slot is retained does not crash either
+    plugin.cmd_makeroom()
+    assert 1 == len(joe.kick.mock_calls)
+
+
+def test_automation_without_admin_kick_in_progress(plugin):
+    assert plugin._kick_in_progress.acquire(False)
+    try:
+        plugin.cmd_makeroom()
+    finally:
+        plugin._kick_in_progress.release()
+
+
+def test_automation_without_admin_no_non_member(plugin, superadmin):
+    superadmin.connects(0)
+    plugin.cmd_makeroom()
+    assert plugin._kick_in_progress.acquire(False)
+    plugin._kick_in_progress.release()

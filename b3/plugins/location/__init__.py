@@ -36,6 +36,13 @@ from b3.functions import getCmd
 from configparser import NoOptionError
 
 
+def get_location(client):
+    """
+    Return the geolocation data of a client, or None if the geolocation plugin did not set it (yet).
+    """
+    return getattr(client, 'location', None)
+
+
 class LocationPlugin(b3.plugin.Plugin):
     
     _adminPlugin = None
@@ -112,7 +119,7 @@ class LocationPlugin(b3.plugin.Plugin):
         """
         Handle EVT_CLIENT_GEOLOCATION_SUCCESS.
         """
-        if self._announce and event.client.location and self.console.upTime() > 300:
+        if self._announce and get_location(event.client) and self.console.upTime() > 300:
             self.console.say(self.getMessage('client_connect', self.getMessageVariables(event.client)))
 
     def onPluginDisable(self, event):
@@ -136,36 +143,39 @@ class LocationPlugin(b3.plugin.Plugin):
         :param client: The client whose geolocation information we need to display
         :return: dict
         """
+        location = get_location(client)
         return {
             'id': client.id,
             'name': client.name,
             'connections': client.connections,
-            'country': '--' if not client.location or not client.location.country else client.location.country,
-            'city': '--' if not client.location or not client.location.city else client.location.city,
-            'region': '--' if not client.location or not client.location.region else client.location.region,
-            'cc': '--' if not client.location or not client.location.cc else client.location.cc,
-            'rc': '--' if not client.location or not client.location.rc else client.location.rc,
-            'isp': '--' if not client.location or not client.location.isp else client.location.isp,
+            'country': '--' if not location or not location.country else location.country,
+            'city': '--' if not location or not location.city else location.city,
+            'region': '--' if not location or not location.region else location.region,
+            'cc': '--' if not location or not location.cc else location.cc,
+            'rc': '--' if not location or not location.rc else location.rc,
+            'isp': '--' if not location or not location.isp else location.isp,
         }
 
     def getLocationDistance(self, client, sclient):
         """
         Return the distance between 2 clients (in Km)
         """
-        if not client.location or client.location.lat is None:
+        location1 = get_location(client)
+        location2 = get_location(sclient)
+        if not location1 or location1.lat is None:
             self.debug('could not compute distance: %s has not enough geolocation data', client.name)
             return False
         
-        if not sclient.location or sclient.location.lat is None:
+        if not location2 or location2.lat is None:
             self.debug('could not compute distance: %s has not enough geolocation data', sclient.name)
             return False
 
         self.verbose('computing distance between %s and %s', client.name, sclient.name)
 
-        lat1 = float(client.location.lat)
-        lon1 = float(client.location.lon)
-        lat2 = float(sclient.location.lat)
-        lon2 = float(sclient.location.lon)
+        lat1 = float(location1.lat)
+        lon1 = float(location1.lon)
+        lat2 = float(location2.lat)
+        lon2 = float(location2.lon)
         
         ###
         # Haversine formula
@@ -195,7 +205,7 @@ class LocationPlugin(b3.plugin.Plugin):
         else:
             sclient = self._adminPlugin.findClientPrompt(data, client)
             if sclient:
-                if not sclient.location:
+                if not get_location(sclient):
                     cmd.sayLoudOrPM(client, self.getMessage('cmd_locate_failed', self.getMessageVariables(sclient)))
                 else:
                     cmd.sayLoudOrPM(client, self.getMessage('cmd_locate', self.getMessageVariables(sclient)))
@@ -229,7 +239,7 @@ class LocationPlugin(b3.plugin.Plugin):
         else:
             sclient = self._adminPlugin.findClientPrompt(data, client)
             if sclient:
-                if not sclient.location:
+                if not get_location(sclient):
                     cmd.sayLoudOrPM(client, self.getMessage('cmd_isp_failed', self.getMessageVariables(sclient)))
                 else:
                     cmd.sayLoudOrPM(client, self.getMessage('cmd_isp', self.getMessageVariables(sclient)))

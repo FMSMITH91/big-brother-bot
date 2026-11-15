@@ -71,5 +71,28 @@ class Test_FieldClause(unittest.TestCase):
         self.assertEqual("`time_add` = 5", qb.FieldClause('time_add', 5))
 
 
+class Test_SelectQuery(unittest.TestCase):
+
+    def test_group_by_uses_groupby(self):
+        qb = QueryBuilder()
+        query = qb.SelectQuery('*', 'clients', groupby='`group_bits`', orderby='`id` DESC')
+        self.assertIn('GROUP BY `group_bits`', query)
+        self.assertIn('ORDER BY `id` DESC', query)
+        self.assertLess(query.index('GROUP BY'), query.index('ORDER BY'))
+
+
+class Test_WhereClause(unittest.TestCase):
+
+    def test_no_stray_output(self):
+        import io
+        from contextlib import redirect_stdout
+        qb = QueryBuilder()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            clause = qb.WhereClause(('id', 'name'), (5, 'foo'))
+        self.assertEqual("`id` = 5 and `name` = 'foo'", clause)
+        self.assertEqual('', buf.getvalue())
+
+
 if __name__ == '__main__':
     unittest.main()

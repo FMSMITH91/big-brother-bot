@@ -104,13 +104,13 @@ class Plugin(object):
     ################################## PLUGIN DEVELOPERS: END PLUGIN CUSTOMIZATION #####################################
 
     _enabled = True
-    _messages = {}
+    _messages = None    # per-instance message template cache: created in __init__
 
     config = None
     console = None
     eventmanager = None
     eventmap = None
-    events = []
+    events = None       # per-instance list of registered event ids: created in __init__
 
     working = True
 
@@ -123,6 +123,10 @@ class Plugin(object):
         self.console = console
         self.eventmanager = b3.events.eventManager
         self.eventmap = dict()
+        # these must be per-instance: as class attributes they would be shared by every plugin, so that the
+        # getMessage() cache of a plugin would leak into another one and registered events would be mixed up
+        self._messages = {}
+        self.events = []
         if isinstance(config, b3.config.XmlConfigParser) or isinstance(config, b3.config.CfgConfigParser):
             # this will be used by default from the Parser class since B3 1.10dev
             self.config = config

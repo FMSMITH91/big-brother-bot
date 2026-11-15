@@ -118,6 +118,7 @@ class PunkbusterPlugin(b3.plugin.Plugin):
     def rebuild_bans(self):
         """
         Rebuild pbbans.dat from database
+        :return: the number of bans written, or None if the remote ban file could not be uploaded
         """
         q = """SELECT DISTINCT(c.id), c.name, c.ip, c.pbid, p.time_add, p.reason
                FROM penalties p, clients c
@@ -149,14 +150,12 @@ class PunkbusterPlugin(b3.plugin.Plugin):
         cursor.close()
 
         if self._remoteBansFile:
-            ftp = ftplib.FTP(self._ftpConfig['host'], self._ftpConfig['user'], self._ftpConfig['password'])
-            f.seek(0)
-            try:
-                ftp.storbinary('STOR %s' % self._ftpConfig['path'], f)
-            except Exception as err:
-                self.error('ERROR: %s' % err)
-            ftp.quit()
-            self.debug('uploaded pbbans.dat to FTP server successfully')
+            # ftplib.storbinary needs a binary file object
+            data = io.BytesIO(f.getvalue().encode('utf-8', 'replace'))
+            f.close()
+            if not self._upload_bans_file(data):
+                # do not reload the ban list on the game server: it was not updated
+                return None
         else:
             f.close()
             self.debug('updated pbbans.dat successfully')
@@ -165,6 +164,31 @@ class PunkbusterPlugin(b3.plugin.Plugin):
         self.console.write('PB_SV_BanLoad')
 
         return i
+
+    def _upload_bans_file(self, data):
+        """
+        Upload the pbbans.dat content to the FTP server.
+        :param data: a binary file object
+        :return: True on success, False otherwise
+        """
+        ftp = None
+        try:
+            ftp = ftplib.FTP(self._ftpConfig['host'], self._ftpConfig['user'], self._ftpConfig['password'])
+            ftp.storbinary('STOR %s' % self._ftpConfig['path'], data)
+        except Exception as err:
+            self.error('could not upload pbbans.dat to FTP server: %s' % err)
+            return False
+        finally:
+            if ftp is not None:
+                try:
+                    ftp.quit()
+                except Exception:
+                    try:
+                        ftp.close()
+                    except Exception:
+                        pass
+        self.debug('uploaded pbbans.dat to FTP server successfully')
+        return True
 
     ####################################################################################################################
     #                                                                                                                  #
@@ -190,4 +214,7 @@ class PunkbusterPlugin(b3.plugin.Plugin):
         Rebuild punkbuster ban file
         """
         bans = self.rebuild_bans()
-        client.message('^3PunkBuster: ^7rebuilt %s bans' % bans)
+        if bans is None:
+            client.message('^3PunkBuster: ^1failed to upload the ban file: check the B3 log')
+        else:
+            client.message('^3PunkBuster: ^7rebuilt %s bans' % bans)

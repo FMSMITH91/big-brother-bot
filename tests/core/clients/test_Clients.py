@@ -117,3 +117,42 @@ class TestClients(B3TestCase):
             self.clients.sync()
         self.assertIsNotNone(self.clients.getByCID(1))
         self.assertIsNotNone(self.clients.getByCID(2))
+
+
+class TestClients_lookupByName(B3TestCase):
+    """
+    lookupByName must match the names stored in the database literally: quotes and backslashes used to be escaped
+    twice (never matching on SQLite) and LIKE wildcards were not escaped at all.
+    """
+
+    def setUp(self):
+        B3TestCase.setUp(self)
+        Clients.authorizeClients = Mock()
+        self.clients = self.console.clients
+        for i, name in enumerate(["O'Neil", 'Say "hi"', 'back\\slash', 'percent%', 'under_score', 'underXscore',
+                                  'plain']):
+            Client(console=self.console, guid='guid%s' % i, name=name).save()
+
+    def names(self, needle):
+        return sorted(c.name for c in self.clients.lookupByName(needle))
+
+    def test_single_quote(self):
+        self.assertListEqual(["O'Neil"], self.names("O'Ne"))
+
+    def test_double_quote(self):
+        self.assertListEqual(['Say "hi"'], self.names('"hi"'))
+
+    def test_backslash(self):
+        self.assertListEqual(['back\\slash'], self.names('k\\s'))
+
+    def test_percent_is_literal(self):
+        self.assertListEqual(['percent%'], self.names('%'))
+
+    def test_underscore_is_literal(self):
+        self.assertListEqual(['under_score'], self.names('r_s'))
+
+    def test_plain(self):
+        self.assertListEqual(['plain'], self.names('lai'))
+
+    def test_no_match(self):
+        self.assertListEqual([], self.names('nobody'))

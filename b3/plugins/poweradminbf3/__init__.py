@@ -100,7 +100,8 @@ class Scrambler:
             random.shuffle(allClients)
             return allClients
         else:
-            sortedScores = sorted(self._last_round_scores, key=lambda x:x['score'])
+            # scores are strings in the PlayerInfoBlock: sort them numerically ("100" < "20" as strings)
+            sortedScores = sorted(self._last_round_scores, key=lambda x: int(x['score']))
             self.debug('sorted score : %r' % sortedScores)
             sortedClients = []
             for cid in [x['name'] for x in sortedScores]:

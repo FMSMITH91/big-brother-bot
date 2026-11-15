@@ -46,7 +46,7 @@ class Cod5Parser(b3.parsers.cod2.Cod2Parser):
         'ban': 'banclient %(cid)s',
         'unban': 'unbanuser %(name)s',
         'tempban': 'clientkick %(cid)s',
-        'kickbyfullname': 'kick %(cid)s'
+        'kickbyfullname': 'kick %(name)s'
     }
 
     # Next actions need translation to the EVT_CLIENT_ACTION (Treyarch has a
@@ -89,7 +89,7 @@ class Cod5Parser(b3.parsers.cod2.Cod2Parser):
     #                                                                                                                  #
     ####################################################################################################################
 
-    def parse_line(self, line):
+    def parseLine(self, line):
         """
         Parse a log line creating necessary events.
         :param line: The log line to be parsed

@@ -36,12 +36,17 @@ from functools import reduce
 
 sleep_patcher = None
 def setUpModule():
+    # 'global' is required: without it the patcher was never stopped and time.sleep stayed mocked for every
+    # test run after this module (busy-looping background threads and growing the mock's call list without limit)
+    global sleep_patcher
     sleep_patcher = patch("time.sleep")
     sleep_patcher.start()
 
 def tearDownModule():
+    global sleep_patcher
     if sleep_patcher:
         sleep_patcher.stop()
+        sleep_patcher = None
 
 
 
@@ -1104,3 +1109,87 @@ class Test_patch_b3_client_yell(AbstractParser_TestCase):
             write_mock.assert_any_call(('admin.yell', '[pm] test3', '3', 'player', 'joe'))
 
 
+
+
+class Test_run_loop(AbstractParser_TestCase):
+
+    def setUp(self):
+        self.conf = XmlConfigParser()
+        self.conf.loadFromString("<configuration/>")
+        self.parser = ConcretegameParser(self.conf)
+        self.parser.screen = Mock()
+        self.parser.updateDocumentation = Mock()
+        self.parser.wait_for_threads = Mock()
+        self.parser.output = Mock()
+        self.parser.exitcode = None
+        self.connections = []
+        self.setup_calls = 0
+        self.seen_connections = []
+
+    def new_connection(self):
+        conn = Mock()
+        conn.connected = True
+        self.connections.append(conn)
+        self.parser._serverConnection = conn
+        return conn
+
+    def run_parser(self, packets, max_iterations=2):
+        import queue as queue_module
+        iterations = {'n': 0}
+
+        def get(timeout=None):
+            iterations['n'] += 1
+            self.seen_connections.append(self.parser._serverConnection)
+            if iterations['n'] >= max_iterations:
+                self.parser.working = False
+            if packets:
+                return 0, 0, packets.pop(0)
+            raise queue_module.Empty()
+
+        self.parser.frostbite_event_queue = Mock()
+        self.parser.frostbite_event_queue.get = Mock(side_effect=get)
+        self.parser.working = True
+        self.parser.run()
+
+    def test_connection_setup_failing_after_connecting_is_retried(self):
+        from b3.parsers.frostbite2.protocol import CommandTimeoutError
+
+        def setup_frostbite_connection():
+            self.setup_calls += 1
+            self.new_connection()
+            if self.setup_calls == 1:
+                # e.g.: admin.eventsEnabled or getServerVars timing out
+                raise CommandTimeoutError("did not receive any response for sequence #3")
+
+        self.parser.setup_frostbite_connection = Mock(side_effect=setup_frostbite_connection)
+        # WHEN
+        self.run_parser(packets=[], max_iterations=2)
+        # THEN the half initialized connection was closed and the setup was run again
+        self.assertEqual(2, self.setup_calls)
+        self.assertTrue(self.connections[0].stop.called)
+
+    def test_event_handler_error_does_not_close_the_connection(self):
+        def setup_frostbite_connection():
+            self.setup_calls += 1
+            self.new_connection()
+
+        self.parser.setup_frostbite_connection = Mock(side_effect=setup_frostbite_connection)
+        self.parser.routeFrostbitePacket = Mock(side_effect=AttributeError("'NoneType' object has no attribute 'team'"))
+        # WHEN
+        self.run_parser(packets=[['player.onSpawn', 'Joe', '1']], max_iterations=2)
+        # THEN
+        self.assertEqual(1, self.setup_calls)
+        self.assertEqual(1, self.parser.routeFrostbitePacket.call_count)
+        self.assertIs(self.connections[0], self.seen_connections[1])
+
+
+class Test_OnPlayerSpawn(AbstractParser_TestCase):
+
+    def setUp(self):
+        self.conf = XmlConfigParser()
+        self.conf.loadFromString("<configuration/>")
+        self.parser = ConcretegameParser(self.conf)
+
+    def test_unknown_client(self):
+        with patch.object(self.parser, 'getClient', return_value=None):
+            self.assertIsNone(self.parser.OnPlayerSpawn('player.onSpawn', ['Joe', '1']))

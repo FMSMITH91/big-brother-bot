@@ -553,16 +553,17 @@ class AbstractParser(b3.parser.Parser):
             cmdPrefix = admin_plugin.cmdPrefix
             cmd_prefixes = (cmdPrefix, admin_plugin.cmdPrefixLoud, admin_plugin.cmdPrefixBig)
 
+        admin_commands = admin_plugin._commands if admin_plugin else {}
         cmd_name = text[1:].split(' ', 1)[0].lower()
         if len(text) >= 2 and text[0] == '/':
             if text[1] in cmd_prefixes:
                 text = text[1:]
-            elif cmd_name in admin_plugin._commands:
+            elif cmd_name in admin_commands:
                 text = cmdPrefix + text[1:]
 
         if len(text) >= 2:
             cmd_name = text[1:].split(' ', 1)[0]
-            if cmd_name in admin_plugin._commands:
+            if cmd_name in admin_commands:
                 # Remove chat source from end of line
                 text = text.rpartition(' ')[0]
 
@@ -744,17 +745,22 @@ class AbstractParser(b3.parser.Parser):
         # 0   192.168.0.100:2316    0    80a5885ebe2420bab5e1581234567890(OK) Bravo17 (Lobby)\n
         # 12  90.0.216.144:2304     -1   - babasss (Lobby)\n
         # (1 players in total)'
+        players = self._queryPlayerList()
+        return players if players is not None else {}
+
+    def _queryPlayerList(self):
+        """
+        Query the game server for connected players.
+        Return a dict having players' id for keys and players' data as another dict for values, or None if the
+        server could not be queried (no response/timeout: over UDP a single lost packet is enough). None must not be
+        mistaken for an empty server.
+        """
         players = {}
-        player_list = None
-        try:
-            player_list = self.output.write("players").splitlines()
-        except AttributeError as err:
-            if player_list is None:
-                return players
-            else:
-                raise
-        except:
-            raise
+        response = self.output.write("players") if self.output else None
+        if not isinstance(response, str) or 'Players on server' not in response:
+            self.warning('Could not retrieve the player list from the server (got %r)' % response)
+            return None
+        player_list = response.splitlines()
         self.debug('Playerlist is %s' % player_list)
         self.debug('Playerlist is %s long' % (len(player_list) - 4))
         for i in range(3, len(player_list)-1):
@@ -812,8 +818,12 @@ class AbstractParser(b3.parser.Parser):
         object from self.clients (with self.clients.get_by_cid(cid) or similar methods) and
         look for inconsistencies. If required call the client.disconnect() method to remove
         a client from self.clients.
+        Return None (so that the current client list is kept) if the server could not be queried.
         """
-        plist = self.getPlayerList()
+        plist = self._queryPlayerList()
+        if plist is None:
+            self.warning('Skipping clients synchronization: could not retrieve the player list from the server')
+            return None
         mlist = {}
         for cid, c in plist.items():
             client = self.clients.getByCID(cid)
@@ -1090,6 +1100,8 @@ class AbstractParser(b3.parser.Parser):
         # (1 players in total)
         pings = {}
         player_list = self.output.write("players")
+        if not isinstance(player_list, str):
+            return pings
         for m in re.finditer(self.re_playerlist, player_list):
             if not m.group('lobby'):
                 try:

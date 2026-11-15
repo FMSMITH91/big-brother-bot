@@ -22,7 +22,15 @@
 #                                                                     #
 # ################################################################### #
 
-from b3.plugins.cmdmanager import GRANT_SET_ATTR
+import os
+import shutil
+import tempfile
+
+from textwrap import dedent
+from mockito import when, unstub, ANY
+from b3.config import CfgConfigParser, XmlConfigParser
+from b3.plugin import Plugin
+from b3.plugins.cmdmanager import GRANT_SET_ATTR, CmdmanagerPlugin
 from b3.fake import FakeClient
 from tests.plugins.cmdmanager import Cmdmanager_TestCase
 
@@ -404,3 +412,91 @@ class Test_commands(Cmdmanager_TestCase):
         superadmin.says("!cmduse mike cmdlevel")
         # THEN
         self.assertListEqual(['mike has access to cmdlevel command'], superadmin.message_history)
+
+class Test_update_config_file(Cmdmanager_TestCase):
+    """
+    !cmdlevel / !cmdalias with update_config_file enabled must rewrite the owning plugin's configuration file
+    (and never leave it truncated).
+    """
+
+    INI_CONTENT = dedent(r"""
+        [settings]
+        message: %s was here
+
+        [commands]
+        zzqtest: mod
+        """)
+
+    XML_CONTENT = dedent(r"""<configuration plugin="zzqtest">
+        <settings name="settings">
+            <set name="message">%s was here</set>
+        </settings>
+        <settings name="commands">
+            <set name="zzqtest">mod</set>
+        </settings>
+    </configuration>
+    """)
+
+    def setUp(self):
+        Cmdmanager_TestCase.setUp(self)
+        self.p._update_config_file = True
+        self.tmpdir = tempfile.mkdtemp()
+        self.superadmin = FakeClient(self.console, name="superadmin", guid="superadminguid", groupBits=128)
+        self.superadmin.connects("1")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+        Cmdmanager_TestCase.tearDown(self)
+
+    def _register_plugin(self, filename, content, parser_class):
+        path = os.path.join(self.tmpdir, filename)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        conf = parser_class()
+        conf.load(path)
+        plugin = Plugin(self.console, conf)
+        self.adminPlugin.registerCommand(plugin, 'zzqtest', 2, lambda data, client, cmd=None: None)
+        return path
+
+    @staticmethod
+    def _read(path):
+        with open(path, encoding='utf-8') as f:
+            return f.read()
+
+    def test_cmdlevel_ini(self):
+        path = self._register_plugin('plugin_zzqtest.ini', self.INI_CONTENT, CfgConfigParser)
+        self.superadmin.clearMessageHistory()
+        self.superadmin.says("!cmdlevel zzqtest admin")
+        self.assertListEqual(['command zzqtest level changed: admin'], self.superadmin.message_history)
+        conf = CfgConfigParser()
+        conf.load(path)
+        self.assertEqual('admin', conf.get('commands', 'zzqtest'))
+        self.assertEqual('%s was here', conf.get('settings', 'message'))
+
+    def test_cmdalias_ini(self):
+        path = self._register_plugin('plugin_zzqtest.ini', self.INI_CONTENT, CfgConfigParser)
+        self.superadmin.says("!cmdalias zzqtest zzq")
+        conf = CfgConfigParser()
+        conf.load(path)
+        self.assertListEqual(['zzqtest-zzq'], conf.options('commands'))
+        self.assertEqual('mod', conf.get('commands', 'zzqtest-zzq'))
+        self.assertEqual('%s was here', conf.get('settings', 'message'))
+
+    def test_cmdlevel_xml(self):
+        path = self._register_plugin('plugin_zzqtest.xml', self.XML_CONTENT, XmlConfigParser)
+        self.superadmin.clearMessageHistory()
+        self.superadmin.says("!cmdlevel zzqtest admin")
+        self.assertListEqual(['command zzqtest level changed: admin'], self.superadmin.message_history)
+        conf = XmlConfigParser()
+        conf.load(path)
+        self.assertEqual('admin', conf.get('commands', 'zzqtest'))
+        self.assertEqual('%s was here', conf.get('settings', 'message'))
+
+    def test_failed_write_leaves_file_untouched(self):
+        path = self._register_plugin('plugin_zzqtest.xml', self.XML_CONTENT, XmlConfigParser)
+        when(CmdmanagerPlugin)._prettyxml(ANY).thenRaise(TypeError('boom'))
+        try:
+            self.superadmin.says("!cmdlevel zzqtest admin")
+        finally:
+            unstub()
+        self.assertEqual(self.XML_CONTENT, self._read(path))

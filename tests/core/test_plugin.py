@@ -570,3 +570,126 @@ class Test_Plugin_requiresStorage(B3TestCase):
             self.console.loadPlugins()
         # THEN
         self.assertListEqual([call('Could not load plugin testplugin3', exc_info=ANY)], error_mock.mock_calls)
+
+
+class Test_Plugin_per_instance_state(B3TestCase):
+    """
+    The message cache and the list of registered events used to be class attributes shared by all the plugins.
+    """
+
+    class PluginA(Plugin):
+        pass
+
+    class PluginB(Plugin):
+        pass
+
+    def conf(self, text):
+        conf = CfgConfigParser()
+        conf.loadFromString(dedent("""
+        [messages]
+        foo: %s
+        """ % text))
+        return conf
+
+    def test_getMessage_cache_not_shared(self):
+        # config instances are given directly (as done by Parser.loadPlugins): loadConfig() is not called
+        a = self.PluginA(self.console, self.conf('message from A'))
+        b = self.PluginB(self.console, self.conf('message from B'))
+        self.assertEqual('message from A', a.getMessage('foo'))
+        self.assertEqual('message from B', b.getMessage('foo'))
+        self.assertIsNot(a._messages, b._messages)
+
+    def test_events_not_shared(self):
+        a = self.PluginA(self.console, self.conf('a'))
+        b = self.PluginB(self.console, self.conf('b'))
+        evt_id = self.console.getEventID('EVT_CLIENT_SAY')
+        a.registerEvent('EVT_CLIENT_SAY')
+        self.assertIn(evt_id, a.events)
+        self.assertNotIn(evt_id, b.events)
+        self.assertIsNot(a.events, b.events)
+        self.assertNotIn(evt_id, Plugin.events or [])
+
+
+class Test_Plugin_requiresPlugins(B3TestCase):
+    """
+    Plugin dependencies: a plugin may require the admin plugin, and disabling a required plugin must not prevent
+    B3 from starting (plugins requiring a disabled plugin are disabled as well).
+    """
+
+    @staticmethod
+    def make_module(name, requires=None):
+        import types
+        module = types.ModuleType('test_dep_%s' % name)
+        clazz = type('%sPlugin' % name.title(), (Plugin,), {
+            'requiresConfigFile': False,
+            'requiresPlugins': list(requires or []),
+        })
+        setattr(module, clazz.__name__, clazz)
+        return module
+
+    def setUp(self):
+        B3TestCase.setUp(self)
+        when(self.console.config).get_external_plugins_dir().thenReturn(external_plugins_dir)
+        self.plugin_list = [
+            {'name': 'admin', 'conf': '@b3/conf/plugin_admin.ini', 'path': None, 'disabled': False},
+        ]
+        adminModule = b3.functions.load_module_from_paths('admin', [os.path.join(b3.getB3Path(True), 'plugins')])
+        when(self.console.config).get_plugins().thenReturn(self.plugin_list)
+        when(self.console).pluginImport('admin', ANY).thenReturn(adminModule)
+        self.modules = {
+            'depbase': self.make_module('depbase'),
+            'depchild': self.make_module('depchild', ['depbase']),
+            'depgrandchild': self.make_module('depgrandchild', ['depchild']),
+            'needsadmin': self.make_module('needsadmin', ['admin']),
+        }
+        for name, module in self.modules.items():
+            when(self.console).pluginImport(name, ANY).thenReturn(module)
+            when(self.console).pluginImport(name).thenReturn(module)
+
+    def add(self, name, disabled=False):
+        self.plugin_list.append({'name': name, 'conf': None, 'path': None, 'disabled': disabled})
+
+    def load(self):
+        with patch.object(self.console, 'error') as error_mock:
+            self.console.loadPlugins()
+        self.assertListEqual([], error_mock.mock_calls)
+        return self.console._plugins
+
+    def test_requires_admin(self):
+        self.add('needsadmin')
+        plugins = self.load()
+        self.assertListEqual(['admin', 'needsadmin'], list(plugins.keys()))
+        self.assertTrue(plugins['needsadmin'].isEnabled())
+
+    def test_required_plugin_disabled(self):
+        # i.e: disabled_plugins: geolocation with geowelcome enabled
+        self.add('depbase', disabled=True)
+        self.add('depchild')
+        self.add('depgrandchild')
+        with patch.object(self.console, 'warning') as warning_mock:
+            plugins = self.load()
+        self.assertListEqual(['admin', 'depbase', 'depchild', 'depgrandchild'], list(plugins.keys()))
+        self.assertTrue(plugins['admin'].isEnabled())
+        self.assertFalse(plugins['depbase'].isEnabled())
+        self.assertFalse(plugins['depchild'].isEnabled())
+        self.assertFalse(plugins['depgrandchild'].isEnabled())
+        self.assertEqual(2, len([c for c in warning_mock.mock_calls if 'will be disabled too' in str(c)]))
+
+    def test_required_plugin_enabled(self):
+        self.add('depchild')  # depbase is loaded automatically
+        plugins = self.load()
+        self.assertListEqual(['admin', 'depbase', 'depchild'], list(plugins.keys()))
+        self.assertTrue(plugins['depbase'].isEnabled())
+        self.assertTrue(plugins['depchild'].isEnabled())
+
+    def test_dependent_plugin_disabled_does_not_disable_requirement(self):
+        self.add('depbase')
+        self.add('depchild', disabled=True)
+        plugins = self.load()
+        self.assertTrue(plugins['depbase'].isEnabled())
+        self.assertFalse(plugins['depchild'].isEnabled())
+
+    def test_admin_cannot_be_disabled(self):
+        self.plugin_list[0]['disabled'] = True
+        plugins = self.load()
+        self.assertTrue(plugins['admin'].isEnabled())

@@ -556,3 +556,68 @@ GUID Bans:
             'b57c222222a76f458893641000000005': {'ban_index': '0', 'guid': 'b57c222222a76f458893641000000005', 'reason': 'Script Detection: Gerk', 'min_left': 'perm'},
             '8ac61111111cd2ff4235140000000026': {'ban_index': '1', 'guid': '8ac61111111cd2ff4235140000000026', 'reason': 'Script Detection: setVehicleInit DoThis;', 'min_left': 'perm'},
         }, rv)
+
+
+class Test_player_list_query_failure(EventParsingTestCase):
+    """
+    The 'players' command is sent over UDP: when its response is lost (the Rcon class returns None on timeout),
+    B3 must not consider the server empty and disconnect every client.
+    """
+
+    def setUp(self):
+        EventParsingTestCase.setUp(self)
+        self.bob = FakeClient(self.parser, name="bob", guid="80a50000000000000000000000fcbc7d", ip="1.2.3.4")
+        self.bob.connects("2")
+
+    def test_sync_keeps_clients_when_player_list_query_fails(self):
+        # GIVEN the server does not answer the 'players' command
+        when(self.parser.output).write('players').thenReturn(None)
+        # WHEN
+        rv = self.parser.sync()
+        # THEN
+        self.assertIsNone(rv)
+        self.assertIs(self.bob, self.parser.clients.getByCID("2"))
+
+    def test_clients_sync_keeps_clients_when_player_list_query_fails(self):
+        # GIVEN the server does not answer the 'players' command
+        when(self.parser.output).write('players').thenReturn(None)
+        # WHEN
+        self.parser.clients.sync()
+        # THEN
+        self.assertIs(self.bob, self.parser.clients.getByCID("2"))
+
+    def test_sync_still_removes_clients_when_server_is_empty(self):
+        # GIVEN the server answers that nobody is connected
+        when(self.parser.output).write('players').thenReturn('''\
+Players on server:
+[#] [IP Address]:[Port] [Ping] [GUID] [Name]
+--------------------------------------------------
+(0 players in total)
+''')
+        # WHEN
+        rv = self.parser.sync()
+        # THEN
+        self.assertDictEqual({}, rv)
+        self.assertIsNone(self.parser.clients.getByCID("2"))
+
+    def test_getPlayerList_returns_empty_dict_when_query_fails(self):
+        when(self.parser.output).write('players').thenReturn(None)
+        self.assertDictEqual({}, self.parser.getPlayerList())
+
+    def test_getPlayerPings_when_query_fails(self):
+        when(self.parser.output).write('players').thenReturn(None)
+        self.assertDictEqual({}, self.parser.getPlayerPings())
+
+
+class Test_chat_without_admin_plugin(EventParsingTestCase):
+
+    def test_chat_when_admin_plugin_is_not_loaded(self):
+        # GIVEN
+        bravo17 = FakeClient(self.parser, name="Bravo17", guid="80a5885ebe2420bab5e158a310fcbc7d")
+        bravo17.connects("12")
+        self.clear_events()
+        # WHEN
+        with patch.object(self.parser, "getPlugin", return_value=None):
+            self.parser.routeBattleyeEvent("""(Global) Bravo17: /help me""")
+        # THEN
+        self.assert_has_event("EVT_CLIENT_SAY", client=bravo17, data='/help me (Global)')

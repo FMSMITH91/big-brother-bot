@@ -39,7 +39,6 @@ class Smg11Parser(AbstractParser):
     PunkBuster = None
 
     _empty_name_default = 'EmptyNameDefault'
-    _connectingSlots = []
     _logSync = 1
     _maplist = None
     
@@ -255,7 +254,7 @@ class Smg11Parser(AbstractParser):
         player_id, info = info.split(' ', 1)
 
         if info[:1] != '\\':
-            info += '\\'
+            info = '\\' + info
 
         options = re.findall(r'\\([^\\]+)\\([^\\]+)', info)
 
@@ -306,48 +305,50 @@ class Smg11Parser(AbstractParser):
                 return
             
             self._connectingSlots.append(cid)
-            client = self.clients.getByCID(cid)
+            try:
+                client = self.clients.getByCID(cid)
 
-            if client:
-                # update existing client
-                for k, v in bclient.items():
-                    setattr(client, k, v)
-            else:
-                if 'name' not in bclient:
-                    bclient['name'] = self._empty_name_default
-
-                if 'team' not in bclient:
-                    bclient['team'] = self.getTeam(bclient['team'])
-
-                if 'guid' in bclient:
-                    guid = bclient['guid']
+                if client:
+                    # update existing client
+                    for k, v in bclient.items():
+                        setattr(client, k, v)
                 else:
-                    if 'skill' in bclient:
-                        guid = 'BOT' + str(cid)
-                        self.verbose('Bot connected!')
-                        self.clients.newClient(cid, name=bclient['name'], ip='0.0.0.0', state=b3.STATE_ALIVE,
-                                               guid=guid, data={'guid': guid}, bot=True, money=20)
-                    else:
-                        self.warning('Cannot connect player because he has no guid and is not a bot either')
+                    if 'name' not in bclient:
+                        bclient['name'] = self._empty_name_default
 
-                    self._connectingSlots.remove(cid)
-                    return None
-                
-                if 'ip' not in bclient:
-                    infoclient = self.parseUserInfo(self.queryClientUserInfoByCid(cid))
-                    if 'ip' in infoclient:
-                        bclient['ip'] = infoclient['ip']
+                    if 'team' not in bclient:
+                        bclient['team'] = self.getTeam(bclient['team'])
+
+                    if 'guid' in bclient:
+                        guid = bclient['guid']
                     else:
-                        self.warning('Failed to get client ip')
+                        if 'skill' in bclient:
+                            guid = 'BOT' + str(cid)
+                            self.verbose('Bot connected!')
+                            self.clients.newClient(cid, name=bclient['name'], ip='0.0.0.0', state=b3.STATE_ALIVE,
+                                                   guid=guid, data={'guid': guid}, bot=True, money=20)
+                        else:
+                            self.warning('Cannot connect player because he has no guid and is not a bot either')
+
+                        return None
                 
-                if 'ip' in bclient:
-                    self.clients.newClient(cid, name=bclient['name'], ip=bclient['ip'],
-                                           state=b3.STATE_ALIVE, guid=guid, data={'guid': guid},
-                                           bot=False, money=20)
-                else:
-                    self.warning('Failed to get connect client')
+                    if 'ip' not in bclient:
+                        userinfo = self.queryClientUserInfoByCid(cid)
+                        infoclient = self.parseUserInfo(userinfo) if userinfo else {}
+                        if 'ip' in infoclient:
+                            bclient['ip'] = infoclient['ip']
+                        else:
+                            self.warning('Failed to get client ip')
+                
+                    if 'ip' in bclient:
+                        self.clients.newClient(cid, name=bclient['name'], ip=bclient['ip'],
+                                               state=b3.STATE_ALIVE, guid=guid, data={'guid': guid},
+                                               bot=False, money=20)
+                    else:
+                        self.warning('Failed to get connect client')
                     
-            self._connectingSlots.remove(cid)
+            finally:
+                self._connectingSlots.remove(cid)
                 
         return None
 
@@ -699,7 +700,7 @@ class Smg11Parser(AbstractParser):
         for cid, c in plist.items():
             client = self.getByCidOrJoinPlayer(cid)
             if client:
-                if client.guid and 'guid' in c():
+                if client.guid and 'guid' in c:
                     if client.guid == c['guid']:
                         # player matches
                         self.debug('in-sync %s == %s', client.guid, c['guid'])
@@ -707,7 +708,7 @@ class Smg11Parser(AbstractParser):
                     else:
                         self.debug('no-sync %s <> %s', client.guid, c['guid'])
                         client.disconnect()
-                elif client.ip and 'ip' in c():
+                elif client.ip and 'ip' in c:
                     if client.ip == c['ip']:
                         # player matches
                         self.debug('in-sync %s == %s', client.ip, c['ip'])

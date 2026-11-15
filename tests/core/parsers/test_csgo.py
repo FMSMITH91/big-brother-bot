@@ -31,6 +31,7 @@ from b3.clients import Client
 from b3.config import XmlConfigParser
 from b3.fake import FakeClient
 from b3.parsers.csgo import CsgoParser
+from tests.core.parsers.source_rcon_injection import RconInjectionChecks
 
 
 WAS_FROSTBITE_LOADED = 'b3.parsers.frostbite' in list(sys.modules.keys()) or 'b3.parsers.frostbite2' in list(sys.modules.keys())
@@ -1409,3 +1410,21 @@ class Test_functional(CsgoTestCase):
         # THEN
         self.assert_has_event("EVT_CLIENT_SAY", "blah blah blah", player)
         self.assertEqual(TEAM_RED, player.team) # make sure we do not break existing correct team value
+
+
+class Test_rcon_injection_and_tempban_duration(RconInjectionChecks, CsgoTestCase):
+    def setUp(self):
+        self.conf = XmlConfigParser()
+        self.conf.loadFromString("""<configuration></configuration>""")
+        self.parser = CsgoParser(self.conf)
+        self.parser.output = Mock()
+        self.parser.output.write = Mock(wraps=self.output_write)
+        when(self.parser).is_sourcemod_installed().thenReturn(True)
+        self.parser.startup()
+        self.parser.msgPrefix = "[Pre]"
+        self.player = Client(console=self.parser, cid="2", name="courgette", guid="STEAM_1:0:1111111")
+
+    def tearDown(self):
+        if hasattr(self, "parser"):
+            del self.parser.clients
+            self.parser.working = False

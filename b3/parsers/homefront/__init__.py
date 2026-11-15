@@ -49,6 +49,21 @@ __author__ = 'Courgette, xlr8or, Freelander, 82ndab-Bravo17'
 __version__ = '1.1.9'
 
 
+_RE_CONTROL_CHARS = re.compile(r'[\x00-\x1f\x7f]')
+
+
+def quoted_arg_safe(value):
+    """
+    Make a piece of text safe to be put between the double quotes of a Homefront rcon command argument: a '"' (or
+    a '\\' escaping the closing quote) in a player/admin name or in a ban reason must not be able to end the
+    argument and shift/inject the following ones.
+    """
+    if value is None:
+        return ''
+    text = str(value).replace('\\', '/').replace('"', "'")
+    return _RE_CONTROL_CHARS.sub(' ', text)
+
+
 class HomefrontParser(Parser):
     """
     The HomeFront B3 parser class
@@ -795,9 +810,9 @@ class HomefrontParser(Parser):
             self.say(fullreason)
 
         if client.guid:
-            self.write(self.getCommand('kick', playerid=client.guid))
+            self.write(self.getCommand('kick', playerid=quoted_arg_safe(client.guid)))
         else:
-            self.write(self.getCommand('kick', playerid=client.cid))
+            self.write(self.getCommand('kick', playerid=quoted_arg_safe(client.cid)))
 
         self.queueEvent(b3.events.Event(self.getEventID('EVT_CLIENT_KICK'), {'reason': reason, 'admin': admin}, client))
         client.disconnect()
@@ -834,7 +849,9 @@ class HomefrontParser(Parser):
             client._name = banid
             client.save()
 
-        self.write(self.getCommand('ban', playerid=banid, admin=admin.name.replace('"','\"'), reason=reason))
+        admin_name = admin.name if admin else 'B3'
+        self.write(self.getCommand('ban', playerid=quoted_arg_safe(banid), admin=quoted_arg_safe(admin_name),
+                                   reason=quoted_arg_safe(reason)))
         self.queueEvent(self.getEvent('EVT_CLIENT_BAN', {'reason': reason, 'admin': admin}, client))
         client.disconnect()
 
@@ -885,9 +902,9 @@ class HomefrontParser(Parser):
             self.say(fullreason)
 
         if client.guid:
-            self.write(self.getCommand('kick', playerid=client.guid))
+            self.write(self.getCommand('kick', playerid=quoted_arg_safe(client.guid)))
         else:
-            self.write(self.getCommand('kick', playerid=client.cid))
+            self.write(self.getCommand('kick', playerid=quoted_arg_safe(client.cid)))
             
         self.queueEvent(self.getEvent('EVT_CLIENT_BAN_TEMP', {'reason': reason, 'duration': duration, 'admin': admin}, client))
         client.disconnect()

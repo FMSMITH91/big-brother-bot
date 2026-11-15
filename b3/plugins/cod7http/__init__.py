@@ -30,6 +30,7 @@ import b3.events
 import b3.plugin
 import os.path
 import gzip
+import http.client
 import socket
 import io
 import time
@@ -236,6 +237,11 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
                 self.error('HTTP ERROR: %s' % e)
             except socket.timeout:
                 self.error('TIMEOUT ERROR: socket timed out!')
+            except (OSError, http.client.HTTPException) as e:
+                # connection reset, remote end closed connection without response, incomplete read, ...
+                # do not let the thread die: retry on next iteration
+                self.error('CONNECTION ERROR: %s: %s' % (e.__class__.__name__, e))
+                remote_log_data = b''
 
             # start keeping the time
             start = time.time()
