@@ -108,24 +108,26 @@ class Test_windows_installer(unittest.TestCase):
         minor = '.'.join(build_installer.EMBED_VERSION.split('.')[:2])
         self.assertIn('python-version: "%s"' % minor, workflow.split('windows-installer:')[1])
 
-    def test_command_line_is_validated(self):
-        import argparse
-        folder = tempfile.mkdtemp(dir=ROOT)
+    def write_wheel(self, folder, name, init):
+        with zipfile.ZipFile(os.path.join(folder, name), 'w') as z:
+            z.writestr('b3/__init__.py', init)
+
+    def test_wheel_and_version_found_in_dist(self):
+        folder = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, folder)
-        wheel = os.path.join(folder, 'b3-2.0.0b1-py3-none-any.whl')
-        open(wheel, 'w').close()
+        open(os.path.join(folder, 'b3-2.0.0b1.tar.gz'), 'w').close()
+        self.write_wheel(folder, 'b3-2.0.0b1-py3-none-any.whl', "import os\n__version__ = '2.0.0b1'\n")
+        self.assertEqual((os.path.join(folder, 'b3-2.0.0b1-py3-none-any.whl'), '2.0.0b1'),
+                         build_installer.find_wheel(folder))
 
-        def options(**kwargs):
-            values = dict(wheel=wheel, version='2.0.0b1', out=folder, build_dir=folder)
-            values.update(kwargs)
-            return argparse.Namespace(**values)
-
-        self.assertEqual((os.path.realpath(wheel), os.path.realpath(folder), os.path.realpath(folder)),
-                         build_installer.check_options(options()))
-        for bad in (dict(version='2.0.0 /DFOO=1'), dict(version='2.0.0rc1'), dict(wheel=folder),
-                    dict(wheel=os.path.join(folder, 'evil.exe')), dict(out=tempfile.gettempdir()),
-                    dict(build_dir=os.path.join(ROOT, '..'))):
-            self.assertRaises(SystemExit, build_installer.check_options, options(**bad))
+    def test_refuses_missing_or_ambiguous_wheel_and_odd_versions(self):
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder)
+        self.assertRaises(SystemExit, build_installer.find_wheel, folder)
+        self.write_wheel(folder, 'b3-2.0.0-py3-none-any.whl', "__version__ = '2.0.0 /DFOO=1'\n")
+        self.assertRaises(SystemExit, build_installer.find_wheel, folder)
+        self.write_wheel(folder, 'b3-2.0.1-py3-none-any.whl', "__version__ = '2.0.1'\n")
+        self.assertRaises(SystemExit, build_installer.find_wheel, folder)
 
     def test_inno_setup_script_uses_the_staged_files(self):
         with open(os.path.join(ROOT, 'installer', 'innosetup', 'b3.iss')) as f:

@@ -85,18 +85,13 @@ jobs:
         run: |
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
       - name: Build the installer
-        env:
-          VERSION: ${{ needs.python-packages.outputs.version }}
-        shell: pwsh
-        run: |
-          $wheel = (Get-ChildItem dist\*.whl).FullName
-          python installer/windows/build_installer.py $wheel --version $env:VERSION --out installer-dist
+        run: python installer/windows/build_installer.py
       - name: Install silently and run B3
         shell: pwsh
         env:
           VERSION: ${{ needs.python-packages.outputs.version }}
         run: |
-          $setup = "installer-dist\b3-$env:VERSION-win64-setup.exe"
+          $setup = "dist\b3-$env:VERSION-win64-setup.exe"
           $dir = "$env:RUNNER_TEMP\b3"
           Start-Process -Wait -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", "/LOG=$env:RUNNER_TEMP\setup.log"
           if (-not (Test-Path "$dir\b3.cmd")) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "b3.cmd was not installed" }
@@ -110,7 +105,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: installer-dist/*.exe
+          path: dist/*.exe
           if-no-files-found: error
 
   publish:

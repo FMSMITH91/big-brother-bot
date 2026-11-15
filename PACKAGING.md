@@ -42,7 +42,10 @@ builds with `--no-isolation`.)
 
 Windows installer (on Windows, with Python 3.14 and [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
-    python installer/windows/build_installer.py dist/b3-<version>-py3-none-any.whl --version <version>
+    python -m build
+    python installer/windows/build_installer.py
+
+It installs the B3 wheel found in `dist/` and writes `dist/b3-<version>-win64-setup.exe`.
 
 The embeddable Python version and its SHA-256 are pinned in `installer/windows/build_installer.py`
 (`EMBED_VERSION`, `EMBED_SHA256`); when changing it, update the Python version of the `windows-installer` job in
