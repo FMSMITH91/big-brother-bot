@@ -1,9 +1,6 @@
 # Python modules needed to run the B3 test suite
-unittest2
-mockito
-nose
-nose-cov
-nose-exclude
-mock>=0.8
+mockito>=1.4
+pytest>=7
+pytest-timeout
+pytest-cov
 pylint
-pytest

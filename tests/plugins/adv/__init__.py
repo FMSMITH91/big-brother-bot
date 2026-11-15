@@ -24,11 +24,11 @@
 
 import logging
 import os
-import unittest2 as unittest
+import unittest
 
 from b3.plugins.admin import AdminPlugin
 from tests import B3TestCase
-from mock import patch,  Mock
+from unittest.mock import patch,  Mock
 from mockito import when, unstub
 from b3.plugins.adv import AdvPlugin
 from b3.config import XmlConfigParser, CfgConfigParser
@@ -111,6 +111,9 @@ class AdvTestCase(B3TestCase):
         self.conf = self.p.config
         self.log.setLevel(logging.DEBUG)
         self.log.info("============================= Adv plugin: loading config ============================")
-        self.p.onLoadConfig()
+        # onLoadConfig() validates the news feed by downloading it; keep the tests offline (the default
+        # bigbrotherbot.net feed no longer exists) by faking a well-formed feed
+        with patch('feedparser.parse', return_value={'bozo': 0, 'entries': []}):
+            self.p.onLoadConfig()
         self.log.info("============================= Adv plugin: starting  =================================")
         self.p.onStartup()

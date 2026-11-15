@@ -102,7 +102,7 @@ class OutputHandler(logging.Logger):
         And raises the exception.
         """
         self.log(logging.ERROR, msg, *args, **kwargs) 
-        raise raiseError, msg % args
+        raise raiseError(msg % args)
 
 
 class STDOutLogger:
@@ -123,6 +123,13 @@ class STDOutLogger:
         """
         self.logger.info('STDOUT %r' % msg)
 
+    def flush(self):
+        """
+        No-op: needed because Python 3 code (and the interpreter itself) calls sys.stdout.flush().
+        (from blitztide's fork, commit 0fbfd3f)
+        """
+        pass
+
 
 class STDErrLogger:
     """
@@ -141,6 +148,12 @@ class STDErrLogger:
         :param msg: The message to write
         """
         self.logger.error('STDERR %r' % msg)
+
+    def flush(self):
+        """
+        No-op: needed because Python 3 code (and the interpreter itself) calls sys.stderr.flush().
+        """
+        pass
 
 
 logging.setLoggerClass(OutputHandler)

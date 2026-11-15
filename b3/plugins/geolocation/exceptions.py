@@ -26,6 +26,12 @@ class GeolocalizationError(Exception):
     """
     Raised when we are not able to geolocalize an IP address
     """
+
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     def __init__(self, message):
         Exception.__init__(self, message)
 

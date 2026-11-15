@@ -22,11 +22,12 @@
 #                                                                     #
 # ################################################################### #
 
+import unittest
 import b3
 import logging
 import sys
 
-from mock import patch, call, Mock
+from unittest.mock import patch, call, Mock
 from tests.plugins.admin import Admin_TestCase, Admin_functional_test
 
 
@@ -36,13 +37,10 @@ class Config_reading_TestCase(Admin_TestCase):
     """
     MESSAGE_BEACON = None
 
-    def __init__(self, *args, **kwargs):
-        Admin_TestCase.__init__(self, *args, **kwargs)
-        if not self.__class__.MESSAGE_BEACON:
-            raise NotImplementedError("you are supposed to set MESSAGE_BEACON with a string to look for in warning "
-                                      "and error messages when inheriting from Config_reading_TestCase")
-
     def setUp(self):
+        if not self.__class__.MESSAGE_BEACON:
+            # abstract base class: pytest collects it too, so skip rather than fail
+            raise unittest.SkipTest("Config_reading_TestCase is a base class; subclasses must set MESSAGE_BEACON")
         Admin_TestCase.setUp(self)
         self.warning_patcher = patch.object(self.p, "warning", wraps=self.p.warning)
         self.warning_mock = self.warning_patcher.start()

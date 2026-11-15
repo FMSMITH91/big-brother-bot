@@ -53,23 +53,23 @@ setnextmap-snmap: 20
 
 
     def test_my_getMapsSoundingLike_3_suggestions(self):
-        when(self.console).getMapsSoundingLike('somemap').thenReturn(['map #1', 'map #2', 'map #3'])
+        when(self.console, strict=False).getMapsSoundingLike('somemap').thenReturn(['map #1', 'map #2', 'map #3'])
         self.superadmin.connects('superadmin')
         self.superadmin.message_history = []
         self.superadmin.says('!setnextmap somemap')
         self.assertEqual(['do you mean : map #1, map #2, map #3 ?'], self.superadmin.message_history)
 
     def test_my_getMapsSoundingLike_finds_the_map(self):
-        when(self.console).getMapsSoundingLike('somemap').thenReturn('MP_Subway')
+        when(self.console, strict=False).getMapsSoundingLike('somemap').thenReturn('MP_Subway')
 
-        when(self.console).write(('mapList.list',)).thenReturn([5, 3,
+        when(self.console, strict=False).write(('mapList.list',)).thenReturn([5, 3,
                                                                  'MP_001', 'ConquestSmall0', '1',
                                                                  'MP_003', 'RushLarge0', '1',
                                                                  'MP_Subway', 'SquadRush0', '1',
                                                                  'MP_007', 'SquadDeathMatch0', '1',
                                                                  'MP_011', 'TeamDeathMatch0', '1'])
-        when(self.console).write(('mapList.getRounds',)).thenReturn([0, 1])
-        when(self.console).write(('mapList.getMapIndices',)).thenReturn([0, 1])
+        when(self.console, strict=False).write(('mapList.getRounds',)).thenReturn([0, 1])
+        when(self.console, strict=False).write(('mapList.getMapIndices',)).thenReturn([0, 1])
 
         self.superadmin.connects('superadmin')
         self.superadmin.message_history = []
@@ -78,8 +78,8 @@ setnextmap-snmap: 20
 
 
     def test_empty_list(self):
-        when(self.console).getMapsSoundingLike('map1').thenReturn('MP_Subway')
-        when(self.console).write(('mapList.list',)).thenReturn([0, 3])
+        when(self.console, strict=False).getMapsSoundingLike('map1').thenReturn('MP_Subway')
+        when(self.console, strict=False).write(('mapList.list',)).thenReturn([0, 3])
         self.superadmin.connects('superadmin')
         self.superadmin.message_history = []
         self.superadmin.says('!snmap map1')
@@ -89,14 +89,14 @@ setnextmap-snmap: 20
 
 
     def test_wanted_map_is_not_in_list(self):
-        when(self.console).getMapsSoundingLike('map1').thenReturn('MP_Subway')
+        when(self.console, strict=False).getMapsSoundingLike('map1').thenReturn('MP_Subway')
 
-        when(self.console).write(('mapList.list',)).thenReturn([4, 3,
+        when(self.console, strict=False).write(('mapList.list',)).thenReturn([4, 3,
                                                                  'MP_001', 'ConquestSmall0', '1',
                                                                  'MP_003', 'RushLarge0', '1',
                                                                  'MP_007', 'SquadDeathMatch0', '1',
                                                                  'MP_011', 'TeamDeathMatch0', '1'])
-        when(self.console).write(('mapList.getMapIndices',)).thenReturn([4, 1])
+        when(self.console, strict=False).write(('mapList.getMapIndices',)).thenReturn([4, 1])
 
 
         self.superadmin.connects('superadmin')
@@ -108,15 +108,15 @@ setnextmap-snmap: 20
 
 
     def test_wanted_map_is_in_list(self):
-        when(self.console).getMapsSoundingLike('map1').thenReturn('MP_Subway')
+        when(self.console, strict=False).getMapsSoundingLike('map1').thenReturn('MP_Subway')
 
-        when(self.console).write(('mapList.list',)).thenReturn([5, 3,
+        when(self.console, strict=False).write(('mapList.list',)).thenReturn([5, 3,
                                                                  'MP_001', 'ConquestSmall0', '1',
                                                                  'MP_003', 'RushLarge0', '1',
                                                                  'MP_Subway', 'SquadRush0', '1',
                                                                  'MP_007', 'SquadDeathMatch0', '1',
                                                                  'MP_011', 'TeamDeathMatch0', '1'])
-        when(self.console).write(('mapList.getMapIndices',)).thenReturn([0, 1])
+        when(self.console, strict=False).write(('mapList.getMapIndices',)).thenReturn([0, 1])
 
 
         self.superadmin.connects('superadmin')
@@ -127,15 +127,15 @@ setnextmap-snmap: 20
 
 
     def test_wanted_map_is_already_the_next_map(self):
-        when(self.console).getMapsSoundingLike('map1').thenReturn('MP_Subway')
+        when(self.console, strict=False).getMapsSoundingLike('map1').thenReturn('MP_Subway')
 
-        when(self.console).write(('mapList.list',)).thenReturn([5, 3,
+        when(self.console, strict=False).write(('mapList.list',)).thenReturn([5, 3,
                                                                  'MP_001', 'ConquestSmall0', '1',
                                                                  'MP_003', 'RushLarge0', '1',
                                                                  'MP_Subway', 'SquadRush0', '1',
                                                                  'MP_007', 'SquadDeathMatch0', '1',
                                                                  'MP_011', 'TeamDeathMatch0', '1'])
-        when(self.console).write(('mapList.getMapIndices',)).thenReturn([0, 2])
+        when(self.console, strict=False).write(('mapList.getMapIndices',)).thenReturn([0, 2])
 
         self.superadmin.connects('superadmin')
         self.superadmin.message_history = []
@@ -145,9 +145,9 @@ setnextmap-snmap: 20
 
 
     def test_wanted_map_is_in_the_list_multiple_times(self):
-        when(self.console).getMapsSoundingLike('map1').thenReturn('MP_Subway')
+        when(self.console, strict=False).getMapsSoundingLike('map1').thenReturn('MP_Subway')
 
-        when(self.console).write(('mapList.list',)).thenReturn([10, 3,
+        when(self.console, strict=False).write(('mapList.list',)).thenReturn([10, 3,
                                                                  'MP_001', 'ConquestSmall0', '1',
                                                                  'MP_003', 'ConquestSmall0', '1',
                                                                  'MP_Subway', 'ConquestSmall0', '1', #2
@@ -159,7 +159,7 @@ setnextmap-snmap: 20
                                                                  'MP_017', 'ConquestSmall0', '1',
                                                                  'MP_018', 'ConquestSmall0', '1',
                                                                  ])
-        when(self.console).write(('mapList.getMapIndices',)).thenReturn([0, 1])
+        when(self.console, strict=False).write(('mapList.getMapIndices',)).thenReturn([0, 1])
 
         self.superadmin.connects('superadmin')
         self.superadmin.message_history = []
@@ -169,9 +169,9 @@ setnextmap-snmap: 20
 
 
     def test_wanted_map_is_in_the_list_multiple_times_2(self):
-        when(self.console).getMapsSoundingLike('map1').thenReturn('MP_Subway')
+        when(self.console, strict=False).getMapsSoundingLike('map1').thenReturn('MP_Subway')
 
-        when(self.console).write(('mapList.list',)).thenReturn([10, 3,
+        when(self.console, strict=False).write(('mapList.list',)).thenReturn([10, 3,
                                                                  'MP_001', 'ConquestSmall0', '1',
                                                                  'MP_003', 'ConquestSmall0', '1',
                                                                  'MP_Subway', 'ConquestSmall0', '1', #2
@@ -183,7 +183,7 @@ setnextmap-snmap: 20
                                                                  'MP_017', 'ConquestSmall0', '1',
                                                                  'MP_018', 'ConquestSmall0', '1',
                                                                  ])
-        when(self.console).write(('mapList.getMapIndices',)).thenReturn([2, 3])
+        when(self.console, strict=False).write(('mapList.getMapIndices',)).thenReturn([2, 3])
 
         self.superadmin.connects('superadmin')
         self.superadmin.message_history = []
@@ -193,9 +193,9 @@ setnextmap-snmap: 20
 
 
     def test_wanted_map_is_in_the_list_multiple_times_3(self):
-        when(self.console).getMapsSoundingLike('map1').thenReturn('MP_Subway')
+        when(self.console, strict=False).getMapsSoundingLike('map1').thenReturn('MP_Subway')
 
-        when(self.console).write(('mapList.list',)).thenReturn([10, 3,
+        when(self.console, strict=False).write(('mapList.list',)).thenReturn([10, 3,
                                                                  'MP_001', 'ConquestSmall0', '1',
                                                                  'MP_003', 'ConquestSmall0', '1',
                                                                  'MP_Subway', 'ConquestSmall0', '1', #2
@@ -207,7 +207,7 @@ setnextmap-snmap: 20
                                                                  'MP_017', 'ConquestSmall0', '1',
                                                                  'MP_018', 'ConquestSmall0', '1',
                                                                  ])
-        when(self.console).write(('mapList.getMapIndices',)).thenReturn([6, 7])
+        when(self.console, strict=False).write(('mapList.getMapIndices',)).thenReturn([6, 7])
 
         self.superadmin.connects('superadmin')
         self.superadmin.message_history = []

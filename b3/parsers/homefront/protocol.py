@@ -97,15 +97,16 @@ class Packet(object):
         ## Message Type
         ## type: 8-bit char[]
         ## byte length : 2
-        s = self.message[0:2]
+        s = self.message[0:2].encode('ascii')
+        data = self.data.encode('utf-8')
         ## Data length
         ## type: 32-bit signed int (big-endian)
         ## byte 4
-        s += pack('>i', len(self.data))
+        s += pack('>i', len(data))
         ## Data
         ## type: 8-bit char[N]
         ## byte length : N
-        s += self.data.encode('utf-8')
+        s += data
         return s
     
     def decode(self, packet):
@@ -115,11 +116,11 @@ class Packet(object):
         ## Message Type
         ## type: 8-bit char[]
         ## byte length : 2
-        self.message = packet[0:2]
+        self.message = packet[0:2].decode('ascii', 'replace')
         ## Message Type
         ## type: 8-bit byte
         ## byte length : 1
-        (self.channel,) = unpack('>B', packet[2])
+        (self.channel,) = unpack('>B', packet[2:3])
         ## Data length
         ## type: 32-bit signed int (big-endian)
         ## byte 4
@@ -127,8 +128,7 @@ class Packet(object):
         ## Data
         ## type: 8-bit char[N]
         ## byte length : N
-        str = packet[7:7+datalength]
-        self.data = str.decode('utf-8')
+        self.data = packet[7:7+datalength].decode('utf-8', 'replace')
         
     @staticmethod
     def decodeIncomingPacketSize(packet):
@@ -156,7 +156,7 @@ class Client(asyncore.dispatcher_with_send):
         self._port = port
         self._password = password
         self.keepalive = keepalive
-        self._buffer_in = ''
+        self._buffer_in = b''
         self.authed = False
         self.server_version = None
         self.last_pong_time = self.last_ping_time = time.time()
@@ -187,7 +187,7 @@ class Client(asyncore.dispatcher_with_send):
             for handler in self._handlers:
                 try:
                     handler(p)
-                except Exception, err:
+                except Exception as err:
                     self.console.exception(err)
             p = self._readPacket()
 
@@ -215,7 +215,7 @@ class Client(asyncore.dispatcher_with_send):
             while i < len(s):
                 yield s[i:i + 2]
                 i += 2
-        sha1_pass_bytes = sha1(self._password).hexdigest()
+        sha1_pass_bytes = sha1(self._password.encode('utf-8')).hexdigest()
         self.command('PASS: "%s"' % ' '.join(twobytwo(sha1_pass_bytes.upper())))
 
     def ping(self):
@@ -229,7 +229,7 @@ class Client(asyncore.dispatcher_with_send):
         try:
             self.send(packet.encode())
             self.last_ping_time = time.time()
-        except socket.error, e:
+        except socket.error as e:
             self.console.error(repr(e))
     
     def command(self, text):
@@ -241,7 +241,7 @@ class Client(asyncore.dispatcher_with_send):
         packet.data = text
         try:
             self.send(packet.encode())
-        except socket.error, e:
+        except socket.error as e:
             self.console.error(repr(e))
         
     def _readPacket(self):

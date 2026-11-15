@@ -25,6 +25,7 @@
 import b3
 import os
 
+from b3.querybuilder import QueryBuilder
 from b3.storage.common import DatabaseStorage
 
 
@@ -40,6 +41,7 @@ class SqliteStorage(DatabaseStorage):
         :param console: The console instance.
         """
         super(SqliteStorage, self).__init__(dsn, dsnDict, console)
+        QueryBuilder.backslash_escapes = False
 
     ####################################################################################################################
     #                                                                                                                  #
@@ -60,23 +62,26 @@ class SqliteStorage(DatabaseStorage):
             is_new_database = not os.path.isfile(path)
             self.db = sqlite3.connect(path, check_same_thread=False)
             self.db.isolation_level = None  # set autocommit mode
-        except Exception, e:
+        except Exception as e:
             self.db = None
             self.console.error('Database connection failed: %s', e)
             if self._consoleNotice:
                 self.console.screen.write('Connecting to DB : FAILED\n')
                 self._consoleNotice = False
         else:
-            # import SQL script if necessary
-            if path == ':memory:' or is_new_database:
-                self.console.info("Importing SQL file: %s..." % b3.getAbsolutePath("@b3/sql/sqlite/b3.sql"))
-                self.queryFromFile("@b3/sql/sqlite/b3.sql")
+            # import SQL script if necessary (errors are logged, not raised, as before: the old code returned from a
+            # `finally` block, which silently swallowed them and is a SyntaxWarning since Python 3.14)
+            try:
+                if path == ':memory:' or is_new_database:
+                    self.console.info("Importing SQL file: %s..." % b3.getAbsolutePath("@b3/sql/sqlite/b3.sql"))
+                    self.queryFromFile("@b3/sql/sqlite/b3.sql")
+            except Exception as e:
+                self.console.error('Could not import SQL file: %s', e)
 
             if self._consoleNotice:
                 self.console.screen.write('Connecting to DB : OK\n')
                 self._consoleNotice = False
-        finally:
-            return self.db
+        return self.db
 
     def getConnection(self):
         """
@@ -113,7 +118,7 @@ class SqliteStorage(DatabaseStorage):
         if cursor and not cursor.EOF:
             while not cursor.EOF:
                 row = cursor.getRow()
-                tables.append(row.values()[0])
+                tables.append(row['name'])
                 cursor.moveNext()
         cursor.close()
         return tables
@@ -148,4 +153,4 @@ class SqliteStorage(DatabaseStorage):
         Check whether the connection with the storage layer is active or not.
         :return True if the connection is active, False otherwise.
         """
-        return self.db is None
+        return self.db is not None

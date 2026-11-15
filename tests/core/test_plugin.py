@@ -24,14 +24,14 @@
 
 
 import b3
-import imp
+import b3.functions
 import logging
 import os
-from ConfigParser import NoOptionError
+from configparser import NoOptionError
 
-from mock import patch
-from mock import call
-from mock import ANY
+from unittest.mock import patch
+from unittest.mock import call
+from unittest.mock import ANY
 from mockito import when
 
 from b3.config import CfgConfigParser
@@ -200,9 +200,9 @@ class Test_Plugin_registerEvent(B3TestCase):
         p = MyPlugin(self.console, self.conf)
         p.registerEvent(k)
         # THEN
-        self.assertIn(k, self.console._handlers.keys())
+        self.assertIn(k, list(self.console._handlers.keys()))
         self.assertIn(p, self.console._handlers[k])
-        self.assertIn(k, p.eventmap.keys())
+        self.assertIn(k, list(p.eventmap.keys()))
         # WHEN
         self.console.queueEvent(Event(k, None))
         # THEN
@@ -216,9 +216,9 @@ class Test_Plugin_registerEvent(B3TestCase):
         p = MyPlugin(self.console, self.conf)
         p.registerEvent(k, p.stub_not_callable)
         # THEN
-        self.assertIn(k, self.console._handlers.keys())
+        self.assertIn(k, list(self.console._handlers.keys()))
         self.assertIn(p, self.console._handlers[k])
-        self.assertNotIn(k, p.eventmap.keys())
+        self.assertNotIn(k, list(p.eventmap.keys()))
         # WHEN
         self.console.queueEvent(Event(k, None))
         # THEN
@@ -232,9 +232,9 @@ class Test_Plugin_registerEvent(B3TestCase):
         p = MyPlugin(self.console, self.conf)
         p.registerEvent(k, p.stub_method)
         # THEN
-        self.assertIn(k, self.console._handlers.keys())
+        self.assertIn(k, list(self.console._handlers.keys()))
         self.assertIn(p, self.console._handlers[k])
-        self.assertIn(k, p.eventmap.keys())
+        self.assertIn(k, list(p.eventmap.keys()))
         self.assertIn(p.stub_method, p.eventmap[k])
         # WHEN
         self.console.queueEvent(Event(k, None))
@@ -250,9 +250,9 @@ class Test_Plugin_registerEvent(B3TestCase):
         p.registerEvent(k, p.stub_method)
         p.registerEvent(k, p.stub_method2)
         # THEN
-        self.assertIn(k, self.console._handlers.keys())
+        self.assertIn(k, list(self.console._handlers.keys()))
         self.assertIn(p, self.console._handlers[k])
-        self.assertIn(k, p.eventmap.keys())
+        self.assertIn(k, list(p.eventmap.keys()))
         self.assertIn(p.stub_method, p.eventmap[k])
         self.assertIn(p.stub_method2, p.eventmap[k])
         # WHEN
@@ -269,9 +269,9 @@ class Test_Plugin_registerEvent(B3TestCase):
         p.registerEvent(k, p.stub_method)
         p.registerEvent(k, p.stub_not_callable)
         # THEN
-        self.assertIn(k, self.console._handlers.keys())
+        self.assertIn(k, list(self.console._handlers.keys()))
         self.assertIn(p, self.console._handlers[k])
-        self.assertIn(k, p.eventmap.keys())
+        self.assertIn(k, list(p.eventmap.keys()))
         self.assertIn(p.stub_method, p.eventmap[k])
         self.assertNotIn(p.stub_method2, p.eventmap[k])
         # WHEN
@@ -287,9 +287,9 @@ class Test_Plugin_registerEvent(B3TestCase):
         p = MyPlugin(self.console, self.conf)
         p.registerEvent(k, p.stub_method, p.stub_method2)
         # THEN
-        self.assertIn(k, self.console._handlers.keys())
+        self.assertIn(k, list(self.console._handlers.keys()))
         self.assertIn(p, self.console._handlers[k])
-        self.assertIn(k, p.eventmap.keys())
+        self.assertIn(k, list(p.eventmap.keys()))
         self.assertIn(p.stub_method, p.eventmap[k])
         self.assertIn(p.stub_method2, p.eventmap[k])
         # WHEN
@@ -305,9 +305,9 @@ class Test_Plugin_registerEvent(B3TestCase):
         p = MyPlugin(self.console, self.conf)
         p.registerEvent(k, p.stub_method, p.stub_not_callable)
         # THEN
-        self.assertIn(k, self.console._handlers.keys())
+        self.assertIn(k, list(self.console._handlers.keys()))
         self.assertIn(p, self.console._handlers[k])
-        self.assertIn(k, p.eventmap.keys())
+        self.assertIn(k, list(p.eventmap.keys()))
         self.assertIn(p.stub_method, p.eventmap[k])
         self.assertNotIn(p.stub_method2, p.eventmap[k])
         # WHEN
@@ -375,9 +375,9 @@ class Test_Plugin_registerEvent(B3TestCase):
         p = MyPlugin(self.console, self.conf)
         p.registerEvent(evt_name, p.stub_method)
         # THEN
-        self.assertIn(k, self.console._handlers.keys())
+        self.assertIn(k, list(self.console._handlers.keys()))
         self.assertIn(p, self.console._handlers[k])
-        self.assertIn(k, p.eventmap.keys())
+        self.assertIn(k, list(p.eventmap.keys()))
         self.assertIn(p.stub_method, p.eventmap[k])
         # WHEN
         self.console.queueEvent(Event(k, None))
@@ -398,20 +398,11 @@ class Test_Plugin_requiresParser(B3TestCase):
             {'name': 'admin', 'conf': '@b3/conf/plugin_admin.ini', 'path': None, 'disabled': False},
         ]
 
-        fp, pathname, description = imp.find_module('testplugin1', [os.path.join(b3.getB3Path(True), '..', 'tests', 'plugins', 'fakeplugins')])
-        pluginModule1 = imp.load_module('testplugin1', fp, pathname, description)
-        if fp:
-            fp.close()
+        pluginModule1 = b3.functions.load_module_from_paths('testplugin1', [os.path.join(b3.getB3Path(True), '..', 'tests', 'plugins', 'fakeplugins')])
 
-        fp, pathname, description = imp.find_module('testplugin2', [os.path.join(b3.getB3Path(True), '..', 'tests', 'plugins', 'fakeplugins')])
-        pluginModule2 = imp.load_module('testplugin2', fp, pathname, description)
-        if fp:
-            fp.close()
+        pluginModule2 = b3.functions.load_module_from_paths('testplugin2', [os.path.join(b3.getB3Path(True), '..', 'tests', 'plugins', 'fakeplugins')])
 
-        fp, pathname, description = imp.find_module('admin', [os.path.join(b3.getB3Path(True), 'plugins')])
-        adminModule = imp.load_module('admin', fp, pathname, description)
-        if fp:
-            fp.close()
+        adminModule = b3.functions.load_module_from_paths('admin', [os.path.join(b3.getB3Path(True), 'plugins')])
 
         when(self.console.config).get_plugins().thenReturn(self.plugin_list)
         when(self.console).pluginImport('admin', ANY).thenReturn(adminModule)
@@ -519,20 +510,11 @@ class Test_Plugin_requiresStorage(B3TestCase):
             {'name': 'admin', 'conf': '@b3/conf/plugin_admin.ini', 'path': None, 'disabled': False},
         ]
 
-        fp, pathname, description = imp.find_module('testplugin1', [os.path.join(b3.getB3Path(True), '..', 'tests', 'plugins', 'fakeplugins')])
-        pluginModule1 = imp.load_module('testplugin1', fp, pathname, description)
-        if fp:
-            fp.close()
+        pluginModule1 = b3.functions.load_module_from_paths('testplugin1', [os.path.join(b3.getB3Path(True), '..', 'tests', 'plugins', 'fakeplugins')])
 
-        fp, pathname, description = imp.find_module('testplugin3', [os.path.join(b3.getB3Path(True), '..', 'tests', 'plugins', 'fakeplugins')])
-        pluginModule3 = imp.load_module('testplugin3', fp, pathname, description)
-        if fp:
-            fp.close()
+        pluginModule3 = b3.functions.load_module_from_paths('testplugin3', [os.path.join(b3.getB3Path(True), '..', 'tests', 'plugins', 'fakeplugins')])
 
-        fp, pathname, description = imp.find_module('admin', [os.path.join(b3.getB3Path(True), 'plugins')])
-        adminModule = imp.load_module('admin', fp, pathname, description)
-        if fp:
-            fp.close()
+        adminModule = b3.functions.load_module_from_paths('admin', [os.path.join(b3.getB3Path(True), 'plugins')])
 
         when(self.console.config).get_plugins().thenReturn(self.plugin_list)
         when(self.console).pluginImport('admin', ANY).thenReturn(adminModule)

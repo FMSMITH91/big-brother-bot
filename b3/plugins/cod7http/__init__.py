@@ -31,10 +31,10 @@ import b3.plugin
 import os.path
 import gzip
 import socket
-import StringIO
+import io
 import time
 import threading
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 user_agent = "B3 Cod7Http plugin/%s" % __version__
 
@@ -55,7 +55,7 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
     _port = None
     _url = None
 
-    lastlines = ''
+    lastlines = b''  # raw bytes: the remote log is handled as bytes and appended as-is to the local log
     locallog = None
     httpthreadinst = None
     timeout = _default_timeout
@@ -85,7 +85,7 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
 
             if self._publicIp[0:1] == '~' or self._publicIp[0:1] == '/':
                 # load ip from a file
-                f = file(self.console.getAbsolutePath(self._publicIp))
+                f = open(self.console.getAbsolutePath(self._publicIp))
                 self._publicIp = f.read().strip()
                 f.close()
 
@@ -107,14 +107,14 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
             # get timeout value set by gameservers.com
             try:
                 
-                req = urllib2.Request(self._timeout_url)
+                req = urllib.request.Request(self._timeout_url)
                 req.headers['User-Agent'] = user_agent
-                f = urllib2.urlopen(req)
+                f = urllib.request.urlopen(req)
                 self.timeout = int(f.readlines()[0])
                 f.close()
                 self.debug('using timeout value of %s seconds' % self.timeout)
                 
-            except (urllib2.HTTPError, urllib2.URLError, socket.timeout), error: 
+            except (urllib.error.HTTPError, urllib.error.URLError, socket.timeout) as error: 
                 self.timeout = self._default_timeout
                 self.error('ERROR: %s' % error)
                 self.error('ERROR: Couldn\'t get timeout value. Using default %s seconds' % self.timeout)
@@ -145,7 +145,7 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
         """
         Test whether processData thread is still running.
         """
-        return self.httpthreadinst.isAlive()
+        return self.httpthreadinst.is_alive()
 
     def writeCompletelog(self, locallog, remotelog):
         """
@@ -159,10 +159,10 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
             self.console.pause()
             self.debug('Pausing')
         # Remove last line if not complete
-        i = remotelog.rfind ('\r\n')
+        i = remotelog.rfind(b'\r\n')
         remotelog = remotelog[:i + 2]
         # remove any blank lines
-        while remotelog[-4:-2] == '\r\n':
+        while remotelog[-4:-2] == b'\r\n':
             remotelog = remotelog[:-2]
         
         # use Just a baka's lazy cursor
@@ -174,9 +174,9 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
         else:
             output = open(locallog, 'wb')
 
-        output.write('\r\n')
-        output.write('B3 has restarted writing the log file\r\n')
-        output.write('\r\n')
+        output.write(b'\r\n')
+        output.write(b'B3 has restarted writing the log file\r\n')
+        output.write(b'\r\n')
         output.close()
 
         self.info('remote log downloaded successfully')
@@ -195,9 +195,9 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
         _firstRead = True
         n = 0
         while self.console.working:
-            remotelog = ''
-            response = ''
-            remote_log_data = ''
+            remotelog = b''
+            response = None
+            remote_log_data = b''
             remotelogsize = 0
 
             # specify range depending on if the last line
@@ -213,15 +213,15 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
                 'Accept-encoding' : 'gzip'
             }
 
-            request = urllib2.Request(self._url, None, headers)
+            request = urllib.request.Request(self._url, None, headers)
 
             # get remote log url response and headers
             try:
-                response = urllib2.urlopen(request)
+                response = urllib.request.urlopen(request)
                 headers = response.info()
 
                 # buffer/download remote log
-                if response != '':
+                if response is not None:
                     remote_log_data = response.read()
                     remotelogsize = round((len(remote_log_data) / float(1024)), 2)
                     # self.verbose('Downloaded: %s KB total' % remotelogsize)
@@ -229,10 +229,10 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
                 try:
                     # close remote file
                     response.close()
-                except AttributeError, e:
+                except AttributeError as e:
                     self.error('ERROR: %s' % e)
 
-            except (urllib2.HTTPError, urllib2.URLError), e:
+            except (urllib.error.HTTPError, urllib.error.URLError) as e:
                 self.error('HTTP ERROR: %s' % e)
             except socket.timeout:
                 self.error('TIMEOUT ERROR: socket timed out!')
@@ -247,13 +247,13 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
                 try:
                     #self.debug('Content-Encoding: %s' % headers.get('Content-Encoding'))
                     if headers.get('Content-Encoding') == 'gzip':
-                        compressedstream = StringIO.StringIO(remote_log_data)
+                        compressedstream = io.BytesIO(remote_log_data)
                         gzipper = gzip.GzipFile(fileobj=compressedstream)
                         remotelog = gzipper.read()
                     else:
                         remotelog = remote_log_data
-                except IOError, e:
-                    remotelog = ''
+                except (IOError, EOFError) as e:
+                    remotelog = b''
                     self.error('IOERROR: %s' % e)
 
                 if os.path.exists(self.locallog) and os.path.getsize(self.locallog) > 0 and not _firstRead:
@@ -269,14 +269,14 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
                             checklog = remotelog.rpartition(self.lastlines)
                             newlog = checklog[2]
                             # remove any broken last line
-                            i = newlog.rfind ('\r\n')
+                            i = newlog.rfind(b'\r\n')
                             newlog = newlog[:i + 2]
                             # remove any blank lines
-                            while newlog[-4:-2] == '\r\n':
+                            while newlog[-4:-2] == b'\r\n':
                                 newlog = newlog[:-2]
-                        except ValueError, error:
+                        except ValueError as error:
                             self.error ('ValueError: %s' % error)
-                            newlog = ''
+                            newlog = b''
 
                         # remove any blank lines from end
                         # append the additions to our log if there is something and update lazy cursor

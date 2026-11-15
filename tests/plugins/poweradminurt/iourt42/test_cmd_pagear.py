@@ -23,7 +23,7 @@
 # ################################################################### #
 
 import time
-from mock import patch, call
+from unittest.mock import patch, call
 from mockito import when
 from b3.config import CfgConfigParser
 from b3.cvar import Cvar
@@ -153,11 +153,11 @@ weapon_codes = (
 
 
 def all_gear_but(*args):
-    return "".join(sorted(G_ALL.translate(None, "".join(args))))
+    return "".join(sorted(G_ALL.translate(str.maketrans("", "", "".join(args)))))
 
 
 def only_gear(*args):
-    return "".join(sorted(G_ALL.translate(None, all_gear_but(*args))))
+    return "".join(sorted(G_ALL.translate(str.maketrans("", "", all_gear_but(*args)))))
 
 
 class Test_cmd_pagear(Iourt42TestCase):
@@ -207,10 +207,12 @@ pagear-gear: 20
         self.superadmin.message_history = []
         self.superadmin.says("!gear")
         # THEN
-        self.assertListEqual(["current gear: med:ON, vest:ON, ak:ON, de:ON, psg:ON, nvg:ON, hk:ON, mac:ON, mp5:ON, las:ON, ber:ON, ump:ON, g36:ON, neg:ON, glo:ON, smo:ON, m4:ON, lr:ON, hel:ON, spas:ON, sr8:ON, he:ON, colt:ON, ammo:ON, sil:ON",
-                              "Usage: !pagear [+/-][med|vest|ak|de|psg|nvg|hk|mac|mp5|las|ber|ump|g36|neg|glo|smo|m4|lr|hel|spas|sr8|he|colt|ammo|sil]",
-                              "Load weapon groups: !pagear [+/-][all_nades|all_auto|all_pistols|all_snipers]",
-                              "Load defaults: !pagear [reset|all|none]"],
+        # weapons are listed in the plugin's own (dict) order
+        weapons = list(self.p._weapons)
+        self.assertListEqual(["current gear: " + ", ".join("%s:ON" % w for w in weapons),
+                              "Usage: !pagear [+/-][" + "|".join(weapons) + "]",
+                              "Load weapon groups: !pagear [+/-][" + "|".join(self.p._weapon_groups) + "]",
+                              "Load defaults: !pagear [" + "|".join(self.p._gears) + "]"],
                               self.superadmin.message_history)
 
     def test_reset(self):

@@ -44,8 +44,8 @@ vipsave: 20
 
 
     def test_nominal(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn([])
-        when(self.console).write(('reservedSlotsList.save',)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.save',)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vipsave")
@@ -53,9 +53,9 @@ vipsave: 20
         self.assertEqual('VIP list saved to disk (0 name written)', self.moderator.message_history[0])
 
     def test_nominal_2(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['foo', 'bar'])
-        when(self.console).write(('reservedSlotsList.list', 2)).thenReturn([])
-        when(self.console).write(('reservedSlotsList.save',)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['foo', 'bar'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 2)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.save',)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vipsave")
@@ -63,8 +63,8 @@ vipsave: 20
         self.assertEqual('VIP list saved to disk (2 names written)', self.moderator.message_history[0])
 
     def test_frostbite_error(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn([])
-        when(self.console).write(('reservedSlotsList.save',)).thenRaise(CommandFailedError(['f00']))
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.save',)).thenRaise(CommandFailedError(['f00']))
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vipsave")

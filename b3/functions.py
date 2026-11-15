@@ -30,12 +30,56 @@ import os
 import re
 import sys
 import shutil
-import string
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 import zipfile
 
 from hashlib import md5
 from b3.exceptions import ProgrammingError
+
+
+def load_module_from_paths(name, paths):
+    """
+    Find and import a top-level module or package called `name` from the given search paths.
+    Replacement for the removed imp.find_module()/imp.load_module() pair: like imp.load_module(),
+    the module is (re)loaded and registered in sys.modules under `name`.
+    :param name: The module name
+    :param paths: A list of directories to search
+    :raise ImportError: If the module cannot be found
+    """
+    import importlib.machinery
+    import importlib.util
+    spec = importlib.machinery.PathFinder.find_spec(name, [p for p in paths if p])
+    if spec is None or spec.loader is None:
+        raise ImportError('No module named %s' % name, name=name)
+    module = importlib.util.module_from_spec(spec)
+    previous = sys.modules.get(name)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        if previous is not None:
+            sys.modules[name] = previous
+        else:
+            sys.modules.pop(name, None)
+        raise
+    return module
+
+
+def hide_url_password(url):
+    """
+    Return the given URL with the password (if any) replaced by asterisks, so it can be logged safely.
+    e.g. ftp://user:secret@host/path -> ftp://user:******@host/path
+    :param url: The URL to sanitize
+    """
+    import urllib.parse
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        return url
+    if parts.password is None:
+        return url
+    netloc = parts.netloc.replace(':%s@' % parts.password, ':******@', 1)
+    return urllib.parse.urlunsplit(parts._replace(netloc=netloc))
 
 
 def getModule(name):
@@ -132,13 +176,13 @@ def confirm(client):
     msg = 'No confirmation...'
     try:
         # First test again known guids
-        f = urllib2.urlopen('http://www.bigbrotherbot.net/confirm.php?uid=%s' % client.guid)
+        f = urllib.request.urlopen('http://www.bigbrotherbot.net/confirm.php?uid=%s' % client.guid)
         response = f.read()
         if not response == 'Error' and not response == 'False':
             msg = '%s is confirmed to be %s!' % (client.name, response)
         else:
             # If it fails, try ip (must be static)
-            f = urllib2.urlopen('http://www.bigbrotherbot.net/confirm.php?ip=%s' % client.ip)
+            f = urllib.request.urlopen('http://www.bigbrotherbot.net/confirm.php?ip=%s' % client.ip)
             response = f.read()
             if not response == 'Error' and not response == 'False':
                 msg = '%s is confirmed to be %s!' % (client.name, response)
@@ -232,16 +276,19 @@ def escape(text, esc):
     :param esc: The character to escape
     :return: string
     """
-    return string.replace(text, esc, '\\%s' % esc)
+    return text.replace(esc, '\\%s' % esc)
 
 
 def decode(text):
     """
     Return a copy of text decoded using the default system encoding.
+    On Python 3 paths and strings are already unicode, so `str` input is returned unchanged.
     :param text: the text to decode
     :return: string
     """
-    return text.decode(sys.getfilesystemencoding())
+    if isinstance(text, bytes):
+        return text.decode(sys.getfilesystemencoding())
+    return text
 
 
 def clamp(value, minv=None, maxv=None):
@@ -269,8 +316,8 @@ def console_exit(message=''):
         if sys.stdout != sys.__stdout__:
             sys.stdout = sys.__stdout__
             sys.stderr = sys.__stderr__
-        print message
-        raw_input("press any key to continue...")
+        print(message)
+        input("press any key to continue...")
         raise SystemExit()
     else:
         raise SystemExit(message)
@@ -318,14 +365,14 @@ def soundex(s1):
     """
     Return the soundex value to a string argument.
     """
-    ignore = "~!@#$%^&*()_+=-`[]\|;:'/?.,<>\" \t\f\v"
-    table = string.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ', '01230120022455012623010202')
+    ignore = "~!@#$%^&*()_+=-`[]\\|;:'/?.,<>\" \t\f\v"
+    table = str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ', '01230120022455012623010202', ignore)
 
-    s1 = string.strip(string.upper(s1))
+    s1 = s1.upper().strip()
     if not s1:
         return "Z000"
     s2 = s1[0]
-    s1 = string.translate(s1.encode('ascii', 'ignore'), table, ignore)
+    s1 = s1.encode('ascii', 'ignore').decode('ascii').translate(table)
     if not s1:
         return "Z000"
     prev = s1[0]
@@ -341,8 +388,8 @@ def soundex(s1):
 def meanstdv(x):
     """
     Calculate mean and standard deviation of data x[]:
-        mean = {\sum_i x_i \over n}
-        std = sqrt(\sum_i (x_i - mean)^2 \over n-1)
+        mean = {\\sum_i x_i \\over n}
+        std = sqrt(\\sum_i (x_i - mean)^2 \\over n-1)
     credit: http://www.physics.rutgers.edu/~masud/computing/WPark_recipes_in_python.html
     """
     from math import sqrt
@@ -423,14 +470,14 @@ def getStuffSoundingLike(stuff, expected_stuff):
         match = [clean_expected_stuff[clean_stuff]]
     else:
         # stuff could be a substring of one of the expected value
-        matching_subset = filter(lambda x: x.lower().find(clean_stuff) >= 0, clean_expected_stuff.keys())
+        matching_subset = [x for x in list(clean_expected_stuff.keys()) if x.lower().find(clean_stuff) >= 0]
         if len(matching_subset) == 1:
             match = [clean_expected_stuff[matching_subset[0]]]
         elif len(matching_subset) > 1:
             match = [clean_expected_stuff[i] for i in matching_subset]
         else:
             # no luck with subset lookup, fallback on soundex magic
-            for m in clean_expected_stuff.keys():
+            for m in list(clean_expected_stuff.keys()):
                 s = soundex(m)
                 if s == soundex1:
                     match.append(clean_expected_stuff[m])
@@ -438,13 +485,16 @@ def getStuffSoundingLike(stuff, expected_stuff):
     if not len(match):
         match = sorted(list(expected_stuff))
         match.sort(key=lambda _map: levenshteinDistance(clean_stuff, _map.strip()))
-    return list(set(match))
+    # dedupe while keeping the closest-sounding matches first
+    return list(dict.fromkeys(match))
 
 
 def hash_password(password):
     """
     Calculate the MD5 digest of a given string.
     """
+    if isinstance(password, str):
+        password = password.encode('utf-8')
     return md5(password).hexdigest()
 
 

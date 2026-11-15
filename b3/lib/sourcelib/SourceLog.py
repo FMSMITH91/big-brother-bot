@@ -48,8 +48,8 @@ TOKEN = {
     'numplayers': '(?P<numplayers>[0-9]+)',
     'player': '(?P<player_name>.*?)<(?P<player_uid>[0-9]*)><(?P<player_steamid>(Console|BOT|STEAM_[01]:[01]:[0-9]{1,12}))><(?P<player_team>[^<>"]*)>',
     'position': '^(?P<x>-?[0-9]+) (?P<y>-?[0-9]+) (?P<z>-?[0-9]+)',
-    'property': ' \((?P<property_key>[^() ]+) "(?P<property_value>[^"]*)"\)',
-    'propertybug': '(?P<rest>.*" disconnected) \((?P<property_key>reason) "(?P<proprety_value>[^"]*)',
+    'property': ' \\((?P<property_key>[^() ]+) "(?P<property_value>[^"]*)"\\)',
+    'propertybug': '(?P<rest>.*" disconnected) \\((?P<property_key>reason) "(?P<property_value>[^"]*)',
     'reason': '(?P<reason>.*)',
     'rest': '(?P<rest>.*)',
     'score': '(?P<score>-?[0-9]+)',
@@ -123,6 +123,8 @@ class SourceLogParser(object):
         pass
 
     def parse(self, line):
+        if isinstance(line, (bytes, bytearray)):
+            line = bytes(line).strip(b'\x00\xff\r\n\t ').decode('UTF-8', 'replace')
         line = line.strip('\x00\xff\r\n\t ')
 
         # parse header (type and date)
@@ -138,7 +140,7 @@ class SourceLogParser(object):
         if match.group('type') == 'RL':
             remote = True
 
-        timestamp = map(int, match.group('year', 'month', 'day', 'hour', 'minute', 'second'))
+        timestamp = list(map(int, match.group('year', 'month', 'day', 'hour', 'minute', 'second')))
 
         # parse properties (key "value"), optional
         properties = {}
@@ -197,12 +199,16 @@ class SourceLogParser(object):
         self.action(remote, timestamp, 'unknown', line, properties)
 
     def parse_file(self, filename):
-        f = open(filename, 'r')
-
-        for line in f:
-            self.parse(line)
+        with open(filename, 'r', encoding='UTF-8', errors='replace') as f:
+            for line in f:
+                self.parse(line)
 
 class SourceLogListenerError(Exception):
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     pass
 
 class SourceLogListener(asyncore.dispatcher):
@@ -222,7 +228,7 @@ class SourceLogListener(asyncore.dispatcher):
     def handle_read(self):
         data = self.recv(PACKETSIZE)
 
-        if data.startswith('\xff\xff\xff\xff') and data.endswith('\n\x00'):
+        if data.startswith(b'\xff\xff\xff\xff') and data.endswith(b'\n\x00'):
             self.parser.parse(data)
 
         else:

@@ -35,10 +35,42 @@ import b3.output # do not remove, needed because the module alters some defaults
 log = logging.getLogger('output')
 log.setLevel(logging.WARNING)
 
-from mock import Mock, patch
+from unittest.mock import Mock, patch
 import time
-import unittest2 as unittest
+import unittest
 from b3.events import Event
+
+
+import mockito as _mockito
+
+if not getattr(_mockito.when, '_b3_lenient', False):
+    # The B3 test suite was written against old mockito releases where `when(obj)` was lenient: calling a method with
+    # arguments that were not stubbed simply returned None. mockito >= 1.0 is strict by default and raises instead.
+    # Restore the old default (tests can still opt in with strict=True). This module is imported before any test
+    # module, so their `from mockito import when` picks up this wrapper.
+    _mockito_when = _mockito.when
+
+    def _lenient_when(obj, strict=False):
+        return _mockito_when(obj, strict=strict)
+
+    _lenient_when._b3_lenient = True
+    _mockito.when = _lenient_when
+
+
+if not hasattr(unittest.TestCase, 'assertDictContainsSubset'):
+    # removed from unittest in Python 3.12; many B3 tests still rely on it
+    def _assertDictContainsSubset(self, subset, dictionary, msg=None):
+        missing = [k for k in subset if k not in dictionary]
+        mismatched = ['%r: expected %r, actual %r' % (k, subset[k], dictionary[k])
+                      for k in subset if k in dictionary and dictionary[k] != subset[k]]
+        if missing or mismatched:
+            parts = []
+            if missing:
+                parts.append('Missing: %s' % ','.join(repr(m) for m in missing))
+            if mismatched:
+                parts.append('Mismatched values: %s' % ', '.join(mismatched))
+            self.fail(self._formatMessage(msg, '; '.join(parts)))
+    unittest.TestCase.assertDictContainsSubset = _assertDictContainsSubset
 
 
 testcase_lock = threading.Lock()  # together with flush_console_streams, helps getting logging output related to the
@@ -78,6 +110,9 @@ class B3TestCase(unittest.TestCase):
 
     def setUp(self):
         testcase_lock.acquire()
+        # release through addCleanup: cleanups run even when setUp fails (tearDown does not), so a single broken
+        # setUp can no longer leave the lock held and deadlock every following test
+        self.addCleanup(testcase_lock.release)
         flush_console_streams()
 
         # create a FakeConsole parser
@@ -94,12 +129,11 @@ class B3TestCase(unittest.TestCase):
         self.console.cron.stop()
 
         def myError(msg, *args, **kwargs):
-            print(("ERROR: %s" % msg) % args)
+            print((("ERROR: %s" % msg) % args))
         self.console.error = myError
 
     def tearDown(self):
         flush_console_streams()
-        testcase_lock.release()
 
     @contextmanager
     def assertRaiseEvent(self, event_type, event_client=None, event_data=None, event_target=None):
@@ -117,11 +151,8 @@ class B3TestCase(unittest.TestCase):
                 # WHEN
                 self.client.team = 24
         """
-        if type(event_type) is basestring:
-            event_type_name = event_type
-        else:
-            event_type_name = self.console.getEventName(event_type)
-            self.assertIsNotNone(event_type_name, "could not find event with name '%s'" % event_type)
+        event_type_name = self.console.getEventName(event_type)
+        self.assertIsNotNone(event_type_name, "could not find event with name '%s'" % event_type)
 
         with patch.object(self.console, 'queueEvent') as queueEvent:
             yield

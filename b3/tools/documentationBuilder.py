@@ -34,14 +34,15 @@ __version__ = '1.2.9'
 import datetime
 import os
 import re
-import StringIO
+import io
 import time
 
 from b3 import getConfPath, getB3Path, getWritableFilePath
 from b3.functions import splitDSN
-from cgi import escape
+from html import escape
 from ftplib import FTP
 from xml.dom.minidom import Document
+from functools import cmp_to_key
 
 
 class DocBuilder:
@@ -238,7 +239,7 @@ class DocBuilder:
         if self._maxlevel is not None:
             self._console.debug('AUTODOC: get commands with level <= %s' % self._maxlevel)
         commands = {}
-        for cmd in self._adminPlugin._commands.values():
+        for cmd in list(self._adminPlugin._commands.values()):
             if cmd in commands or \
                 cmd.level is None:
                 continue
@@ -250,7 +251,7 @@ class DocBuilder:
             if cmd.alias is not None and cmd.alias != '' :
                 tmp['alias'] = cmd.prefix + cmd.alias
             tmp['plugin'] = re.sub('Plugin$', '', cmd.plugin.__class__.__name__) 
-            _cmd_help = escape(cmd.help)
+            _cmd_help = escape(cmd.help, quote=False)
             if _cmd_help.startswith('-'):
                 tmp['description'] = _cmd_help[1:]
             else:
@@ -272,8 +273,8 @@ class DocBuilder:
             else:
                 return 0
 
-        listCommands = commands.values()
-        listCommands.sort(commands_compare)
+        listCommands = list(commands.values())
+        listCommands.sort(key=cmp_to_key(commands_compare))
         return listCommands
     
     def _write(self, text):
@@ -285,14 +286,14 @@ class DocBuilder:
             self._console.debug('AUTODOC: uploading to FTP server %s' % dsn['host'])
             ftp = FTP(dsn['host'], dsn['user'], passwd=dsn['password'])
             ftp.cwd(os.path.dirname(dsn['path']))
-            ftpfile = StringIO.StringIO()
+            ftpfile = io.StringIO()
             ftpfile.write(text)
             ftpfile.seek(0)
             ftp.storbinary('STOR ' + os.path.basename(dsn['path']), ftpfile)
         elif dsn['protocol'] == 'file':
             path = getWritableFilePath(dsn['path'], True)
             self._console.debug('AUTODOC: writing to %s', path)
-            f = file(path, 'w')
+            f = open(path, 'w')
             f.write(text)
             f.close()
         else:

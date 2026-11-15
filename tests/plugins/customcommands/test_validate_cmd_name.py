@@ -23,8 +23,8 @@
 # ################################################################### #
 
 
-from mock import Mock
-from unittest2 import TestCase
+from unittest.mock import Mock
+from unittest import TestCase
 from b3.config import CfgConfigParser
 from b3.plugins.customcommands import CustomcommandsPlugin
 
@@ -55,6 +55,6 @@ class Test_validate_cmd_name(TestCase):
     def test_nominal(self):
         try:
             self.p._validate_cmd_name("cookie")
-        except (AssertionError, ValueError), err:
+        except (AssertionError, ValueError) as err:
             self.fail("expecting no error, got %r" % err)
 

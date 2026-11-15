@@ -25,7 +25,24 @@
 __author__  = 'ThorN'
 __version__ = '1.3.0'
 
+def escape_string(value):
+    """
+    Escape a value for use *inside* a single-quoted SQL string literal ('...').
+    Single quotes are doubled (standard SQL, understood by MySQL, SQLite and PostgreSQL); backslashes are doubled
+    as well when the active storage treats them as escape characters (MySQL). Use this when building raw SQL.
+    :param value: The value to escape (converted to str)
+    """
+    value = str(value)
+    if QueryBuilder.backslash_escapes:
+        value = value.replace('\\', '\\\\')
+    return value.replace("'", "''")
+
+
 class QueryBuilder(object):
+
+    # Set by the storage layer on startup: MySQL treats backslashes inside string literals as escape characters,
+    # SQLite and PostgreSQL (standard_conforming_strings) do not.
+    backslash_escapes = False
 
     def __init__(self, db=None):
         """
@@ -36,15 +53,17 @@ class QueryBuilder(object):
 
     def escape(self, word):
         """
-        Escape quotes from a given string.
-        :param word: The string on which to perform the escape
+        Return the given value as an SQL literal: numbers as-is, everything else as a properly escaped
+        single-quoted string. (B3 used to emit "..." with only double quotes backslash-escaped, which a value
+        ending in a backslash could break out of on MySQL and any double quote could break out of on SQLite.)
+        :param word: The value to escape
         """
-        if isinstance(word, int) or isinstance(word, long) or isinstance(word, complex) or isinstance(word, float):
+        if isinstance(word, (int, float, complex)):
             return str(word)
         elif word is None:
-            return '"None"'
+            return "'None'"
         else:
-            return '"%s"' % word.replace('"', '\\"')
+            return "'%s'" % escape_string(word)
 
     def quoteArgs(self, args):
         """
@@ -145,7 +164,7 @@ class QueryBuilder(object):
             if len(fields) == 1 and len(values) == 1:
                 sql.append(self.FieldClause(fields[0], values[0]))
             else:
-                print fields
+                print(fields)
                 for k, field in enumerate(fields):
                     v = values[k]
                     sql.append(self.FieldClause(field, v))
@@ -167,7 +186,7 @@ class QueryBuilder(object):
                 sql.append(self.FieldClause(field, ''))
 
         elif isinstance(fields, dict):
-            for k, v in fields.iteritems():
+            for k, v in fields.items():
                 sql.append(self.FieldClause(k, v))
 
         else:
@@ -224,7 +243,7 @@ class QueryBuilder(object):
         sql += table + " SET "
 
         sets = []
-        for k, v in data.iteritems():
+        for k, v in data.items():
             sets.append(self.FieldClause(k, v))
 
         sql += ", ".join(sets)
@@ -248,7 +267,7 @@ class QueryBuilder(object):
 
         keys = []
         values = []
-        for k, v in data.iteritems():
+        for k, v in data.items():
             keys.append(k)
             values.append(self.escape(v))
 
@@ -272,7 +291,7 @@ class QueryBuilder(object):
 
         keys = []
         values = []
-        for k, v in data.iteritems():
+        for k, v in data.items():
             keys.append(k)
             values.append(self.escape(v))
 

@@ -23,7 +23,7 @@
 # ################################################################### #
 
 from b3 import functions
-import unittest2 as unittest
+import unittest
     
 class TestSplitDSN(unittest.TestCase):
     def assertDsnEqual(self, url, expected):
@@ -146,7 +146,7 @@ class TestTime2minutes(unittest.TestCase):
 class Test_misc(unittest.TestCase):
 
     def test_minutesStr(self):
-        for test_data, expected in {
+        for test_data, expected in list({
             '3s': '3 seconds',
             '4m': '4 minutes',
             '41': '41 minutes',
@@ -170,13 +170,13 @@ class Test_misc(unittest.TestCase):
             861984: '1.6 year',
             1051200: '2 years',
             10512000: '20 years',
-        }.items():
+        }.items()):
             result = functions.minutesStr(test_data)
             if expected != result:
                 self.fail("%r, expecting '%s' but got '%s'" % (test_data, expected, result))
 
     def test_vars2printf(self):
-        for test_data, expected in {
+        for test_data, expected in list({
             '': '',
             'qsdf': 'qsdf',
             'qsdf $azer xcw': 'qsdf %(azer)s xcw',
@@ -184,17 +184,17 @@ class Test_misc(unittest.TestCase):
             '$test': '%(test)s',
             '  $test ': '  %(test)s ',
             '  $test $foo $ $bar': '  %(test)s %(foo)s $ %(bar)s',
-        }.items():
+        }.items()):
             result = functions.vars2printf(test_data)
             if expected != result:
                 self.fail("%r, expecting '%s' but got '%s'" % (test_data, expected, result))
 
     def test_meanstdv(self):
-        for test_data, expected in {
+        for test_data, expected in list({
             (5,): (5.0, 0),
             (10,): (10.0, 0),
             (): (0, 0)
-        }.items():
+        }.items()):
             result = functions.meanstdv(test_data)
             if expected != result:
                 self.fail("%r, expecting '%s' but got '%s'" % (test_data, expected, result))
@@ -230,7 +230,8 @@ class Test_getStuffSoundingLike(unittest.TestCase):
         self.assertListEqual(['jack'], functions.getStuffSoundingLike('jak', ['bar', 'foO', 'joe', 'jack', 'averell', 'william']))
 
     def test_fallback(self):
-        self.assertListEqual(['bar', 'william', 'joe', 'averell', 'foO', 'jack'], functions.getStuffSoundingLike('xxx', ['bar', 'foO', 'joe', 'jack', 'averell', 'william']))
+        # fallback: every candidate, closest (Levenshtein) first
+        self.assertListEqual(['bar', 'foO', 'joe', 'jack', 'averell', 'william'], functions.getStuffSoundingLike('xxx', ['bar', 'foO', 'joe', 'jack', 'averell', 'william']))
 
 
 class Test_topologicalSort(unittest.TestCase):
@@ -243,3 +244,17 @@ class Test_topologicalSort(unittest.TestCase):
                     ('myplugin5', {'myplugin1', 'myplugin3', 'myplugin4'})]
         sorted_list = [x for x in functions.topological_sort(dep_list)]
         self.assertListEqual(sorted_list, ['myplugin3', 'myplugin1', 'myplugin2', 'myplugin4', 'myplugin5'])
+
+
+class Test_hide_url_password(unittest.TestCase):
+
+    def test_password_is_masked(self):
+        self.assertEqual('ftp://user:******@example.com:21/games_mp.log',
+                         functions.hide_url_password('ftp://user:s3cr3t@example.com:21/games_mp.log'))
+        self.assertEqual('sftp://b3:******@host/path/to/log',
+                         functions.hide_url_password('sftp://b3:p%40ss@host/path/to/log'))
+
+    def test_url_without_password_is_unchanged(self):
+        self.assertEqual('http://example.com/games_mp.log', functions.hide_url_password('http://example.com/games_mp.log'))
+        self.assertEqual('ftp://user@example.com/log', functions.hide_url_password('ftp://user@example.com/log'))
+        self.assertEqual('/local/games_mp.log', functions.hide_url_password('/local/games_mp.log'))

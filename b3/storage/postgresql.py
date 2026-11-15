@@ -27,6 +27,7 @@ import re
 import sys
 
 from b3.storage.cursor import Cursor as DBCursor
+from b3.querybuilder import QueryBuilder
 from b3.storage.common import DatabaseStorage
 from time import time
 from traceback import extract_tb
@@ -61,6 +62,7 @@ class PostgresqlStorage(DatabaseStorage):
         :param console: The console instance.
         """
         super(PostgresqlStorage, self).__init__(dsn, dsnDict, console)
+        QueryBuilder.backslash_escapes = False
         # check for valid PostgreSQL host
         if not self.dsnDict['host']:
             raise AttributeError("invalid PostgreSQL host in %(protocol)s://%(user)s:******@%(host)s:%(port)s%(path)s" % self.dsnDict)
@@ -122,14 +124,14 @@ class PostgresqlStorage(DatabaseStorage):
                     try:
                         self.console.info("Missing PostgreSQL database tables: importing SQL file: %s..." % b3.getAbsolutePath("@b3/sql/postgresql/b3.sql"))
                         self.queryFromFile("@b3/sql/postgresql/b3.sql")
-                    except Exception, e:
+                    except Exception as e:
                         self.shutdown()
                         self.console.critical("Missing PostgreSQL database tables. You need to create the necessary tables for "
                                               "B3 to work. You can do so by importing the following SQL script into your "
                                               "database: %s. An attempt of creating tables automatically just failed: %s" %
                                               (b3.getAbsolutePath("@b3/sql/postgresql/b3.sql"), e))
 
-            except Exception, e:
+            except Exception as e:
                 self.console.error('Database connection failed: working in remote mode: %s - %s', e, extract_tb(sys.exc_info()[2]))
                 self.db = None
                 self._lastConnectAttempt = time()
@@ -173,7 +175,7 @@ class PostgresqlStorage(DatabaseStorage):
         if cursor and not cursor.EOF:
             while not cursor.EOF:
                 row = cursor.getRow()
-                tables.append(row.values()[0])
+                tables.append(list(row.values())[0])
                 cursor.moveNext()
         cursor.close()
         return tables
@@ -235,7 +237,7 @@ class PostgresqlStorage(DatabaseStorage):
                     dbcursor.lastrowid = cursor.fetchone()[0]
                     dbcursor._cursor.lastrowid = dbcursor.lastrowid
                     cursor.close()
-                except Exception, e:
+                except Exception as e:
                     # can't recover in any case
                     pass
 
@@ -274,7 +276,7 @@ def patch_query_builder(console):
         Escape quotes from a given string.
         :param word: The string on which to perform the escape
         """
-        if isinstance(word, int) or isinstance(word, long) or isinstance(word, complex) or isinstance(word, float):
+        if isinstance(word, int) or isinstance(word, int) or isinstance(word, complex) or isinstance(word, float):
             return str(word)
         elif word is None:
             return "'None'"

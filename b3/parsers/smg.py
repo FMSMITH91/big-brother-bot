@@ -29,7 +29,6 @@ import b3
 import b3.events
 import b3.parsers.punkbuster
 import re
-import string
 import threading
 
 from b3.parsers.q3a.abstractParser import AbstractParser
@@ -237,7 +236,7 @@ class SmgParser(AbstractParser):
         Parse an infostring.
         :param info: The infostring to be parsed.
         """
-        player_id, info = string.split(info, ' ', 1)
+        player_id, info = info.split(' ', 1)
         if info[:1] != '\\':
             info += '\\'
 
@@ -254,7 +253,7 @@ class SmgParser(AbstractParser):
 
         # split port from ip field
         if 'ip' in data:
-            tip = string.split(data['ip'], ':', 1)
+            tip = data['ip'].split(':', 1)
             data['ip'] = tip[0]
             data['port'] = tip[1]
 
@@ -296,7 +295,7 @@ class SmgParser(AbstractParser):
 
             if client:
                 # update existing client
-                for k, v in bclient.iteritems():
+                for k, v in bclient.items():
                     setattr(client, k, v)
             else:
                 if not 'name' in bclient:
@@ -526,7 +525,7 @@ class SmgParser(AbstractParser):
         """
         plist = self.getPlayerList()
         mlist = dict()
-        for cid, c in plist.iteritems():
+        for cid, c in plist.items():
             client = self.clients.getByCID(cid)
             if client:
                 if client.guid and 'guid' in c:
@@ -559,7 +558,7 @@ class SmgParser(AbstractParser):
         players = self.getPlayerList()
         self.verbose('connectClient() = %s' % players)
 
-        for cid, p in players.iteritems():
+        for cid, p in players.items():
             if int(cid) == int(ccid):
                 self.debug('client found in status/playerList')
                 return p

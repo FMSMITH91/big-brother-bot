@@ -26,7 +26,7 @@ import b3
 from b3.config import CfgConfigParser
 from b3.parsers.frostbite2.protocol import CommandFailedError
 from b3.plugins.poweradminbf3 import Poweradminbf3Plugin
-from mock import call, patch, Mock
+from unittest.mock import call, patch, Mock
 from mockito import when, verify
 from tests.plugins.poweradminbf3 import Bf3TestCase, logging_disabled
 
@@ -65,7 +65,7 @@ changeteam: mod
         self.joe.squad = 1
 
         # simulate Frostbite error when moving a player
-        when(self.console).write(('admin.movePlayer', 'joe', 2, 0, 'true')).thenRaise(
+        when(self.console, strict=False).write(('admin.movePlayer', 'joe', 2, 0, 'true')).thenRaise(
             CommandFailedError(['SetTeamFailed']))
 
         self.superadmin.connects('superadmin')
@@ -132,13 +132,13 @@ changeteam: mod
 
     def test_ConquestLarge0(self):
         # GIVEN
-        when(self.console).write(('serverInfo',)).thenReturn(
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(
             ['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
              '2', '300', '300', '0', '', 'false', 'true', 'false', '197758', '197735', '', '', '', 'EU', 'AMS', 'DE'])
         self.assert_moved_from_team_1_to_2_to_1()
 
     def test_ConquestSmall0(self):
-        when(self.console).write(('serverInfo',)).thenReturn(
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(
             ['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestSmall0', 'MP_001', '1', '2',
              '2', '250', '250', '0', '', 'false', 'true', 'false', '197774', '1', '', '', '', 'EU', 'AMS', 'DE'])
         self.assert_moved_from_team_1_to_2_to_1()
@@ -146,26 +146,26 @@ changeteam: mod
     def test_RushLarge0(self):
         # set the BF3 server
         # despite showing 0 teams in the serverInfo response, this gamemode has 2 teams (id 1 and 2)
-        when(self.console).write(('serverInfo',)).thenReturn(
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(
             ['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'RushLarge0', 'MP_001', '0', '2',
              '0', '0', '', 'false', 'true', 'false', '197817', '2', '', '', '', 'EU', 'AMS', 'DE'])
         self.assert_moved_from_team_1_to_2_to_1()
 
     def test_SquadRush0(self):
         # despite showing 0 teams in the serverInfo response, this gamemode has 2 teams (id 1:attackers and 2:defenders)
-        when(self.console).write(('serverInfo',)).thenReturn(
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(
             ['i3D.net - BigBrotherBot #3 (DE)', '0', '8', 'SquadRush0', 'MP_001', '1', '2',
              '0', '0', '', 'false', 'true', 'false', '197928', '0', '', '', '', 'EU', 'AMS', 'DE'])
         self.assert_moved_from_team_1_to_2_to_1()
 
     def test_TeamDeathMatch0(self):
-        when(self.console).write(('serverInfo',)).thenReturn(
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(
             ['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'TeamDeathMatch0', 'MP_001', '1', '2',
              '2', '0', '0', '100', '', 'false', 'true', 'false', '198148', '0', '', '', '', 'EU', 'AMS', 'DE'])
         self.assert_moved_from_team_1_to_2_to_1()
 
     def test_SquadDeathMatch0(self):
-        when(self.console).write(('serverInfo',)).thenReturn(
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(
             ['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'SquadDeathMatch0', 'MP_001', '0', '2',
              '4', '0', '0', '0', '0', '50', '', 'false', 'true', 'false', '198108', '0', '', '', '', 'EU', 'AMS', 'DE'])
         self.console.getServerInfo()

@@ -24,7 +24,7 @@
 
 import time
 # http://www.voidspace.org.uk/python/mock/mock.html
-from mock import patch
+from unittest.mock import patch
 from mockito import when, verify
 from b3.config import CfgConfigParser
 from b3.plugins.poweradminbf3 import Poweradminbf3Plugin
@@ -57,7 +57,7 @@ endround: 20
 
 
     def test_frostbite_error(self):
-        when(self.console).write(('serverInfo',)).thenReturn(['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
                                                                '2', '300', '300', '0', '', 'false', 'true', 'false', '105473', '105450', '', '', '', 'EU', 'AMS', 'DE'])
         self.superadmin.message_history = []
         self.superadmin.says("!endround")
@@ -66,7 +66,7 @@ endround: 20
 
 
     def test_no_argument_team1_winning(self):
-        when(self.console).write(('serverInfo',)).thenReturn(['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
                                                                '2', '800', '90', '0', '', 'true', 'true', 'false', '105473', '105450', '', '', '', 'EU', 'AMS', 'DE'])
         self.superadmin.message_history = []
         self.superadmin.says("!endround")
@@ -74,7 +74,7 @@ endround: 20
         verify(self.console).write(('mapList.endRound', '1'))
 
     def test_no_argument_team2_winning(self):
-        when(self.console).write(('serverInfo',)).thenReturn(['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
                                                                '2', '400', '1300', '0', '', 'true', 'true', 'false', '105473', '105450', '', '', '', 'EU', 'AMS', 'DE'])
 
         self.superadmin.message_history = []
@@ -84,7 +84,7 @@ endround: 20
 
 
     def test_no_argument_team4_winning(self):
-        when(self.console).write(('serverInfo',)).thenReturn(['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn(['i3D.net - BigBrotherBot #3 (DE)', '0', '16', 'ConquestLarge0', 'MP_007', '0', '2',
                                                                '4', '400', '1300', '45', '1651' '0', '', 'true', 'true', 'false', '105473', '105450', '', '', '', 'EU', 'AMS', 'DE'])
 
         self.superadmin.message_history = []
@@ -94,7 +94,7 @@ endround: 20
 
 
     def test_0(self):
-        when(self.console).write().thenReturn()
+        when(self.console, strict=False).write().thenReturn()
         self.superadmin.message_history = []
         self.superadmin.says("!endround 0")
         verify(self.console).write(('mapList.endRound', '0'))
@@ -102,7 +102,7 @@ endround: 20
 
 
     def test_1(self):
-        when(self.console).write().thenReturn()
+        when(self.console, strict=False).write().thenReturn()
         self.superadmin.message_history = []
         self.superadmin.says("!endround 1")
         verify(self.console).write(('mapList.endRound', '1'))

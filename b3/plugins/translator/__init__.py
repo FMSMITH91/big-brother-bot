@@ -29,18 +29,11 @@ import b3
 import b3.plugin
 import b3.events
 
-# translate utility that utilize google translator, support python2 & python3
+# translate utility that utilize google translator
 # Note that the order or arguments in the URL matters.
 
-try:
-    from urllib import urlencode
-except ImportError:
-    from urllib.parse import urlencode
-
-try:
-    import urllib2
-except ImportError:
-    import urllib.request as urllib2
+import urllib.request
+from urllib.parse import urlencode
 
 try:
     # only necessary if using exclude_language setting
@@ -52,8 +45,6 @@ import json
 import re
 import sys
 import time
-reload(sys)
-sys.setdefaultencoding('utf-8')
 
 try:
     # import the getCmd function
@@ -105,7 +96,7 @@ class TranslatorPlugin(b3.plugin.Plugin):
         """
         def validate_source(x):
             """helper used to validate the source language"""
-            acceptable = self.languages.keys()
+            acceptable = list(self.languages.keys())
             acceptable.append('auto')
             if x not in acceptable and x != 'auto':
                 raise ValueError('value must be one of [%s]' % ', '.join(acceptable))
@@ -113,7 +104,7 @@ class TranslatorPlugin(b3.plugin.Plugin):
 
         def validate_target(x):
             """helper used to validate the target language"""
-            acceptable = self.languages.keys()
+            acceptable = list(self.languages.keys())
             if x not in acceptable and x != 'auto':
                 raise ValueError('value must be one of [%s]' % ', '.join(acceptable))
             return x
@@ -133,7 +124,8 @@ class TranslatorPlugin(b3.plugin.Plugin):
         Initialize plugin settings
         """
         self.adminPlugin = self.console.getPlugin('admin')
-        
+        self.last_message_said = []
+
         # register our commands
         if 'commands' in self.config.sections():
             for cmd in self.config.options('commands'):
@@ -173,22 +165,14 @@ class TranslatorPlugin(b3.plugin.Plugin):
         if len(message) < self.settings['min_sentence_length']:
             return
 
-        # check if we are not spamming requests
-        curTime = time.time()
-        if self.lastTime and curTime - self.lastTime <= self.settings['min_time_between']:
-            return
-        else:
-            # update last time with current time
-            self.lastTime = curTime
-
         # if it's not a B3 command
         if message[0] not in self.cmdPrefix:
 
             # save for future use
             self.last_message_said.append(message)
             # remove old messages
-            if len(self.last_message) > self.settings['max_history']:
-                self.last_message.pop(0)
+            if len(self.last_message_said) > self.settings['max_history']:
+                self.last_message_said.pop(0)
 
             # we have now to send a translation to all the
             # clients that enabled the automatic translation
@@ -200,6 +184,14 @@ class TranslatorPlugin(b3.plugin.Plugin):
             if not collection:
                 # no one has transauto enabled
                 return
+
+            # check if we are not spamming requests
+            curTime = time.time()
+            if self.lastTime and curTime - self.lastTime <= self.settings['min_time_between']:
+                return
+            else:
+                # update last time with current time
+                self.lastTime = curTime
 
             translation = self.translate(message, to_lang=self.settings['default_target_language'])
             if not translation:
@@ -220,10 +212,10 @@ class TranslatorPlugin(b3.plugin.Plugin):
     @staticmethod
     def to_byte_string(s):
         """
-        Convert the given unicode string to a bytestring, using utf-8 encoding.
+        Convert the given string to a bytestring, using utf-8 encoding.
         If it is already a bytestring, just return the string given.
         """
-        return s if isinstance(s, str) else s.encode('utf-8')
+        return s if isinstance(s, bytes) else s.encode('utf-8')
 
     @staticmethod
     def str_sanitize(s):
@@ -231,7 +223,7 @@ class TranslatorPlugin(b3.plugin.Plugin):
         Sanitize the given string.
         Will remove color codes, XML tags and substitute unprintable characters with their alphabetical representation.
         """
-        return re.sub('\^[0-9]', '', re.sub(r'<[^>]*>', '', s)).replace('ß', 'ss').replace('ü', 'ue').\
+        return re.sub('\\^[0-9]', '', re.sub(r'<[^>]*>', '', s)).replace('ß', 'ss').replace('ü', 'ue').\
                replace('ö', 'oe').replace('ä', 'ae').replace('à', 'a').replace('è', 'e').replace('é', 'e').\
                replace('ì', 'i').replace('ò', 'o').replace('ù', 'u').replace('ç', 'c').replace('€', 'euro').\
                replace('$', 'dollar').replace('£', 'pound').replace('%', 'pc').replace('"', "''").strip()
@@ -279,10 +271,10 @@ class TranslatorPlugin(b3.plugin.Plugin):
         params.append(urlencode({'q': text}))
         url += '&'.join(params)
 
-        request = urllib2.Request(url)
+        request = urllib.request.Request(url)
         browser = "Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0"
         request.add_header('User-Agent', browser)
-        response = urllib2.urlopen(request)
+        response = urllib.request.urlopen(request)
         rtn = json.loads(response.read().decode('utf8'))
         self.verbose('translation done and received, sanitizing...')
 
@@ -307,10 +299,10 @@ class TranslatorPlugin(b3.plugin.Plugin):
         params.append('tl=' + lang)
         params.append(urlencode({'q': text}))
         url += '&'.join(params)
-        request = urllib2.Request(url)
+        request = urllib.request.Request(url)
         browser = "Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0"
         request.add_header('User-Agent', browser)
-        response = urllib2.urlopen(request)
+        response = urllib.request.urlopen(request)
         return response.read()
 
     def send_translation(self, client, message, cmd=None):
@@ -460,7 +452,7 @@ class TranslatorPlugin(b3.plugin.Plugin):
         Display the list of available language codes
         """
         codes = []
-        for k, v in self.languages.items():
+        for k, v in list(self.languages.items()):
             codes.append('^2%s^7:%s' % (k, v))
 
         cmd.sayLoudOrPM(client, '^7Languages: %s' % ', '.join(codes))

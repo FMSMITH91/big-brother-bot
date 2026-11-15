@@ -22,7 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
-from mock import Mock, call
+from unittest.mock import Mock, call
 from mockito import when
 
 from b3.plugins.poweradminbf3 import Poweradminbf3Plugin
@@ -37,8 +37,8 @@ class Test_events(Bf3TestCase):
         self.conf = CfgConfigParser()
         with logging_disabled():
             self.p = Poweradminbf3Plugin(self.console, self.conf)
-        when(self.console).write(('vars.roundStartPlayerCount',)).thenReturn(['0'])
-        when(self.console).write(('vars.roundLockdownCountdown',)).thenReturn(['3'])
+        when(self.console, strict=False).write(('vars.roundStartPlayerCount',)).thenReturn(['0'])
+        when(self.console, strict=False).write(('vars.roundLockdownCountdown',)).thenReturn(['3'])
         self.scrambleTeams_mock = self.p._scrambler.scrambleTeams = Mock(name="scrambleTeams", wraps=self.p._scrambler.scrambleTeams)
         self.scrambleTeams_mock.reset_mock()
 
@@ -73,11 +73,11 @@ gamemodes_blacklist: %s""" % (scramble_mode, '|'.join(gamemode_blacklist)))
 
         # When
         self.joe.connects('joe')
-        when(self.console).write(('serverInfo',)).thenReturn([ 'i3D.net - BigBrotherBot #3 (DE)', '1', '16',
+        when(self.console, strict=False).write(('serverInfo',)).thenReturn([ 'i3D.net - BigBrotherBot #3 (DE)', '1', '16',
                                                                 next_gamemode, 'MP_007', str(next_round_number), '2', '4', '0', '0', '0', '0', '50', '', 'false', 'true',
                                                                 'false', '790596', '1484', '', '', '', 'EU', 'AMS', 'DE', 'false'])
         self.console.routeFrostbitePacket(['server.onLevelLoaded', 'MP_007', next_gamemode, str(next_round_number), '2'])
-        when(self.console).getClient('joe').thenReturn(self.joe)
+        when(self.console, strict=False).getClient('joe').thenReturn(self.joe)
         self.console.routeFrostbitePacket(['player.onSpawn', 'joe', '1'])
 
         # Then

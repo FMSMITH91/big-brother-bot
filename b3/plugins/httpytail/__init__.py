@@ -31,10 +31,10 @@ import b3.events
 import b3.plugin
 import os.path
 import time
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 from b3 import functions
-from ConfigParser import NoOptionError
+from configparser import NoOptionError
 
 user_agent = "B3 Httpytail plugin/%s" % __version__
 
@@ -109,7 +109,7 @@ class HttpytailPlugin(b3.plugin.Plugin):
             except NoOptionError:
                 self.warning('could not find settings/timeout in config file, '
                              'using default: %s' % self._connectionTimeout)
-            except ValueError, e:
+            except ValueError as e:
                 self.error('could not load settings/timeout config value: %s' % e)
                 self.debug('using default value (%s) for settings/timeout' % self._connectionTimeout)
     
@@ -119,7 +119,7 @@ class HttpytailPlugin(b3.plugin.Plugin):
             except NoOptionError:
                 self.warning('could not find settings/maxGapBytes in config file, '
                              'using default: %s' % self._maxGap)
-            except ValueError, e:
+            except ValueError as e:
                 self.error('could not load settings/maxGapBytes config value: %s' % e)
                 self.debug('using default value (%s) for settings/maxGapBytes' % self._maxGap)
 
@@ -165,7 +165,7 @@ class HttpytailPlugin(b3.plugin.Plugin):
     #                                                                                                                  #
     ####################################################################################################################
 
-    class DiffURLOpener(urllib2.HTTPRedirectHandler, urllib2.HTTPDefaultErrorHandler):
+    class DiffURLOpener(urllib.request.HTTPRedirectHandler, urllib.request.HTTPDefaultErrorHandler):
         """
         Create sub-class in order to overide error 206.
         This error means a partial file is being sent,
@@ -180,11 +180,11 @@ class HttpytailPlugin(b3.plugin.Plugin):
         """
         try:
             self.file = open(self.lgame_log, 'ab')
-            self.file.write('\r\n')
-            self.file.write('B3 has been restarted\r\n')
-            self.file.write('\r\n')
+            self.file.write(b'\r\n')
+            self.file.write(b'B3 has been restarted\r\n')
+            self.file.write(b'\r\n')
             self.file.close()
-        except Exception, e:
+        except Exception as e:
             if hasattr(e, 'reason'):
                 self.error(str(e.reason))
             if hasattr(e, 'code'):
@@ -211,7 +211,7 @@ class HttpytailPlugin(b3.plugin.Plugin):
                     logurl = self.httpconfig['protocol'] + '://' + self.httpconfig['host'] + '/' + \
                              self.httpconfig['path']
 
-                req = urllib2.Request(logurl, None, headers)
+                req = urllib.request.Request(logurl, None, headers)
 
                 # - htaccess authentication
                 # we login if the file is protected by a .htaccess and .htpasswd and the user specified a username and
@@ -223,24 +223,27 @@ class HttpytailPlugin(b3.plugin.Plugin):
                         password = self.httpconfig['password']
                         # create a password manager
 
-                    password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+                    password_mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
                     # Add the username and password.
                     # If we knew the realm, we could use it instead of ``None``.
                     top_level_url = logurl
                     password_mgr.add_password(None, top_level_url, username, password)
-                    handler = urllib2.HTTPBasicAuthHandler(password_mgr)
+                    handler = urllib.request.HTTPBasicAuthHandler(password_mgr)
 
                     # We store these parameters in an opener
-                    opener = urllib2.build_opener(handler)
+                    opener = urllib.request.build_opener(handler)
                 else:
                     # Else if no authentication is needed, then we create a standard opener
-                    opener = urllib2.build_opener()
+                    opener = urllib.request.build_opener()
 
                 # opening the full file and detect its size
                 webFile = opener.open(req)
-                urllib2.install_opener(opener)
+                urllib.request.install_opener(opener)
                 filestats = webFile.info()
-                remoteSize = filestats.getheader('Content-Length')
+                content_length = filestats.get('Content-Length')
+                if content_length is None:
+                    raise ValueError('the server did not send a Content-Length header for %s' % logurl)
+                remoteSize = int(content_length)
                 webFile.close() # We close the remote connection as soon as possible to avoid spamming the server, and
                 # thus blacklisting us for an amount of time
 
@@ -264,12 +267,12 @@ class HttpytailPlugin(b3.plugin.Plugin):
                     # For that, we use a custom made opener so that we can download only the
                     # diff between what has been added since last cycle
                     DiffURLOpener = self.DiffURLOpener()
-                    httpopener = urllib2.build_opener(DiffURLOpener)
+                    httpopener = urllib.request.build_opener(DiffURLOpener)
 
                     b1 = self._remoteFileOffset
                     b2 = remoteSize
-                    if int(b2) - int(b1) > self._maxGap:
-                        b1 = int(b2) - self._maxGap
+                    if b2 - b1 > self._maxGap:
+                        b1 = b2 - self._maxGap
 
                     # We add the Range header here, this is the one permitting to fetch only a part of an http remote
                     # file
@@ -284,14 +287,14 @@ class HttpytailPlugin(b3.plugin.Plugin):
                     # We update the current cursor position to the size of the remote file
                     self._remoteFileOffset = remoteSize
 
-                    self.verbose("%s bytes downloaded" % webFileDiff.info().getheader('Content-Length'))
+                    self.verbose("%s bytes downloaded" % webFileDiff.info().get('Content-Length'))
                     # Finally, we close the distant file
                     webFileDiff.close()
 
                 # closing the local temporary file
                 self.file.close()
 
-            except IOError, e:
+            except IOError as e:
                 if hasattr(e, 'reason'):
                     self.error('failed to reach the server: %s' % str(e.reason))
                 if hasattr(e, 'code'):
@@ -303,13 +306,13 @@ class HttpytailPlugin(b3.plugin.Plugin):
                 if self._logAppend:
                     try:
                         self.file = open(self.lgame_log, 'ab')
-                        self.file.write('\r\n')
-                        self.file.write('B3 has restarted writing the log file\r\n')
-                        self.file.write('\r\n')
+                        self.file.write(b'\r\n')
+                        self.file.write(b'B3 has restarted writing the log file\r\n')
+                        self.file.write(b'\r\n')
                     except:
-                        self.file = open(self.lgame_log, 'w')
+                        self.file = open(self.lgame_log, 'wb')
                 else:
-                    self.file = open(self.lgame_log, 'w')
+                    self.file = open(self.lgame_log, 'wb')
 
                 self.file.close()
                 self.file = open(self.lgame_log, 'ab')
@@ -328,7 +331,7 @@ class HttpytailPlugin(b3.plugin.Plugin):
                     self.debug('too many failures: sleeping %s sec' % self._waitBeforeReconnect)
                     time.sleep(self._waitBeforeReconnect)
 
-            except Exception, e:
+            except Exception as e:
                 if hasattr(e, 'reason'):
                     self.error(str(e.reason))
                 if hasattr(e, 'code'):

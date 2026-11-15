@@ -31,6 +31,11 @@ __version__ = '1.4'
 
 
 class BanlistContentError(Exception):
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     pass
 
 
@@ -91,7 +96,7 @@ class BanlistContent(object):
 
         # append data
         self.bansData += data
-        self.numOfBans += len(data) / 6
+        self.numOfBans += len(data) // 6
 
     def __len__(self):
         return int(self.numOfBans)
@@ -254,6 +259,11 @@ class TeamScoresBlock(object):
 
 
 class MapListBlockError(Exception):
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     pass
 
 
@@ -308,12 +318,12 @@ class MapListBlock(object):
 
         try:
             num_maps = int(data[0])
-        except ValueError, err:
+        except ValueError as err:
             raise MapListBlockError("invalid data: first element should be a integer, got %r" % data[0], err)
 
         try:
             num_words = int(data[1])
-        except ValueError, err:
+        except ValueError as err:
             raise MapListBlockError("invalid data: second element should be a integer, got %r" % data[1], err)
 
         if len(data) != (2 + (num_maps * num_words)):

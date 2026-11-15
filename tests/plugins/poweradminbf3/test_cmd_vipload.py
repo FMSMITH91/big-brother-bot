@@ -43,8 +43,8 @@ vipload: 20
             self.moderator.connects("moderator")
 
     def test_nominal(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn([])
-        when(self.console).write(('reservedSlotsList.load',)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.load',)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vipload")
@@ -52,9 +52,9 @@ vipload: 20
         self.assertEqual('VIP list loaded from disk (0 name loaded)', self.moderator.message_history[0])
 
     def test_nominal_2(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['foo', 'bar'])
-        when(self.console).write(('reservedSlotsList.list', 2)).thenReturn([])
-        when(self.console).write(('reservedSlotsList.load',)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['foo', 'bar'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 2)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.load',)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vipload")
@@ -62,7 +62,7 @@ vipload: 20
         self.assertEqual('VIP list loaded from disk (2 names loaded)', self.moderator.message_history[0])
 
     def test_frostbite_error(self):
-        when(self.console).write(('reservedSlotsList.load',)).thenRaise(CommandFailedError(['f00']))
+        when(self.console, strict=False).write(('reservedSlotsList.load',)).thenRaise(CommandFailedError(['f00']))
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vipload")

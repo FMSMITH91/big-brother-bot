@@ -1,5 +1,7 @@
-# Python modules needed to run the B3
-pymysql==0.6.6
-python-dateutil==2.4.2
-feedparser==5.1.3
-requests==2.7.0
+# Python modules needed to run the B3 (Python 3.9+)
+pymysql>=1.0
+python-dateutil>=2.8
+feedparser>=6.0
+requests>=2.25
+# asyncore was removed from the standard library in Python 3.12 (used by the Frostbite/Homefront/etc. parsers)
+pyasyncore>=1.0; python_version >= "3.12"

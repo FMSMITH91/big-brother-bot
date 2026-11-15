@@ -28,11 +28,7 @@ import socket
 
 from struct import *
 
-try:
-    from hashlib import md5 as newmd5
-except ImportError:
-    # for Python versions < 2.5
-    from md5 import new as newmd5
+from hashlib import md5 as newmd5
 
 
 def EncodeHeader(isFromServer, isResponse, sequence):
@@ -57,27 +53,47 @@ def DecodeInt32(data):
     return unpack('<I', data[0 : 4])[0]
     
     
+# The Frostbite protocol transports words as UTF-8 encoded bytes. Inside B3 words are always str: they are
+# encoded right before being put on the wire and decoded right after being read from it.
+WORD_ENCODING = 'UTF-8'
+
+
+def EncodeWord(word):
+    """
+    Return the given word as bytes, ready to be sent to the Frostbite server.
+    """
+    if isinstance(word, (bytes, bytearray)):
+        return bytes(word)
+    return str(word).encode(WORD_ENCODING)
+
+
+def DecodeWord(data):
+    """
+    Return the given raw word (bytes) received from the Frostbite server as a str.
+    """
+    return bytes(data).decode(WORD_ENCODING, 'replace')
+
+
 def EncodeWords(words):
     size = 0
-    encodedWords = ''
+    encodedWords = b''
     for word in words:
-        strWord = str(word)
-        encodedWords += EncodeInt32(len(strWord))
-        encodedWords += strWord
-        encodedWords += '\x00'
-        size += len(strWord) + 5
+        bytesWord = EncodeWord(word)
+        encodedWords += EncodeInt32(len(bytesWord))
+        encodedWords += bytesWord
+        encodedWords += b'\x00'
+        size += len(bytesWord) + 5
     
     return size, encodedWords
 
 
 def DecodeWords(size, data):
-    numWords = DecodeInt32(data[0:])
     words = []
     offset = 0
     while offset < size:
         wordLen = DecodeInt32(data[offset : offset + 4])        
         word = data[offset + 4 : offset + 4 + wordLen]
-        words.append(word)
+        words.append(DecodeWord(word))
         offset += wordLen + 5
 
     return words
@@ -131,26 +147,35 @@ def printPacket(packet):
     Display contents of packet in user-friendly format, useful for debugging purposes.
     """
     if packet[0]:
-        print "IsFromServer, ",
+        print("IsFromServer, ", end=' ')
     else:
-        print "IsFromClient, ",
+        print("IsFromClient, ", end=' ')
     
     if packet[1]:
-        print "Response, ",
+        print("Response, ", end=' ')
     else:
-        print "Request, ",
+        print("Request, ", end=' ')
 
-    print "Sequence: " + str(packet[2]),
+    print("Sequence: " + str(packet[2]), end=' ')
 
     if packet[3]:
-        print " Words:",
+        print(" Words:", end=' ')
         for word in packet[3]:
-            print "\"" + word + "\"",
+            print("\"" + word + "\"", end=' ')
 
-    print ""
+    print("")
 
 
 def generatePasswordHash(salt, password):
+    """
+    Compute the hash expected by the login.hashed command.
+    :param salt: the salt as bytes (as obtained by decoding the hex string sent by the server)
+    :param password: the rcon password
+    """
+    if isinstance(salt, str):
+        salt = salt.encode(WORD_ENCODING)
+    if isinstance(password, str):
+        password = password.encode(WORD_ENCODING)
     m = newmd5()
     m.update(salt)
     m.update(password)

@@ -23,9 +23,9 @@
 # ################################################################### #
 
 import os
-import unittest2 as unittest
+import unittest
 
-from mock import Mock, call, patch
+from unittest.mock import Mock, call, patch
 from mockito import when
 from b3 import TEAM_UNKNOWN
 from b3.clients import Client
@@ -45,7 +45,7 @@ def client_equal(client_a, client_b):
         return False
     if client_a is not None and client_b is None:
         return False
-    return all(map(lambda x: getattr(client_a, x, None) == getattr(client_b, x, None), ('cid', 'guid', 'name', 'ip', 'ping')))
+    return all([getattr(client_a, x, None) == getattr(client_b, x, None) for x in ('cid', 'guid', 'name', 'ip', 'ping')])
 
 
 class RavagedTestCase(unittest.TestCase):
@@ -97,7 +97,7 @@ class RavagedTestCase(unittest.TestCase):
         """
         assert that self.evt_queue contains at least one event for the given type that has the given characteristics.
         """
-        assert isinstance(event_type, basestring)
+        assert isinstance(event_type, str)
         expected_event = self.parser.getEvent(event_type, data, client, target)
 
         if not len(self.evt_queue):
@@ -123,7 +123,7 @@ class RavagedTestCase(unittest.TestCase):
                 if all(results):
                     return
 
-            self.fail("expecting event %s. Got instead: %s" % (expected_event, map(str, self.evt_queue)))
+            self.fail("expecting event %s. Got instead: %s" % (expected_event, list(map(str, self.evt_queue))))
 
 
 
@@ -142,8 +142,8 @@ class Test_parser_API(RavagedTestCase):
                             "voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat "
                             "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")
             write_mock.assert_has_calls([call("say <FONT COLOR='#F2C880'> [Pre] <FONT COLOR='#F2C880'> Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,"),
-                                         call(u"say <FONT COLOR='#F2C880'> >quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla"),
-                                         call(u"say <FONT COLOR='#F2C880'> >pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")])
+                                         call("say <FONT COLOR='#F2C880'> >quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla"),
+                                         call("say <FONT COLOR='#F2C880'> >pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")])
 
 
     def test_saybig(self):
@@ -166,12 +166,12 @@ class Test_parser_API(RavagedTestCase):
                                "voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint "
                                "occaecati cupiditate non provident, similique sunt in culpa")
             write_mock.assert_has_calls([call("say <FONT COLOR='#FC00E2'> [Pre] <FONT COLOR='#FC00E2'> At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias"),
-                                         call(u"say <FONT COLOR='#FC00E2'> >excepturi sint occaecati cupiditate non provident, similique sunt in culpa")])
+                                         call("say <FONT COLOR='#FC00E2'> >excepturi sint occaecati cupiditate non provident, similique sunt in culpa")])
 
 
     def test_getMap(self):
         # GIVEN
-        when(self.parser.output).write("getmaplist false").thenReturn("""0 CTR_Canyon
+        when(self.parser.output, strict=False).write("getmaplist false").thenReturn("""0 CTR_Canyon
 1 CTR_Derelict
 2 CTR_IceBreaker
 3 CTR_Liberty
@@ -185,7 +185,7 @@ class Test_parser_API(RavagedTestCase):
 
     def test_getNextMap(self):
         # GIVEN
-        when(self.parser.output).write("getmaplist false").thenReturn("""0 CTR_Canyon
+        when(self.parser.output, strict=False).write("getmaplist false").thenReturn("""0 CTR_Canyon
 1 CTR_Derelict
 2 CTR_IceBreaker
 3 CTR_Liberty
@@ -198,7 +198,7 @@ class Test_parser_API(RavagedTestCase):
 
     def test_changeMap(self):
         # GIVEN
-        when(self.parser.output).write("getmaplist false").thenReturn("""0 CTR_Bridge
+        when(self.parser.output, strict=False).write("getmaplist false").thenReturn("""0 CTR_Bridge
 1 CTR_Canyon
 2 CTR_Derelict
 3 CTR_IceBreaker
@@ -295,13 +295,13 @@ class Test_gamelog_parsing(RavagedTestCase):
 
     def test_Server_say(self):
         self.queueEvent_mock.reset_mock()
-        self.parser.route_game_event(b'''Server say "Admin: B\xb3: www.bigbrotherbot.net (b3) v1.10dev [nt] [Coco] [ONLINE]"''')
+        self.parser.route_game_event('''Server say "Admin: B\xb3: www.bigbrotherbot.net (b3) v1.10dev [nt] [Coco] [ONLINE]"''')
         self.assertFalse(self.queueEvent_mock.called)
 
 
     def test_Server_say_team(self):
         self.queueEvent_mock.reset_mock()
-        self.parser.route_game_event(b'''Server say_team "f00" to team "1"''')
+        self.parser.route_game_event('''Server say_team "f00" to team "1"''')
         self.assertFalse(self.queueEvent_mock.called)
 
 
@@ -441,7 +441,7 @@ class Test_getClientOrCreate(RavagedTestCase):
     def test_new_client__guid_name_team(self):
         # GIVEN
         self.assertEqual(1, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 1}, self.parser.storage.getCounts())
+        self.assertEqual(1, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(guid="12312312312312312", name="courgette", team="1")
         # THEN
@@ -452,13 +452,13 @@ class Test_getClientOrCreate(RavagedTestCase):
         self.assertEqual(TEAM_RESISTANCE, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
 
 
     def test_new_client__guid_name(self):
         # GIVEN
         self.assertEqual(1, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 1}, self.parser.storage.getCounts())
+        self.assertEqual(1, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(guid="12312312312312312", name="courgette")
         # THEN
@@ -469,14 +469,14 @@ class Test_getClientOrCreate(RavagedTestCase):
         self.assertEqual(TEAM_UNKNOWN, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
 
 
     def test_connected_client__guid(self):
         # GIVEN
         self.parser.clients.newClient(cid="12312312312312312", guid="12312312312312312", name="courgette", team=TEAM_SCAVENGERS)
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(guid="12312312312312312", name=None)
         # THEN
@@ -487,14 +487,14 @@ class Test_getClientOrCreate(RavagedTestCase):
         self.assertEqual(TEAM_SCAVENGERS, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
 
 
     def test_connected_client__guid_different_name(self):
         # GIVEN
         self.parser.clients.newClient(cid="12312312312312312", guid="12312312312312312", name="courgette", team=TEAM_SCAVENGERS)
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(guid="12312312312312312", name="F00")
         # THEN
@@ -505,7 +505,7 @@ class Test_getClientOrCreate(RavagedTestCase):
         self.assertEqual(TEAM_SCAVENGERS, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
 
 
     def test_known_client__guid(self):
@@ -513,7 +513,7 @@ class Test_getClientOrCreate(RavagedTestCase):
         known_client = Client(console=self.parser, guid="12312312312312312", name="courgette", connections=15)
         known_client.save()
         self.assertEqual(1, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(guid="12312312312312312", name="newName", team="0")
         # THEN
@@ -526,7 +526,7 @@ class Test_getClientOrCreate(RavagedTestCase):
         self.assertEqual(16, client.connections)
         self.assertTrue(client.authed)
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
 
 
 
@@ -542,7 +542,7 @@ class Test_other(RavagedTestCase):
 
     def test_getmaplist(self):
         # GIVEN
-        when(self.parser.output).write("getmaplist false").thenReturn("""0 CTR_Canyon
+        when(self.parser.output, strict=False).write("getmaplist false").thenReturn("""0 CTR_Canyon
 1 CTR_Derelict
 2 CTR_IceBreaker
 3 CTR_Liberty
@@ -593,7 +593,7 @@ courgette 21 pts 4:8 38ms steamid: 12312312312312312
 
     def test_getMapsSoundingLike_matching(self):
         # GIVEN
-        when(self.parser.output).write("getmaplist false").thenReturn("""0 CTR_Bridge
+        when(self.parser.output, strict=False).write("getmaplist false").thenReturn("""0 CTR_Bridge
 1 CTR_Canyon
 2 CTR_Derelict
 3 CTR_IceBreaker
@@ -615,7 +615,7 @@ courgette 21 pts 4:8 38ms steamid: 12312312312312312
 
     def test_getMapsSoundingLike_no_match(self):
         # GIVEN
-        when(self.parser.output).write("getmaplist false").thenReturn("""0 CTR_Bridge
+        when(self.parser.output, strict=False).write("getmaplist false").thenReturn("""0 CTR_Bridge
 1 CTR_Canyon
 2 CTR_Derelict
 3 CTR_IceBreaker
@@ -637,7 +637,7 @@ courgette 21 pts 4:8 38ms steamid: 12312312312312312
 
     def test_getMapsSoundingLike_3(self):
         # GIVEN
-        when(self.parser.output).write("getmaplist false").thenReturn("""0 CTR_Bridge
+        when(self.parser.output, strict=False).write("getmaplist false").thenReturn("""0 CTR_Bridge
 1 CTR_Canyon
 2 CTR_Derelict
 3 CTR_IceBreaker
@@ -695,7 +695,7 @@ class test_functional(unittest.TestCase):
 
     def test_map(self):
         # GIVEN
-        when(self.parser.output).write("getmaplist false").thenReturn(u"""0 CTR_Bridge
+        when(self.parser.output, strict=False).write("getmaplist false").thenReturn("""0 CTR_Bridge
 1 CTR_Canyon
 2 CTR_Derelict
 3 CTR_IceBreaker
@@ -708,7 +708,7 @@ class test_functional(unittest.TestCase):
 10 Thrust_Liberty
 11 Thrust_Oilrig
 12 Thrust_Rooftop
-""".encode('UTF-8'))
+""")
         admin = FakeClient(console=self.parser, name="admin", guid="guid_admin", groupBits=128)
         admin.connects("guid_admin")
         # WHEN
