@@ -111,9 +111,9 @@ class QueryBuilder(object):
             value = self.escape(value)
 
         if len(field) >= 2:
-            if field[-2] == ">=":
+            if field[-2:] == ">=":
                 return "`" + field[:-2].strip() + "` >= " + value
-            elif field[-2] == "<=":
+            elif field[-2:] == "<=":
                 return "`" + field[:-2].strip() + "` <= " + value
             elif field[-1] == "<":
                 return "`" + field[:-1].strip() + "` < " + value

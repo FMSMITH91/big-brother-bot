@@ -420,6 +420,21 @@ class Test_Plugin_requiresParser(B3TestCase):
         # THEN
         self.assertListEqual([], error_mock.mock_calls)
 
+    def test_publist_not_loaded_unless_configured(self):
+        # publist used to be forced on (it reports the server address to bigbrotherbot.net)
+        self.console.loadPlugins()
+        self.assertNotIn('publist', self.console._plugins)
+
+    def test_publist_opt_in_with_empty_entry(self):
+        # a bare 'publist:' line in [plugins] gives an empty config path, which must mean "no config file"
+        self.plugin_list.append({'name': 'publist', 'conf': '', 'path': None, 'disabled': False})
+        when(self.console).pluginImport('publist', ANY).thenReturn(
+            b3.functions.load_module_from_paths('publist', [os.path.join(b3.getB3Path(True), 'plugins')]))
+        with patch.object(self.console, 'error') as error_mock:
+            self.console.loadPlugins()
+        self.assertListEqual([], error_mock.mock_calls)
+        self.assertIn('publist', self.console._plugins)
+
     def test_wrong_game(self):
         # GIVEN
         self.plugin_list.append(

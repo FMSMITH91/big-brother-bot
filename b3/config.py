@@ -47,7 +47,9 @@ NoOptionError = b3.exceptions.NoOptionError
 NoSectionError = b3.exceptions.NoSectionError
 
 # list of plugins that cannot be loaded as disabled from configuration file
-MUST_HAVE_PLUGINS = ('admin', 'publist', 'ftpytail', 'sftpytail', 'httpytail')
+# publist used to be forced on as well; it now only runs when listed in the [plugins] section, since it reports the
+# server's address to bigbrotherbot.net, which the B3 project no longer operates.
+MUST_HAVE_PLUGINS = ('admin', 'ftpytail', 'sftpytail', 'httpytail')
 
 class B3ConfigParserMixin(object):
     """

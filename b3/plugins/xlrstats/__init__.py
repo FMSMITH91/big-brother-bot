@@ -2189,8 +2189,11 @@ class CtimePlugin(b3.plugin.Plugin):
             self.debug('CTIME LEFT: player: %s played this time: %s sec', ts.client.exactName, diff)
             self.debug('CTIME LEFT: player: %s played this time: %s', ts.client.exactName, self.formatTD(diff))
             #INSERT INTO `ctime` (`guid`, `came`, `left`) VALUES ("6fcc4f6d9d8eb8d8457fd72d38bb1ed2", 1198187868, 1226081506)
-            q = """INSERT INTO %s (guid, came, gone, nick) VALUES (\"%s\", \"%s\", \"%s\", \"%s\")""" % (self.ctime_table,
-                ts.client.guid, int(time.mktime(ts.came.timetuple())), int(time.mktime(ts.left.timetuple())), ts.client.name)
+            # guid and name are player-controlled: single-quoted, escaped SQL literals (double quotes are identifiers
+            # in standard SQL and were not escaped at all)
+            q = """INSERT INTO %s (guid, came, gone, nick) VALUES ('%s', %s, %s, '%s')""" % (self.ctime_table,
+                escape_string(ts.client.guid), int(time.mktime(ts.came.timetuple())),
+                int(time.mktime(ts.left.timetuple())), escape_string(ts.client.name))
             self.query(q)
 
             self._clients[clientid].left = None
@@ -2336,7 +2339,7 @@ class PlayerStats(StatObject):
                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, '%s', '%s')""" % (self._table, self.client_id, self.kills,
                self.deaths, self.teamkills, self.teamdeaths, self.suicides, self.ratio, self.skill, self.assists,
                self.assistskill, self.curstreak, self.winstreak, self.losestreak, self.rounds, self.hide,
-               escape_string(self.fixed_name), self.id_token)
+               escape_string(self.fixed_name), escape_string(self.id_token))
         return q
 
     def _updatequery(self):
@@ -2345,7 +2348,7 @@ class PlayerStats(StatObject):
                fixed_name='%s', id_token='%s' WHERE id= %s""" % (self._table, self.client_id, self.kills, self.deaths,
                self.teamkills, self.teamdeaths, self.suicides, self.ratio, self.skill, self.assists, self.assistskill,
                self.curstreak, self.winstreak, self.losestreak, self.rounds, self.hide, escape_string(self.fixed_name),
-               self.id_token, self.id)
+               escape_string(self.id_token), self.id)
         return q
 
 

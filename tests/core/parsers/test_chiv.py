@@ -281,6 +281,14 @@ class Test_gameevent_parsing(ChivTestCase):
 
 class Test_parser_other(ChivTestCase):
 
+    def test_tempban_with_float_duration(self):
+        # Client.tempban() converts durations such as '1h' with time2minutes(), which returns a float:
+        # struct.pack('>i', 3600.0) raises on Python 3, so the ban packet was never sent
+        client = Mock(guid='76561198000000000', cid='3')
+        self.parser.tempban(client, reason='spam', duration=60.0, silent=True)
+        sent = self.parser._client.sendPacket.call_args[0][0]
+        self.assertIn(b'\x00\x00\x0e\x10', sent.encode())  # 3600 seconds as a big-endian int
+
     def test_getNextMap(self):
         # GIVEN
         self.parser._mapList = None

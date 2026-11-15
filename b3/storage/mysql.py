@@ -263,6 +263,28 @@ class MysqlStorage(DatabaseStorage):
     #                                                                                                                  #
     ####################################################################################################################
 
+    def _detect_backslash_escapes(self):
+        """
+        MySQL treats backslashes in string literals as escape characters unless the server runs with the
+        NO_BACKSLASH_ESCAPES SQL mode: escape string values accordingly (see b3.querybuilder.escape_string).
+        """
+        try:
+            cursor = self.db.cursor()
+            try:
+                cursor.execute("SELECT @@SESSION.sql_mode")
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+            sql_mode = row[0] if row else ''
+            if isinstance(sql_mode, bytes):
+                sql_mode = sql_mode.decode('utf-8', 'replace')
+            QueryBuilder.backslash_escapes = 'NO_BACKSLASH_ESCAPES' not in (sql_mode or '').upper()
+        except Exception as e:
+            # keep the MySQL default (backslash escapes enabled)
+            QueryBuilder.backslash_escapes = True
+            self.console.warning('Could not read the MySQL sql_mode, assuming backslash escapes are enabled: %s', e)
+        self.console.debug('MySQL backslash escapes: %s', QueryBuilder.backslash_escapes)
+
     def connect(self):
         """
         Establish and return a connection with the storage layer.
@@ -291,6 +313,7 @@ class MysqlStorage(DatabaseStorage):
 
                 self.console.bot('Successfully established a connection with MySQL database')
                 self._lastConnectAttempt = 0
+                self._detect_backslash_escapes()
 
                 if self._consoleNotice:
                     self.console.screen.write('Connecting to DB : OK\n')

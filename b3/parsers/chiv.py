@@ -371,7 +371,7 @@ class ChivParser(Parser):
         packet.msgType = MessageType.TEMP_BAN_PLAYER
         packet.addGUID(client.guid)
         packet.addString(reason)
-        packet.addInt(duration * 60)
+        packet.addInt(int(duration * 60))
         self.sendPacket(packet)
         
         banid = client.guid

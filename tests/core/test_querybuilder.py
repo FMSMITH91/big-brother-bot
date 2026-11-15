@@ -60,5 +60,16 @@ class Test_escaping(unittest.TestCase):
         self.assertEqual([("O'Neil",)], db.execute(query).fetchall(), query)
 
 
+class Test_FieldClause(unittest.TestCase):
+
+    def test_comparison_operators(self):
+        qb = QueryBuilder()
+        self.assertEqual("`time_add` >= 5", qb.FieldClause('time_add >=', 5))
+        self.assertEqual("`time_add` <= 5", qb.FieldClause('time_add <=', 5))
+        self.assertEqual("`time_add` > 5", qb.FieldClause('time_add >', 5))
+        self.assertEqual("`time_add` < 5", qb.FieldClause('time_add <', 5))
+        self.assertEqual("`time_add` = 5", qb.FieldClause('time_add', 5))
+
+
 if __name__ == '__main__':
     unittest.main()

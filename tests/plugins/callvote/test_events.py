@@ -108,6 +108,22 @@ class Test_events(CallvoteTestCase):
         self.assertEqual(3, self.p.callvote['num_yes'])
         self.assertEqual(0, self.p.callvote['num_no'])
 
+    def test_client_callvote_with_quotes_is_stored(self):
+        # GIVEN vote arguments containing SQL quote characters (they come straight from the player)
+        self.init()
+        self.mike.connects("1")
+        self.bill.connects("2")
+        evil = """x' , 'y'); DELETE FROM callvote; --"""
+        # WHEN
+        self.console.parseLine('Callvote: 1 - "kick %s"' % evil)
+        self.console.parseLine('VotePassed: 2 - 0 - "kick %s"' % evil)
+        # THEN the vote is stored verbatim instead of breaking (or extending) the INSERT
+        cursor = self.console.storage.query("SELECT type, data FROM callvote")
+        self.assertFalse(cursor.EOF)
+        row = cursor.getRow()
+        self.assertEqual('kick', row["type"])
+        self.assertEqual(evil, row["data"])
+
     def test_client_callvote_failed(self):
         # GIVEN
         self.init()

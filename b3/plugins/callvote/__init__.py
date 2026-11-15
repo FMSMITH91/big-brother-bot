@@ -32,6 +32,7 @@ import os
 import re
 
 from b3.functions import getCmd
+from b3.querybuilder import escape_string
 
 
 class CallvotePlugin(b3.plugin.Plugin):
@@ -213,8 +214,10 @@ class CallvotePlugin(b3.plugin.Plugin):
         self.callvote['max_num'] = len(self.console.clients.getList())
 
         # save the callvote in the storage
-        self.console.storage.query(self.sql['q1'] % (self.callvote['client'].id, self.callvote['type'],
-                                                     self.callvote['args'] if self.callvote['args'] else None,
+        # type and args come from the player's vote command: escape them before putting them in the query
+        self.console.storage.query(self.sql['q1'] % (self.callvote['client'].id,
+                                                     escape_string(self.callvote['type']),
+                                                     escape_string(self.callvote['args'] if self.callvote['args'] else None),
                                                      self.callvote['max_num'], self.callvote['num_yes'],
                                                      self.callvote['num_no'], self.callvote['time']))
 

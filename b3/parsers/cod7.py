@@ -275,7 +275,8 @@ class Cod7Parser(b3.parsers.cod5.Cod5Parser):
                        'the log was probably either rotated or emptied. B3 will now re-adjust to the '
                        'new size of the log.' % (str(self.input.tell()), str(filestats.st_size)) )
             self.input.seek(0, os.SEEK_END)
-        return self.input.readlines()
+            self._partialLine = ''
+        return self.completeLines(self.input.readlines())
 
     ####################################################################################################################
     #                                                                                                                  #
