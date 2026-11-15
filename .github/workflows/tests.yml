@@ -1,16 +1,19 @@
 name: tests
 
 on:
+  # run on pushes to master and on pull requests (not on every branch push too, which ran each job twice for PRs)
   push:
+    branches: [master]
   pull_request:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # pinned: the newest runner image has no prebuilt Python 3.9
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.11", "3.12", "3.13", "3.14"]
         suite: [core, plugins]
     services:
       mysql:

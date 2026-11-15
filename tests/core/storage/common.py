@@ -275,7 +275,8 @@ class StorageAPITest(object):
         self.assertEqual(id1, id3)
 
     def test_setClientPenalty_bad_keyword(self):
-        id1 = self.storage.setClientPenalty(Penalty(keyword='!=+', clientId=1, adminId=0))
+        # a valid type is needed: MySQL >= 5.7 runs in strict mode and rejects '' for the `type` ENUM column
+        id1 = self.storage.setClientPenalty(Penalty(type='Ban', keyword='!=+', clientId=1, adminId=0))
         self.assertIsNotNone(id1)
         p1 = self.storage.getClientPenalty(Penalty(id=id1, type='foo'))
         self.assertIsInstance(p1, Penalty)
