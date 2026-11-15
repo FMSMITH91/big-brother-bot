@@ -13,21 +13,19 @@ install Python.
 
 FIRST RUN
 ---------
-1. Edit your configuration file:
-      %USERPROFILE%\.b3\b3.ini
-   (Start menu > BigBrotherBot > Edit B3 configuration). The installer created
-   it from the sample conf\b3.distribution.ini if you did not have one yet.
-   Set at least: the game parser, the game server address, RCON password and
-   game log file, and the database. The comments in the file explain each
-   setting.
-2. Database: B3 stores players, admins, warnings and bans in a database.
-   SQLite needs nothing installed (database: sqlite://C:/path/to/b3.db).
-   MySQL/MariaDB and PostgreSQL are supported too.
-3. Start B3: Start menu > BigBrotherBot > Run B3 (or run b3.cmd). If B3 stops,
-   the window stays open with the reason: until b3.ini is filled in, B3 stops
-   at once with "invalid parser specified in b3::parser (changeme)".
-   Type !iamgod in the game chat to become super admin (works once, on a
-   fresh database).
+1. Create your configuration with the setup wizard: Start menu > BigBrotherBot >
+   B3 setup wizard (the installer offers to run it on its last page). It asks
+   for your game, the game server address and RCON password, the game log file
+   and the database, and writes %USERPROFILE%\.b3\b3.ini.
+   Database: SQLite needs nothing installed; MySQL/MariaDB and PostgreSQL are
+   supported too.
+2. Start B3: Start menu > BigBrotherBot > Run B3. If B3 stops, the window stays
+   open with the reason.
+3. In game, type !iamgod in the chat to become super admin (works once, on a
+   new database).
+
+Every other setting (plugins, messages, time format...) is in b3.ini, with
+comments: Start menu > BigBrotherBot > Edit B3 configuration.
 
 FOLDERS
 -------
@@ -44,5 +42,5 @@ B3 writes its log files and its SQLite database (if you use one) in
 UPGRADING
 ---------
 Install the new version over the old one. Your b3.ini and everything else in
-%USERPROFILE%\.b3 is kept.
+%USERPROFILE%\.b3 is kept (there is no need to run the setup wizard again).
 ================================================================================

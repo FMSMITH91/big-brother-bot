@@ -95,16 +95,25 @@ jobs:
           $dir = "$env:RUNNER_TEMP\b3"
           Start-Process -Wait -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", "/LOG=$env:RUNNER_TEMP\setup.log"
           if (-not (Test-Path "$dir\b3.cmd")) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "b3.cmd was not installed" }
-          if (-not (Test-Path "$env:USERPROFILE\.b3\b3.ini")) { throw "the starting b3.ini was not created" }
           $out = & "$dir\b3.cmd" --version
           Write-Output $out
           if ($out -notmatch [regex]::Escape("v$env:VERSION")) { throw "b3.cmd --version did not report $env:VERSION" }
           if (-not (Test-Path "$dir\run-b3.cmd")) { throw "run-b3.cmd was not installed" }
-          # first start with the untouched sample b3.ini: B3 must stop with an error that says which file to edit
+          # first start without a b3.ini (no terminal, so no wizard offered): B3 must stop and explain how to make one
           $first = & "$dir\b3.cmd" 2>&1 | Out-String
           Write-Output $first
-          if ($LASTEXITCODE -eq 0) { throw "B3 started with the unedited sample configuration" }
-          if ($first -notmatch 'Edit .*b3\.ini') { throw "the configuration error does not say which file to edit" }
+          if ($LASTEXITCODE -eq 0) { throw "B3 started without a configuration file" }
+          if ($first -notmatch 'b3\.distribution\.ini') { throw "the error does not explain how to create b3.ini" }
+          # the setup wizard, with its answers piped in: Call of Duty, same computer, default IP and port, RCON
+          # password, game log, no PunkBuster, SQLite in the default file, default bot name
+          $answers = "1`ny`n`n`nsecret`nC:\cod\main\games_mp.log`nn`n1`n`n`n"
+          $wizard = $answers | & "$dir\b3.cmd" --setup 2>&1 | Out-String
+          Write-Output $wizard
+          if ($LASTEXITCODE -ne 0) { throw "the setup wizard failed" }
+          $ini = Get-Content "$env:USERPROFILE\.b3\b3.ini" -Raw
+          foreach ($line in 'parser: cod', 'port: 28960', 'rcon_password: secret', 'punkbuster: off', 'database: sqlite://') {
+            if ($ini -notmatch [regex]::Escape($line)) { throw "b3.ini written by the wizard lacks '$line'" }
+          }
           # the libraries and data files B3 and its plugins need at runtime
           & "$dir\python\python.exe" -c "import b3, b3.parsers.cod, b3.storage.sqlite, b3.plugins.xlrstats, pymysql, psycopg2, requests, feedparser, dateutil, paramiko, os; p = os.path.dirname(b3.__file__); assert os.path.isfile(os.path.join(p, 'plugins', 'geolocation', 'lib', 'geoip', 'db', 'GeoIP.dat')); print('runtime OK')"
           if ($LASTEXITCODE -ne 0) { throw "runtime check failed" }

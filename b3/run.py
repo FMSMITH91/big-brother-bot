@@ -126,6 +126,30 @@ def run_update(config=None):
     update.run()
 
 
+def offer_setup_wizard(reason, config=None):
+    """
+    When B3 runs in a terminal, offer to create the configuration file with the setup wizard.
+    :return: True if the wizard wrote a configuration file
+    """
+    if not (sys.stdin and sys.stdin.isatty() and sys.stdout.isatty()):
+        return False
+    from b3.setup_wizard import Wizard, WizardAbort
+    wizard = Wizard()
+    try:
+        if reason:
+            print(reason)
+        question = 'Replace %s with one made by the setup wizard? (a backup copy is kept)' % config if config \
+            else 'Create the configuration file now with the setup wizard?'
+        if not wizard.yes(question, True):
+            return False
+    except (WizardAbort, KeyboardInterrupt):
+        return False
+    if not wizard.run(config, confirm_replace=False):
+        return False
+    print('\nStart B3 again to use it.')
+    return True
+
+
 def run(options):
     """
     Run B3 in console.
@@ -156,6 +180,8 @@ def run(options):
 
             if not config:
                 printexit = True
+                if offer_setup_wizard('B3 could not find a configuration file.'):
+                    raise SystemExit(0)
                 console_exit('ERROR: could not find any valid configuration file.\n%s' % config_help())
 
         # LOADING MAIN CONFIGURATION
@@ -175,6 +201,8 @@ def run(options):
         else:
             print('CRITICAL: invalid configuration file specified!')
         print('Edit %s to fix this, then start B3 again: the comments in the file explain each setting.' % config)
+        if offer_setup_wizard('', config):
+            raise SystemExit(0)
         raise SystemExit(1)
     except SystemExit as msg:
         if not printexit and main_is_frozen():
@@ -199,7 +227,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('-c', '--config', dest='config', default=None, metavar='b3.ini', help='B3 config file. Example: -c b3.ini')
     p.add_argument('-r', '--restart', action='store_true', dest='restart', default=False, help='Auto-restart B3 on crash')
-    p.add_argument('-s', '--setup',  action='store_true', dest='setup', default=False, help='Setup main b3.ini config file')
+    p.add_argument('-s', '--setup',  action='store_true', dest='setup', default=False, help='Create the b3.ini config file with the setup wizard')
     p.add_argument('-u', '--update', action='store_true', dest='update', default=False, help='Update B3 database to latest version')
     p.add_argument('-v', '--version', action='version', default=False, version=b3.getB3versionString(), help='Show B3 version and exit')
     p.add_argument('-a', '--autorestart', action='store_true', dest='autorestart', default=False, help=argparse.SUPPRESS)
@@ -210,9 +238,9 @@ def main():
         options.config = args[0]
 
     if options.setup:
-        # setup procedure is deprecated: show configuration file generator web tool url instead
-        sys.stdout.write('\n')
-        console_exit("  *** NOTICE: the console setup procedure is deprecated!\n%s\n" % config_help())
+        ## SETUP WIZARD => CONSOLE
+        from b3.setup_wizard import run_wizard
+        raise SystemExit(0 if run_wizard(options.config) else 1)
 
     if options.update:
         ## UPDATE => CONSOLE

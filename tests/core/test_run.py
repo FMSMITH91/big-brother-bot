@@ -59,5 +59,24 @@ class Test_first_start(unittest.TestCase):
         self.assertNotIn('bigbrotherbot.net', text)
 
 
+class Test_setup_option(unittest.TestCase):
+
+    def test_setup_runs_the_wizard(self):
+        # --setup used to only print a link to the defunct web config generator
+        import sys
+        from unittest.mock import patch
+        with patch('b3.setup_wizard.run_wizard', return_value='/x/b3.ini') as wizard, \
+                patch.object(sys, 'argv', ['b3_run', '--setup', '-c', '/x/b3.ini']), \
+                self.assertRaises(SystemExit) as ctx:
+            b3.run.main()
+        wizard.assert_called_once_with('/x/b3.ini')
+        self.assertEqual(0, ctx.exception.code)
+
+    def test_wizard_offered_only_in_a_terminal(self):
+        from unittest.mock import patch, Mock
+        with patch('sys.stdin', Mock(isatty=Mock(return_value=False))):
+            self.assertFalse(b3.run.offer_setup_wizard('no config'))
+
+
 if __name__ == '__main__':
     unittest.main()

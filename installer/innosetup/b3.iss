@@ -60,8 +60,6 @@ Source: "{#B3_STAGE_DIR}\readme.txt"; DestDir: "{app}"; Flags: ignoreversion isr
 Source: "{#B3_STAGE_DIR}\conf\*"; DestDir: "{app}\conf"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; third party plugins folder: never overwrite what the user put there
 Source: "{#B3_STAGE_DIR}\extplugins\*"; DestDir: "{app}\extplugins"; Flags: onlyifdoesntexist recursesubdirs createallsubdirs uninsneveruninstall
-; a starting configuration, only if the user has none yet (kept on uninstall)
-Source: "{#B3_STAGE_DIR}\conf\b3.distribution.ini"; DestDir: "{%USERPROFILE}\.b3"; DestName: "b3.ini"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [InstallDelete]
 ; drop the previous version's Python and libraries so no stale module survives an upgrade
@@ -69,6 +67,7 @@ Type: filesandordirs; Name: "{app}\python"
 
 [Icons]
 Name: "{group}\Run B3"; Filename: "{app}\run-b3.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\b3.ico"; Comment: "Run BigBrotherBot {#B3_VERSION}"
+Name: "{group}\B3 setup wizard"; Filename: "{app}\run-b3.cmd"; Parameters: "--setup"; WorkingDir: "{app}"; IconFilename: "{app}\b3.ico"; Comment: "Create the B3 configuration file (b3.ini)"
 Name: "{group}\Edit B3 configuration"; Filename: "notepad.exe"; Parameters: """{%USERPROFILE}\.b3\b3.ini"""; IconFilename: "{app}\b3.ico"
 Name: "{group}\B3 data folder"; Filename: "{%USERPROFILE}\.b3"
 Name: "{group}\Sample configurations"; Filename: "{app}\conf"
@@ -82,8 +81,8 @@ Name: "{autodesktop}\BigBrotherBot"; Filename: "{app}\run-b3.cmd"; WorkingDir: "
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Run]
-; B3 cannot start until b3.ini is filled in: offer to open it on the last page of the setup
-Filename: "notepad.exe"; Parameters: """{%USERPROFILE}\.b3\b3.ini"""; Description: "Edit the B3 configuration now (required before the first start)"; Flags: postinstall nowait skipifsilent
+; B3 needs a b3.ini before its first start: offer the setup wizard on the last page of the setup
+Filename: "{app}\run-b3.cmd"; Parameters: "--setup"; WorkingDir: "{app}"; Description: "Run the B3 setup wizard now (creates the configuration B3 needs)"; Flags: postinstall nowait skipifsilent shellexec
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\python"
