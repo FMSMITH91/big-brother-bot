@@ -147,6 +147,9 @@ def build_config(sample_text, answers):
         ('b3', 'database', answers['database']),
         ('b3', 'bot_name', answers.get('bot_name') or 'b3'),
         ('b3', 'time_zone', answers.get('time_zone') or 'auto'),
+        # next to b3.ini: the sample's relative b3.log ends up in whatever folder B3 starts in (on Windows, the
+        # install folder)
+        ('b3', 'logfile', '@home/b3.log'),
         ('server', 'public_ip', answers['public_ip']),
         ('server', 'port', str(answers['port'])),
         ('server', 'rcon_ip', answers['rcon_ip']),
