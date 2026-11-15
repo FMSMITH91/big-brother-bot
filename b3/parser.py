@@ -469,6 +469,7 @@ class Parser(object):
         self.cron.add(self._eventsStats_cronTab)
         self.bot("All plugins started")
         self.pluginsStarted()
+        self.joinConnectedPlayers()
         self.bot("Starting event dispatching thread")
         _thread.start_new_thread(self.handleEvents, ())
         self.bot("Start reading game events")
@@ -527,6 +528,13 @@ class Parser(object):
         """
         Called after the parser loaded and started all plugins. 
         Overwrite this in parsers to take actions once plugins are ready
+        """
+        pass
+
+    def joinConnectedPlayers(self):
+        """
+        Called once the plugins are started: parsers that only learn about players from the game log
+        override this to authenticate the players who were already connected when B3 started.
         """
         pass
 

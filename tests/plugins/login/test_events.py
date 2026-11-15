@@ -43,13 +43,15 @@ class Test_auth(LoginTestCase):
         self.assertEqual(8, joe.groupBits)
 
     def test_high_level_no_password_set(self):
-        # GIVEN
+        # GIVEN a super admin who has no password yet
         joe = FakeClient(self.console, name="Joe", guid="joeguid", groupBits=128)
         # WHEN
         joe.clearMessageHistory()
         joe.connects("0")
-        # THEN
-        self.assertEqual(['You need a password to use all your privileges: ask the administrator to set a password for you'], joe.message_history)
+        # THEN he is demoted until he logs in, and told how to choose his password (he may set passwords, but
+        # cannot run !setpassword while demoted)
+        self.assertEqual(['You have no password yet: choose one via console: /tell 0 !login yournewpassword'],
+                         joe.message_history)
         self.assertEqual(2, joe.groupBits)
 
     def test_high_level_having_password(self):
@@ -61,4 +63,25 @@ class Test_auth(LoginTestCase):
         joe.connects("0")
         # THEN
         self.assertEqual(['Login via console: /tell 0 !login yourpassword'], joe.message_history)
+        self.assertEqual(2, joe.groupBits)
+
+
+class Test_auth_below_passwdlevel(LoginTestCase):
+
+    def setUp(self):
+        LoginTestCase.setUp(self)
+        self.init_plugin("""
+            [settings]
+            thresholdlevel: 20
+            passwdlevel: 80
+        """)
+
+    def test_high_level_no_password_set_not_allowed_to_set_passwords(self):
+        # GIVEN a full admin (level 60) below the level needed to set passwords
+        joe = FakeClient(self.console, name="Joe", guid="joeguid", groupBits=32)
+        # WHEN
+        joe.clearMessageHistory()
+        joe.connects("0")
+        # THEN
+        self.assertEqual(['You need a password to use all your privileges: ask the administrator to set a password for you'], joe.message_history)
         self.assertEqual(2, joe.groupBits)

@@ -51,8 +51,19 @@ class Test_misc_cmd(Admin_TestCase):
 
     def test_restart(self):
         self.console.restart = Mock()
+        self.console.autorestart = True
         self.p.cmd_restart(None, None, Mock())
         assert self.console.restart.called
+
+    def test_restart_without_autorestart(self):
+        # live CoD1 test (2026-11-15): the command was unregistered, so the admin only got "unknown command"
+        self.console.restart = Mock()
+        self.console.autorestart = False
+        client = Mock()
+        self.assertIn('restart', self.p._commands)
+        self.p.cmd_restart(None, client, Mock())
+        assert not self.console.restart.called
+        self.assertIn('auto-restart', client.message.call_args[0][0])
 
     def test_reconfig(self):
         self.console.reloadConfigs = Mock()
@@ -1046,7 +1057,7 @@ class Test_cmd_help(Admin_functional_test):
                                             ', clear, clientinfo, die, find, help, iamgod, kick, kicka'
                                             'll, lastbans, leveltest, list, longlist, lookup, makereg, map, maprotate, maps, '
                                             'mask, nextmap, notice, pause, permban, poke, putgroup, rebuild, reco'
-                                            'nfig, regtest, regulars, rules, runas, say, scream, seen, spam, s'
+                                            'nfig, regtest, regulars, restart, rules, runas, say, scream, seen, spam, s'
                                             'pams, spank, spankall, status, tempban, time, unban, ungroup, unmask, unre'
                                             'g, warn, warnclear, warninfo, warnremove, warns, warntest')
         self.mike.message = Mock()

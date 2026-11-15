@@ -10,3 +10,5 @@
                                                                          - add min_time_between to limit number of requests
 2017/06/02 - 3.1 - GrosBedo - add always_loud setting to display translation to every players
 2017/06/02 - 3.2 - GrosBedo - add exclude_language setting to skip messages in a given language from !translast
+2026/11/15 - 3.3 -          - add the libretranslate service (self-hostable, so chat text can stay on your server); removed the
+                             unused text-to-speech helper that called Google

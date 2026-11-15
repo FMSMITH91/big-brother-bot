@@ -762,3 +762,35 @@ class Test_events(XlrstatsTestCase):
         # THEN
         player_stats = self.p.get_PlayerStats(client=self.p1)
         self.assertEqual(2, player_stats.rounds)
+
+
+class Test_schema_upgrade(XlrstatsTestCase):
+    """
+    Live CoD1 test (2026-11-15): every start logged "Duplicate column name 'id_token'" because the 3.0.0 upgrade
+    script ran against tables that already had the column.
+    """
+
+    def query_errors(self, error):
+        return [c for c in error.call_args_list if 'Query failed' in str(c)]
+
+    def test_no_query_error_on_new_database_and_restart(self):
+        with patch.object(self.console, 'error') as error:
+            self.init()                     # first start: the tables are created
+            self.p.build_database_schema()  # next start: the tables exist and are up to date
+        self.assertEqual([], self.query_errors(error))
+
+    def test_table_from_older_version_is_upgraded(self):
+        self.init()
+        self.console.storage.query('ALTER TABLE %s DROP COLUMN id_token' % self.p.playerstats_table)
+        self.assertFalse(self.p._column_exists(self.p.playerstats_table, 'id_token'))
+        self.p.build_database_schema()
+        self.assertTrue(self.p._column_exists(self.p.playerstats_table, 'id_token'))
+
+
+class Test_sample_config(XlrstatsTestCase):
+
+    def test_sample_config_has_every_setting(self):
+        # live CoD1 test (2026-11-15): 11 "could not find settings::..." warnings with the sample config
+        with patch.object(XlrstatsPlugin, 'warning') as warning:
+            self.init()
+        self.assertEqual([], [c for c in warning.call_args_list if 'could not find' in str(c)])

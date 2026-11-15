@@ -24,6 +24,7 @@
 
 import logging
 from unittest.mock import Mock
+from unittest.mock import patch
 from mockito import mock, when, any as anything
 import unittest
 from b3.config import XmlConfigParser
@@ -111,3 +112,77 @@ num score ping guid   name            lastmsg address               qport rate
             'slot': '5', 'score': '5', 'ping': '53', 'guid': '318670', 'name': 'bigredtwit^7', 'last': '0', 'ip': '11.11.11.11', 'pbid': None
         }, rv.get('5', {}), rv)
 
+
+STATUS_WITH_JOE = '''\
+map: mp_harbor
+num score ping guid   name            lastmsg address               qport rate
+--- ----- ---- ---------- --------------- ------- --------------------- ------ -----
+  7     0   48 2019598 Joe^7                  0 11.22.33.55:28960      1773  5000
+'''
+
+
+class Test_players_connected_before_b3(CodTestCase):
+    """
+    Live CoD1 test (2026-11-15): a player who was on the server when B3 started typed !iamgod and B3 only used the
+    line to start authenticating him: the command itself was dropped.
+    """
+
+    def setUp(self):
+        CodTestCase.setUp(self)
+        self.console.PunkBuster = None
+        when(self.console).write('status', maxRetries=anything()).thenReturn(STATUS_WITH_JOE)
+        when(self.console).write('status').thenReturn(STATUS_WITH_JOE)
+        self.queued = []
+        self.console.queueEvent = lambda event, expire=10: self.queued.append(event)
+        self.timers = []
+        patcher = patch('b3.parsers.cod.Timer', side_effect=self._timer)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.console._counter.clear)
+
+    def _timer(self, interval, function, args=()):
+        timer = Mock()
+        timer.start = lambda: self.timers.append((function, args))
+        return timer
+
+    def run_timers(self):
+        while self.timers:
+            function, args = self.timers.pop(0)
+            function(*args)
+
+    def events(self, key):
+        event_id = self.console.getEventID(key)
+        return [e for e in self.queued if e.type == event_id]
+
+    def test_command_from_unauthenticated_player_is_handled_once_authenticated(self):
+        # WHEN Joe, unknown to B3, types a command
+        self.console.parseLine('1319:34 say;2019598;7;Joe;!iamgod')
+        # THEN nothing happens until he is authenticated...
+        self.assertEqual([], self.events('EVT_CLIENT_SAY'))
+        self.run_timers()
+        # ...and then his command is handled, after his join
+        joins = self.events('EVT_CLIENT_JOIN')
+        says = self.events('EVT_CLIENT_SAY')
+        self.assertEqual(1, len(joins))
+        self.assertEqual(['!iamgod'], [e.data for e in says])
+        self.assertIs(joins[0].client, says[0].client)
+        self.assertLess(self.queued.index(joins[0]), self.queued.index(says[0]))
+
+    def test_kept_lines_are_dropped_when_the_player_leaves(self):
+        self.console.parseLine('1319:34 say;2019598;7;Joe;!iamgod')
+        self.console.parseLine('1319:35 Q;2019598;7;Joe')
+        self.run_timers()
+        self.assertEqual([], self.events('EVT_CLIENT_SAY'))
+
+    def test_players_already_connected_are_authenticated_at_startup(self):
+        # WHEN B3 has started its plugins
+        self.console.joinConnectedPlayers()
+        # THEN the players listed by rcon status are authenticated without waiting for them to do something
+        joe = self.console.clients.getByCID('7')
+        self.assertIsNotNone(joe)
+        self.assertEqual('2019598', joe.guid)
+        self.assertEqual(1, len(self.events('EVT_CLIENT_JOIN')))
+        # and a known player is not authenticated twice
+        self.queued[:] = []
+        self.console.joinConnectedPlayers()
+        self.assertEqual([], self.events('EVT_CLIENT_JOIN'))

@@ -22,6 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
+import b3
 from unittest.mock import Mock, call
 from tests.plugins.countryfilter import CountryFilterTestCase
 from textwrap import dedent
@@ -127,3 +128,27 @@ class Test_events(CountryFilterTestCase):
         # THEN
         self.console.say.assert_called_with('^7Mike ^1(country: Italy)^7 was rejected by B3')
         self.mike.kick.assert_called_with(silent=True)
+
+class Test_unknown_country(CountryFilterTestCase):
+    """
+    Live CoD1 test (2026-11-15): with the sample config a player whose country geolocation could not find would
+    have been kicked: the empty country code matched "cf_deny_from: none" as a substring.
+    """
+
+    def test_sample_config_accepts_player_without_country(self):
+        # an empty country code was denied (it matched "none"), and a missing one (None) raised a TypeError
+        self.init(open(b3.getAbsolutePath('@b3/conf/plugin_countryfilter.ini')).read())
+        self.bill.connects('1')
+        self.assertTrue(self.p.isAllowConnect('', self.bill))
+        self.assertTrue(self.p.isAllowConnect(None, self.bill))
+        self.assertFalse(self.p.isMessageExcludeFrom(None))
+
+    def test_codes_are_compared_whole(self):
+        from b3.plugins.countryfilter import CountryfilterPlugin
+        self.assertTrue(CountryfilterPlugin.isListed('NL US', 'us'))
+        self.assertTrue(CountryfilterPlugin.isListed('NL,US', 'US'))
+        self.assertTrue(CountryfilterPlugin.isListed('all', ''))
+        self.assertFalse(CountryfilterPlugin.isListed('none', ''))
+        self.assertFalse(CountryfilterPlugin.isListed('none', None))
+        self.assertFalse(CountryfilterPlugin.isListed('none', 'NO'))
+        self.assertFalse(CountryfilterPlugin.isListed('AUS', 'US'))

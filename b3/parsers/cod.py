@@ -45,6 +45,9 @@ class CodParser(AbstractParser):
     _pbRegExp = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE) # RegExp to match a PunkBuster ID
     _logSync = 3                                             # Value for unbuffered game logging (append mode)
     _counter = {}
+    # chat lines (commands) said by players who were still being authenticated: replayed once they are
+    _pending_says = None
+    _max_pending_says = 5
 
     _line_length = 65
     _line_color_prefix = ''
@@ -351,6 +354,7 @@ class CodParser(AbstractParser):
                 # Flag it to remove from the queue
                 cid = match.group('cid')
                 self._counter[cid] = 'Disconnected'
+                self._drop_pending_says(cid)
                 self.debug('Slot %s has disconnected or was forwarded to our http download location: '
                            'removing from authentication queue...' % cid)
         return None
@@ -422,6 +426,7 @@ class CodParser(AbstractParser):
             self.OnJ(action, data, match)
             client = self.getClient(match)
             if not client:
+                self._defer_until_authenticated(match.group('cid'), self.OnSay, action, data, match)
                 return None
 
         data = match.group('text')
@@ -447,6 +452,7 @@ class CodParser(AbstractParser):
             self.OnJ(action, data, match)
             client = self.getClient(match)
             if not client:
+                self._defer_until_authenticated(match.group('cid'), self.OnSayteam, action, data, match)
                 return None
 
         data = match.group('text')
@@ -475,6 +481,7 @@ class CodParser(AbstractParser):
             self.OnJ(action, data, match)
             client = self.getClient(match)
             if not client:
+                self._defer_until_authenticated(match.group('cid'), self.OnTell, action, data, match)
                 return None
 
         data = match.group('text')
@@ -570,6 +577,7 @@ class CodParser(AbstractParser):
         if self._counter.get(cid) == 'Disconnected':
             self.debug('%s disconnected: removing from authentication queue' % name)
             self._counter.pop(cid)
+            self._drop_pending_says(cid)
             return None
         self.debug('newClient: %s, %s, %s' % (cid, codguid, name))
         sp = self.connectClient(cid)
@@ -615,6 +623,7 @@ class CodParser(AbstractParser):
             self.debug('Could not auth %s: giving up...' % name)
             if self._counter.get(cid):
                 self._counter.pop(cid)
+            self._drop_pending_says(cid)
             return None
         # Player is not in the status response (yet), retry
         else:
@@ -631,6 +640,57 @@ class CodParser(AbstractParser):
                                         guid=guid, pbid=pbid, data={'codguid': codguid})
 
         self.queueEvent(self.getEvent('EVT_CLIENT_JOIN', client=client))
+        self._replay_pending_says(cid)
+
+    def _defer_until_authenticated(self, cid, handler, action, data, match):
+        """
+        Keep a chat line said by a player B3 is still authenticating (typically the player was already on the
+        server when B3 started), so that a command such as !iamgod is not lost: it is handled once the player
+        is authenticated.
+        """
+        if self._pending_says is None:
+            self._pending_says = {}
+        pending = self._pending_says.setdefault(str(cid), [])
+        if len(pending) < self._max_pending_says:
+            self.debug('Slot %s is not authenticated yet: chat line kept until it is', cid)
+            pending.append((handler, action, data, match))
+
+    def _replay_pending_says(self, cid):
+        """
+        Handle the chat lines said by the given slot while it was being authenticated.
+        """
+        for handler, action, data, match in self._drop_pending_says(cid):
+            event = handler(action, data, match)
+            if event:
+                self.queueEvent(event)
+
+    def _drop_pending_says(self, cid):
+        """
+        Forget (and return) the chat lines kept for the given slot.
+        """
+        if not self._pending_says:
+            return []
+        return self._pending_says.pop(str(cid), [])
+
+    def joinConnectedPlayers(self):
+        """
+        Authenticate the players who were already on the server when B3 started: the game log only tells
+        B3 about players when they join, so without this they stay unknown until they do something.
+        """
+        try:
+            players = self.getPlayerList(maxRetries=4)
+        except Exception as e:
+            self.warning('Could not get the list of connected players: %s', e)
+            return
+        for cid, p in players.items():
+            if self.clients.getByCID(cid) or self._counter.get(cid):
+                continue
+            codguid = p.get('guid')
+            if codguid and len(codguid) < self._guidLength:
+                codguid = None
+            self.debug('%s was already connected: authenticating...', p.get('name'))
+            self._counter[cid] = 1
+            self.newPlayer(cid, codguid, p.get('name'))
 
     ####################################################################################################################
     #                                                                                                                  #

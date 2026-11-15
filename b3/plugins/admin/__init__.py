@@ -439,11 +439,6 @@ class AdminPlugin(b3.plugin.Plugin):
                 if func:
                     self.registerCommand(self, cmd, level, func, alias)
 
-        if not self.console.autorestart:
-            if 'restart' in self._commands:
-                self.debug('unregistering !restart command: B3 is not running in autorestart mode')
-                self.unregisterCommand('restart')
-
         if not self.console.storage.db:
             self.error('could not retrieve database connection: unable to store or retrieve any information!')
         else:
@@ -1196,6 +1191,12 @@ class AdminPlugin(b3.plugin.Plugin):
         """
         - restart b3
         """
+        if not self.console.autorestart:
+            # nothing would start B3 again: say so instead of answering "unknown command" (the command used to be
+            # unregistered in this case)
+            client.message('^7B3 is not running in auto-restart mode: !restart would only stop it. '
+                           'Start B3 with --autorestart to use !restart')
+            return
         cmd.sayLoudOrPM(client, '^7Shutting down for restart...')
         self.console.restart()
 

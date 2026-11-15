@@ -22,10 +22,11 @@
 #                                                                     #
 # ################################################################### #
 
-__version__ = '1.7'
+__version__ = '1.8'
 __author__ = 'guwashi / xlr8or'
 
 import b3
+import re
 import b3.events
 import b3.plugin
 
@@ -152,24 +153,16 @@ class CountryfilterPlugin(b3.plugin.Plugin):
         elif 'allow,deny' == self.cf_order:
             # self.debug('allow,deny - checking')
             result = False  # deny
-            if -1 != self.cf_allow_from.find('all'):
+            if self.isListed(self.cf_allow_from, cc):
                 result = True
-            if -1 != self.cf_allow_from.find(cc):
-                result = True
-            if -1 != self.cf_deny_from.find('all'):
-                result = False
-            if -1 != self.cf_deny_from.find(cc):
+            if self.isListed(self.cf_deny_from, cc):
                 result = False
         else:  # 'deny,allow' (default)
             # self.debug('deny,allow - checking')
             result = True  # allow
-            if -1 != self.cf_deny_from.find('all'):
+            if self.isListed(self.cf_deny_from, cc):
                 result = False
-            if -1 != self.cf_deny_from.find(cc):
-                result = False
-            if -1 != self.cf_allow_from.find('all'):
-                result = True
-            if -1 != self.cf_allow_from.find(cc):
+            if self.isListed(self.cf_allow_from, cc):
                 result = True
         return result
 
@@ -178,9 +171,18 @@ class CountryfilterPlugin(b3.plugin.Plugin):
         Is message allowed to print?
         :param cc: The country code
         """
-        result = False
-        if -1 != self.cf_message_exclude_from.find('all'):
-            result = True
-        if -1 != self.cf_message_exclude_from.find(cc):
-            result = True
-        return result
+        return self.isListed(self.cf_message_exclude_from, cc)
+
+    @staticmethod
+    def isListed(setting, cc):
+        """
+        Tell whether a country code is in a list setting ("all", "none", or codes separated by spaces or commas).
+        Codes are compared whole: the old substring search matched an empty country code (geolocation without a
+        country) against any list, so with the sample "cf_deny_from: none" such players were kicked.
+        :param setting: The list setting
+        :param cc: The country code (may be None or empty)
+        """
+        codes = set(re.split(r'[\s,]+', (setting or '').strip().upper())) - {''}
+        if 'ALL' in codes:
+            return True
+        return bool(cc) and cc.strip().upper() in codes

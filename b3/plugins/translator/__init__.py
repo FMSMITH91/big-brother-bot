@@ -23,7 +23,7 @@
 # ################################################################### #
 
 __author__ = 'Fenix'
-__version__ = '3.2'
+__version__ = '3.3'
 
 import b3
 import b3.plugin
@@ -32,8 +32,10 @@ import b3.events
 # translate utility that utilize google translator
 # Note that the order or arguments in the URL matters.
 
+import requests
 import urllib.request
 from urllib.parse import urlencode
+from urllib.parse import urlparse
 
 try:
     # only necessary if using exclude_language setting
@@ -108,6 +110,23 @@ class TranslatorPlugin(b3.plugin.Plugin):
         self.settings['always_loud'] = self.getSetting('settings', 'always_loud', b3.BOOL, True)
         self.settings['max_history'] = self.getSetting('settings', 'max_history', b3.INT, 10)
         self.settings['exclude_language'] = self.getSetting('settings', 'exclude_language', b3.STR, 'en', validate_target)
+
+        def validate_service(x):
+            """helper used to validate the translation service"""
+            if x not in ('google', 'libretranslate'):
+                raise ValueError('value must be one of [google, libretranslate]')
+            return x
+
+        self.settings['service'] = self.getSetting('settings', 'service', b3.STR, 'google', validate_service)
+        self.settings['libretranslate_url'] = self.getSetting('settings', 'libretranslate_url', b3.STR, '').rstrip('/')
+        self.settings['libretranslate_api_key'] = self.getSetting('settings', 'libretranslate_api_key', b3.STR, '')
+        if self.settings['service'] == 'libretranslate':
+            url = urlparse(self.settings['libretranslate_url'])
+            if not url.netloc:
+                self.error('settings/libretranslate_url is missing: translations will fail')
+            elif url.scheme != 'https' and url.hostname not in ('localhost', '127.0.0.1', '::1'):
+                self.warning('settings/libretranslate_url does not use https: chat text will cross the network in '
+                             'clear text')
 
     def onStartup(self):
         """
@@ -244,8 +263,10 @@ class TranslatorPlugin(b3.plugin.Plugin):
         return '\n'.join(ret)
 
     def translate(self, text, from_lang="auto", to_lang="en-EN"):
-        """translate text, return the result as json"""
+        """translate text, return the result as a string"""
         self.debug('attempting to translate message -> %s : %s' % (to_lang, text))
+        if self.settings.get('service') == 'libretranslate':
+            return self.translate_libretranslate(text, from_lang, to_lang)
 
         url = 'https://translate.googleapis.com/translate_a/single?'
 
@@ -279,21 +300,25 @@ class TranslatorPlugin(b3.plugin.Plugin):
         self.verbose('message translated [ source <%s> : %s | result <%s> : %s ]' % (from_lang, text, to_lang, msg))
         return msg
 
-    def voice(self, text, lang='en'):
-        """return the sound of an word, in mp3 bytes"""
-        url = 'https://translate.googleapis.com/translate_tts?'
-
-        params = []
-        params.append('client=gtx')
-        params.append('ie=UTF-8')
-        params.append('tl=' + lang)
-        params.append(urlencode({'q': text}))
-        url += '&'.join(params)
-        request = urllib.request.Request(url)
-        browser = "Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0"
-        request.add_header('User-Agent', browser)
-        response = urllib.request.urlopen(request)
-        return response.read()
+    def translate_libretranslate(self, text, from_lang="auto", to_lang="en"):
+        """
+        Translate text with a LibreTranslate server (https://libretranslate.com, open source and self-hostable:
+        run it on the game server box and chat text never leaves it).
+        """
+        data = {'q': text, 'source': from_lang.split('-')[0], 'target': to_lang.split('-')[0], 'format': 'text'}
+        if self.settings.get('libretranslate_api_key'):
+            data['api_key'] = self.settings['libretranslate_api_key']
+        response = requests.post(self.settings['libretranslate_url'] + '/translate', json=data, timeout=10)
+        rtn = response.json()
+        if response.status_code != 200 or 'translatedText' not in rtn:
+            self.debug('could not translate message (%s): %s' % (text, rtn.get('error', response.status_code)))
+            return None
+        msg = self.str_sanitize(rtn['translatedText'])
+        if not msg:
+            self.debug('could not translate message (%s): empty string returned' % text)
+            return None
+        self.verbose('message translated [ source <%s> : %s | result <%s> : %s ]' % (from_lang, text, to_lang, msg))
+        return msg
 
     def send_translation(self, client, message, cmd=None):
         """

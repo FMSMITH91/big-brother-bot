@@ -20,3 +20,8 @@ In-game user guide
 * **!translang** `display the list of available language codes`
 
 It is advised to increase min_time_between to reduce the likelihood of a google temporary ban.
+
+Privacy: with the default `service: google` every translated message is sent to Google Translate. Set
+`service: libretranslate` and point `libretranslate_url` at your own [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate)
+server (for example `docker run -p 127.0.0.1:5000:5000 libretranslate/libretranslate`, then
+`libretranslate_url: http://127.0.0.1:5000`) to keep the chat on your server.

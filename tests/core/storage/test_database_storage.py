@@ -115,3 +115,18 @@ class Test_DatabaseStorage(unittest.TestCase):
         with open(b3.getAbsolutePath("@b3/sql/mysql/b3-db.sql"), 'r') as sql_file:
             statements = DatabaseStorage.getQueriesFromFile(sql_file)
             self.assertEqual(2, len(statements))
+
+    def test_no_empty_statement_after_the_last_semicolon(self):
+        # live CoD1 test (2026-11-15): the chatlogger SQL file ends with ";\n\n", which gave an empty statement
+        # that MySQL rejects ("Query was empty"), so the plugin did not start on a new database
+        import io
+        sql_file = io.StringIO("CREATE TABLE a (id INT);\n\nCREATE TABLE b (id INT);\n\n  \n")
+        self.assertEqual(['CREATE TABLE a (id INT)', 'CREATE TABLE b (id INT)'],
+                         DatabaseStorage.getQueriesFromFile(sql_file))
+
+    def test_plugin_sql_files_have_no_empty_statement(self):
+        import glob
+        for path in glob.glob(b3.getAbsolutePath('@b3/plugins/*/sql/*/*.sql')):
+            with open(path, 'r') as sql_file:
+                statements = DatabaseStorage.getQueriesFromFile(sql_file)
+            self.assertNotIn('', statements, path)

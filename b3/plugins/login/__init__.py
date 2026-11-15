@@ -34,7 +34,7 @@ from b3.clients import Client, Group
 from configparser import NoOptionError
 
 __author__ = 'Tim ter Laak'
-__version__ = '1.4'
+__version__ = '1.5'
 
 
 class LoginPlugin(b3.plugin.Plugin):
@@ -104,7 +104,13 @@ class LoginPlugin(b3.plugin.Plugin):
             # still the ones being saved in the storage and used to check who may change his password
             client.restrictGroups(bits)
 
-            if not client_from_db.password:
+            if not client_from_db.password and client.realMaxLevel >= self._setpassword_cmd_level:
+                # he may set passwords, but cannot run !setpassword while demoted: let him choose his first
+                # password with !login (otherwise a server's only super admin was locked out)
+                m = 'You have no password yet: choose one via console: %s %s !login yournewpassword' % (
+                    self._pmcomm, client.cid)
+                client.message(m)
+            elif not client_from_db.password:
                 m = 'You need a password to use all your privileges: ask the administrator to set a password for you'
                 client.message(m)
             else:
@@ -166,12 +172,17 @@ class LoginPlugin(b3.plugin.Plugin):
 
         if data:
             client_from_db = self._get_client_from_db(client.id)
-            if verify_password(data, client_from_db.password):
+            if not client_from_db.password and client.realMaxLevel >= self._setpassword_cmd_level:
+                # first password of a player allowed to set passwords: save it and log him in
+                client.password = hash_password(data)
+                client.save()
                 client.setvar(self, 'loggedin', 1)
-                if client.groupsRestricted:
-                    client.liftGroupRestriction()
-                else:
-                    client.groupBits = client.var(self, 'login_groupbits').value
+                self._lift_restriction(client)
+                self.info('client @%s chose his first password', client.id)
+                client.message('Your password has been saved and you are logged in')
+            elif verify_password(data, client_from_db.password):
+                client.setvar(self, 'loggedin', 1)
+                self._lift_restriction(client)
                 if password_needs_rehash(client_from_db.password):
                     # upgrade a legacy (unsalted MD5) hash now that we know the password
                     client.password = hash_password(data)
@@ -184,6 +195,15 @@ class LoginPlugin(b3.plugin.Plugin):
             message = 'Usage (via console): %s %s !login yourpassword' % (self._pmcomm, client.cid)
             client.message(message)
         
+    def _lift_restriction(self, client):
+        """
+        Give a client who logged in his real groups back.
+        """
+        if client.groupsRestricted:
+            client.liftGroupRestriction()
+        else:
+            client.groupBits = client.var(self, 'login_groupbits').value
+
     def cmd_setpassword(self, data, client, cmd=None):
         """
         <password> [<client>] - set a password for a client

@@ -261,6 +261,18 @@ def loadParser(pname):
     return mod
 
 
+def term_signal_handler(console):
+    """
+    Return the SIGTERM handler: shut B3 down properly and exit with status 0. A TERM signal is a requested stop
+    (systemd, docker, kill): exiting with 222 made service managers report the unit as failed.
+    """
+    def handler(signum, frame):
+        console.bot("TERM signal received: shutting down")
+        console.shutdown()
+        raise SystemExit(0)
+    return handler
+
+
 def start(mainconfig, options):
     """
     Main B3 startup.
@@ -309,18 +321,10 @@ def start(mainconfig, options):
     global console
     console = parser(mainconfig, options)
 
-    def termSignalHandler(signum, frame):
-        """
-        Define the signal handler so to handle B3 shutdown properly.
-        """
-        console.bot("TERM signal received: shutting down")
-        console.shutdown()
-        raise SystemExit(222)
-
     try:
         # necessary if using the functions profiler,
         # because signal.signal cannot be used in threads
-        signal.signal(signal.SIGTERM, termSignalHandler)
+        signal.signal(signal.SIGTERM, term_signal_handler(console))
     except Exception:
         pass
 
