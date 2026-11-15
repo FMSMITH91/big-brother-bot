@@ -16,6 +16,7 @@ Inno Setup's ISCC.exe is looked up in ISCC_EXE, in PATH, then in its default ins
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,9 @@ EMBED_SHA256 = '90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159
 
 # optional dependencies worth shipping: PostgreSQL storage, the sftpytail plugin
 EXTRA_PACKAGES = ['psycopg2-binary>=2.9', 'paramiko>=3.0']
+
+# the B3 version scheme (scripts/set_version.py): 2.0.0, 2.0.0b1...
+VERSION_RE = re.compile(r'^\d+\.\d+(?:\.\d+)?(?:(?:a|b|dev)\d*)?$')
 
 LAUNCHER = '@echo off\r\nrem Run BigBrotherBot (B3): b3.cmd --help lists the options\r\n' \
            '"%~dp0python\\python.exe" -m b3.run %*\r\n'
@@ -137,17 +141,41 @@ def compile_installer(stage_dir, version, out_dir):
     return installer
 
 
+def project_folder(path, name):
+    """
+    Return the given folder as an absolute path, refusing anything outside the project: the build deletes and
+    rewrites its work folder.
+    """
+    path = os.path.realpath(path)
+    if os.path.commonpath([path, os.path.realpath(ROOT)]) != os.path.realpath(ROOT):
+        raise SystemExit('%s must be inside the project folder (%s): %s' % (name, ROOT, path))
+    return path
+
+
+def check_options(options):
+    """
+    Validate the command line: the values end up in file paths and in the pip and ISCC command lines.
+    """
+    if not VERSION_RE.match(options.version):
+        raise SystemExit('not a B3 version number: %r (expected e.g. 2.0.0 or 2.0.0b1)' % options.version)
+    wheel = os.path.realpath(options.wheel)
+    if not (os.path.isfile(wheel) and re.match(r'^b3-[\w.]+-py3-none-any\.whl$', os.path.basename(wheel))):
+        raise SystemExit('not a B3 wheel: %s' % options.wheel)
+    return wheel, project_folder(options.out, '--out'), project_folder(options.build_dir, '--build-dir')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Build the B3 Windows installer')
     parser.add_argument('wheel', help='the B3 wheel to install')
     parser.add_argument('--version', required=True, help='the B3 version, e.g. 2.0.0 or 2.0.0b1')
-    parser.add_argument('--out', default=os.path.join(ROOT, 'dist'), help='where to put the installer')
-    parser.add_argument('--build-dir', default=os.path.join(ROOT, 'build', 'windows'), help='work folder')
+    parser.add_argument('--out', default=os.path.join(ROOT, 'dist'), help='where to put the installer (in the project)')
+    parser.add_argument('--build-dir', default=os.path.join(ROOT, 'build', 'windows'),
+                        help='work folder (in the project)')
     options = parser.parse_args(argv)
+    wheel, out_dir, build_dir = check_options(options)
     check_interpreter()
-    stage_dir = stage(os.path.abspath(options.wheel), os.path.join(options.build_dir, 'stage'),
-                      os.path.join(options.build_dir, 'cache'))
-    compile_installer(stage_dir, options.version, options.out)
+    stage_dir = stage(wheel, os.path.join(build_dir, 'stage'), os.path.join(build_dir, 'cache'))
+    compile_installer(stage_dir, options.version, out_dir)
 
 
 if __name__ == '__main__':

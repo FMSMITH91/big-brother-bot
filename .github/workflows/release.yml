@@ -44,10 +44,12 @@ jobs:
             version=$(python scripts/set_version.py "${current}dev${GITHUB_RUN_NUMBER}")
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+      # build and setuptools at exact versions with hashes (.github/ci-requirements.txt), wheels only so no package
+      # setup script runs; --no-isolation builds with them instead of fetching unpinned build tools
+      - name: Install build tools
+        run: "pip install --only-binary :all: --require-hashes -r .github/ci-requirements.txt"
       - name: Build sdist and wheel
-        run: |
-          python -m pip install -r build-requirements.txt
-          python -m build --outdir dist .
+        run: python -m build --no-isolation --outdir dist .
       # (the file names use the normalized version: 1.12dev5 becomes 1.12.dev5)
       - name: Check the wheel has every B3 file
         run: python scripts/check_dist.py dist/*.whl
