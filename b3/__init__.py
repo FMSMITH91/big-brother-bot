@@ -38,12 +38,13 @@ from configparser import NoOptionError
 from configparser import NoSectionError
 
 __author__ = 'ThorN'
-__version__ = '1.12'
+__version__ = '2.0.0dev'
 
 modulePath = pkg_handler.resource_directory(__name__)
 
 versionId = 'v%s' % __version__
-version = '^8www.bigbrotherbot.net ^0(^8b3^0) ^9%s ^9[^3IronPigeon^9]^3' % versionId
+# shown in game (B3 ONLINE message, !b3): www.bigbrotherbot.net is gone
+version = '^8BigBrotherBot ^0(^8b3^0) ^9%s^3' % versionId
 
 confdir = None
 console = None
@@ -56,7 +57,8 @@ B3_LICENSE = 'GNU General Public License v2'
 B3_FORUM = 'http://forum.bigbrotherbot.net/'
 B3_WEBSITE = 'http://www.bigbrotherbot.net'
 B3_WIKI = 'http://wiki.bigbrotherbot.net/'
-B3_CONFIG_GENERATOR = 'http://config.bigbrotherbot.net/'
+# the old web config generator (config.bigbrotherbot.net) is gone: point to the sample configuration instead
+B3_CONFIG_GENERATOR = 'https://github.com/FMSMITH91/big-brother-bot/blob/master/b3/conf/b3.distribution.ini'
 B3_DOCUMENTATION = 'http://doc.bigbrotherbot.net/'
 B3_DONATE = 'http://www.bigbrotherbot.net/donate'
 B3_XLRSTATS = 'http://www.xlrstats.com/'
@@ -107,6 +109,15 @@ def getHomePath():
 
 # APP HOME DIRECTORY
 HOMEDIR = getHomePath()
+
+
+def config_help():
+    """
+    Tell how to create a B3 configuration file (shown when none is found or it is not valid).
+    """
+    return 'To create one, copy the sample configuration file\n  %s\nto\n  %s\nand edit it: the comments in ' \
+           'the file explain each setting.' % (getAbsolutePath('@b3/conf/b3.distribution.ini'),
+                                                os.path.join(HOMEDIR, 'b3.ini'))
 
 
 def getB3Path(decode=False):

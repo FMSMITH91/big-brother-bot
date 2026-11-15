@@ -133,8 +133,16 @@ class Test_windows_installer(unittest.TestCase):
         with open(os.path.join(ROOT, 'installer', 'innosetup', 'b3.iss')) as f:
             iss = f.read()
         self.assertIn('OutputBaseFilename=b3-{#B3_VERSION}-win64-setup', iss)
-        for name in ('python\\*', 'b3.cmd', 'readme.txt', 'license.txt', 'conf\\*', 'extplugins\\*'):
+        for name in ('python\\*', 'b3.cmd', 'run-b3.cmd', 'readme.txt', 'license.txt', 'conf\\*', 'extplugins\\*'):
             self.assertIn('{#B3_STAGE_DIR}\\' + name, iss)
+        # shortcuts keep the window open when B3 stops (it used to vanish on a configuration error)
+        self.assertNotIn('Filename: "{app}\\b3.cmd"', iss)
+        self.assertIn('Filename: "{app}\\run-b3.cmd"', iss)
+
+    def test_console_launcher_waits(self):
+        self.assertIn('call "%~dp0b3.cmd" %*', build_installer.CONSOLE_LAUNCHER)
+        self.assertIn('pause', build_installer.CONSOLE_LAUNCHER)
+        self.assertNotIn('pause', build_installer.LAUNCHER)
 
 
 if __name__ == '__main__':
