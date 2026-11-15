@@ -24,6 +24,7 @@
 
 import b3
 import b3.events
+import b3.functions
 from . import functions
 from b3.querybuilder import escape_string
 import re
@@ -787,7 +788,7 @@ class Client(object):
         :param msg: the message to send
         :param args: substitution arguments (if any).
         """
-        self.console.message(self, msg, *args)
+        self.console.message(self, b3.functions.format_message(msg, args))
 
     def warn(self, duration, warning, keyword=None, admin=None, data=''):
         """

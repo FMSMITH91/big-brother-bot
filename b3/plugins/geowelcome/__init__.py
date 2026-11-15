@@ -92,8 +92,22 @@ class GeowelcomePlugin(WelcomePlugin):
         self.registerEvent('EVT_CLIENT_GEOLOCATION_SUCCESS', self.onGeolocationSuccess)
         self.registerEvent('EVT_CLIENT_GEOLOCATION_FAILURE', self.onGeolocationFailure)
 
+        # a disabled geowelcome (configuration) must not silence the welcome plugin: see onEnable
+        if self.isEnabled():
+            self._take_over_from_welcome_plugin()
+
+    def onEnable(self):
+        """
+        Called when the plugin is enabled: welcome players instead of the Welcome plugin.
+        """
+        self._take_over_from_welcome_plugin()
+
+    def _take_over_from_welcome_plugin(self):
+        """
+        Disable the Welcome plugin (if loaded and enabled) so players are not welcomed twice.
+        """
         welcomePlugin = self.console.getPlugin('welcome')
-        if welcomePlugin:
+        if welcomePlugin and welcomePlugin.isEnabled():
             self.info('NOTE: to run this plugin you don\'t need to load also the Welcome plugin: disabling Welcome plugin')
             welcomePlugin.disable()
 

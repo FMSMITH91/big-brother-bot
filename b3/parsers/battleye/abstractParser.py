@@ -34,6 +34,7 @@ import threading
 import time
 
 from b3.functions import prefixText
+from b3.functions import format_message
 from b3.parsers.battleye.rcon import Rcon as BattleyeRcon
 from b3.parsers.battleye.protocol import BattleyeServer
 from b3.parsers.battleye.protocol import CommandFailedError
@@ -886,14 +887,14 @@ class AbstractParser(b3.parser.Parser):
         Broadcast a message to all players.
         :param msg: The message to be broadcasted
         """
-        self.sayqueue.put(msg % args)
+        self.sayqueue.put(format_message(msg, args))
 
     def saybig(self, msg, *args):
         """
         Broadcast a message to all players in a way that will catch their attention.
         :param msg: The message to be broadcasted
         """
-        self.say(msg % args)
+        self.say(format_message(msg, args))
 
     def message(self, client, text, *args):
         """
@@ -902,7 +903,7 @@ class AbstractParser(b3.parser.Parser):
         :param text: The message to be sent
         """
         if client:
-            text = text % args
+            text = format_message(text, args)
             for line in self.getWrap(self.stripColors(self.msgPrefix + ' ' + text)):
                 self.write(self.getCommand('message', cid=client.cid, message=line))
 

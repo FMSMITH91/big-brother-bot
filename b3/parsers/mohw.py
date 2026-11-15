@@ -29,6 +29,7 @@ import traceback
 import sys
 
 from b3.functions import prefixText
+from b3.functions import format_message
 from b3.parsers.frostbite2.abstractParser import AbstractParser
 from b3.parsers.frostbite2.util import PlayerInfoBlock
 from b3.parsers.frostbite2.util import MapListBlockError
@@ -274,7 +275,7 @@ class MohwParser(AbstractParser):
         Broadcast a message to all players in a way that will catch their attention.
         """
         if msg and len(msg.strip()) > 0:
-            msg = msg % args
+            msg = format_message(msg, args)
             text = self.stripColors(prefixText([self.msgPrefix], msg))
             for line in self.getWrap(text):
                 self.write(self.getCommand('yell', message=line))

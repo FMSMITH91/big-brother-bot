@@ -286,6 +286,9 @@ class Cron(object):
 
         # thread will stop if this event gets set
         self._stopEvent = threading.Event()
+        # held while a crontab runs, so stop() can wait for it to finish (B3 closes the database right after)
+        self._runLock = threading.Lock()
+        self._thread_ident = None
 
     def create(self, command, second=0, minute='*', hour='*', day='*', month='*', dow='*'):
         """
@@ -333,17 +336,21 @@ class Cron(object):
         """
         return time.time()
 
-    def stop(self):
+    def stop(self, timeout=10):
         """
-        Stop the cron scheduler.
+        Stop the cron scheduler, waiting (at most timeout seconds) for a crontab which is running to finish.
         """
         self._stopEvent.set()
+        # a crontab calling stop() itself must not wait for its own end
+        if threading.get_ident() != self._thread_ident and self._runLock.acquire(timeout=timeout):
+            self._runLock.release()
 
     def run(self):
         """
         Main cron loop.
         Will terminate when stop event is set.
         """
+        self._thread_ident = threading.get_ident()
         self.console.info("Cron scheduler started")
         nexttime = self.getNextTime()
         while not self._stopEvent.is_set():
@@ -363,6 +370,11 @@ class Cron(object):
                         # reached max executions, remove tab
                         del self._tabs[k]
                     else:
+                        self._runLock.acquire()
+                        if self._stopEvent.is_set():
+                            # stopped while the previous crontab was running
+                            self._runLock.release()
+                            break
                         c.numRuns += 1
                         try:
                             c.run()
@@ -379,6 +391,8 @@ class Cron(object):
                         except Exception as msg:
                             self.console.error('Exception raised while executing crontab %s: %s\n%s', c.command,
                                                msg, traceback.extract_tb(sys.exc_info()[2]))
+                        finally:
+                            self._runLock.release()
             nexttime += 1
 
         self.console.info("Cron scheduler ended")

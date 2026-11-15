@@ -332,6 +332,33 @@ class Test_own_class_containers(unittest.TestCase):
         self.assertEqual({}, TablePlugin._table)
 
 
+class Test_format_message(unittest.TestCase):
+
+    def test_with_arguments(self):
+        self.assertEqual('hi joe', functions.format_message('hi %s', ('joe',)))
+
+    def test_without_arguments_keeps_percent_signs(self):
+        self.assertEqual('50% off %s', functions.format_message('50% off %s', ()))
+
+
+class Test_clearscreen(unittest.TestCase):
+
+    def test_no_clear_without_a_terminal(self):
+        from unittest.mock import patch
+        with patch('sys.stdout') as stdout, patch('os.system') as system:
+            stdout.isatty.return_value = False
+            functions.clearscreen()
+        self.assertFalse(system.called)
+
+    def test_no_clear_with_unknown_terminal(self):
+        from unittest.mock import patch
+        with patch('sys.stdout') as stdout, patch('os.system') as system, \
+                patch('sys.platform', 'linux'), patch.dict('os.environ', {'TERM': 'unknown'}):
+            stdout.isatty.return_value = True
+            functions.clearscreen()
+        self.assertFalse(system.called)
+
+
 class Test_password_hashing(unittest.TestCase):
 
     def test_hash_and_verify(self):

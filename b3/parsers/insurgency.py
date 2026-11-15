@@ -37,6 +37,7 @@ from b3.functions import minutesStr
 from b3.functions import prefixText
 from b3.functions import time2minutes
 from b3.functions import getStuffSoundingLike
+from b3.functions import format_message
 from b3.parser import Parser
 from b3.parsers.source.rcon import Rcon
 from b3.parsers.source.rcon import cvar_command
@@ -650,7 +651,7 @@ class InsurgencyParser(Parser):
         Broadcast a message to all players.
         :param msg: The message to be broadcasted
         """
-        msg = self.stripColors(msg % args)
+        msg = self.stripColors(format_message(msg, args))
         if msg and len(msg.strip()):
             template = 'sm_say %s'
             if "B3 Say" in self.sm_plugins:
@@ -665,7 +666,7 @@ class InsurgencyParser(Parser):
         Broadcast a message to all players in a way that will catch their attention.
         :param msg: The message to be broadcasted
         """
-        msg = self.stripColors(msg % args)
+        msg = self.stripColors(format_message(msg, args))
         if msg and len(msg.strip()):
             template = 'sm_hsay %s'
             if "B3 Say" in self.sm_plugins:
@@ -681,7 +682,7 @@ class InsurgencyParser(Parser):
         :param client: The client to who send the message
         :param msg: The message to be sent
         """
-        msg = self.stripColors(msg % args)
+        msg = self.stripColors(format_message(msg, args))
         if not client.bot:  # do not talk to bots
             if msg and len(msg.strip()):
                 template = 'sm_psay #%(guid)s "%(msg)s"'

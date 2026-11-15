@@ -443,7 +443,8 @@ class Plugin(object):
             try:
                 func(event)
             except TypeError as e:
-                self.error('could not parse event %s: %s' % (self.console.getEventName(event.type), e))
+                # with the traceback: a TypeError raised deep inside a command is otherwise hard to locate
+                self.error('could not parse event %s: %s' % (self.console.getEventName(event.type), e), exc_info=e)
 
         if event.type == self.console.getEventID('EVT_EXIT') or event.type == self.console.getEventID('EVT_STOP'):
             self.working = False

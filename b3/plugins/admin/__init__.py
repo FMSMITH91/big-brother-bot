@@ -41,6 +41,7 @@ from b3.clients import Client
 from b3.clients import Group
 from b3.functions import minutesStr
 from b3.functions import getCmd
+from b3.functions import format_message
 from configparser import NoOptionError
 
 # pylint: disable-msg=E1103
@@ -1660,7 +1661,7 @@ class AdminPlugin(b3.plugin.Plugin):
                 self.error('iamgod command not found')
                 return False
             else:
-                command.level = 'none'
+                command.level = None
                 if group in client.groups:
                     client.message('^7You are already a ^2%s' % group.exactName)
                 else:
@@ -2529,12 +2530,14 @@ class Command(object):
         :param client: The client on who to send the message
         :param message: The message to be sent
         """
+        # substitute here: several parsers' say()/saybig() accept no substitution arguments
+        message = format_message(message, args)
         if self.loud:
-            self.plugin.console.say(message, *args)
+            self.plugin.console.say(message)
         elif self.big:
-            self.plugin.console.saybig(message, *args)
+            self.plugin.console.saybig(message)
         else:
-            client.message(message, *args)
+            client.message(message)
 
     def parseData(self, data, *args):
         """

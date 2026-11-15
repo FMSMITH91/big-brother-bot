@@ -25,6 +25,7 @@
 import b3
 import b3.clients
 import b3.functions
+from b3.functions import format_message
 import re
 import json
 import time
@@ -567,14 +568,14 @@ class AltitudeParser(Parser):
         Broadcast a message to all players.
         :param msg: The message to be broadcasted
         """
-        self.write('serverMessage %s' % self.stripColors(msg % args))
+        self.write('serverMessage %s' % self.stripColors(format_message(msg, args)))
 
     def saybig(self, msg, *args):
         """
         Broadcast a message to all players in a way that will catch their attention.
         :param msg: The message to be broadcasted
         """
-        self.say(msg % args)
+        self.say(format_message(msg, args))
 
     def message(self, client, msg, *args):
         """
@@ -582,7 +583,7 @@ class AltitudeParser(Parser):
         :param client: The client to who send the message
         :param msg: The message to be sent
         """
-        self.write('serverWhisper %s %s' % (client.name, self.stripColors(msg % args)))
+        self.write('serverWhisper %s %s' % (client.name, self.stripColors(format_message(msg, args))))
 
     def kick(self, client, reason='', admin=None, silent=False, *kwargs):
         """

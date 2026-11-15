@@ -42,6 +42,7 @@ import b3.parser
 from b3.cvar import Cvar
 from b3.functions import getStuffSoundingLike
 from b3.functions import prefixText
+from b3.functions import format_message
 from b3.parsers.frostbite2.rcon import Rcon as FrostbiteRcon
 from b3.parsers.frostbite2.protocol import FrostbiteServer
 from b3.parsers.frostbite2.protocol import CommandFailedError
@@ -880,14 +881,14 @@ class AbstractParser(b3.parser.Parser):
         Broadcast a message to all players.
         :param msg: The message to be broadcasted
         """
-        self.sayqueue.put(msg % args)
+        self.sayqueue.put(format_message(msg, args))
 
     def saybig(self, msg, *args):
         """
         Broadcast a message to all players in a way that will catch their attention.
         """
         if msg and len(msg.strip()) > 0:
-            msg = msg % args
+            msg = format_message(msg, args)
             text = self.stripColors(prefixText([self.msgPrefix], msg))
             for line in self.getWrap(text):
                 self.write(self.getCommand('yell', message=line,

@@ -249,6 +249,24 @@ class Test_Client_events(B3TestCase):
         }):
             self.client.notice(notice="keep a eye on this guy", spare=None, admin=self.admin)
         
+
+
+class Test_Client_message(unittest.TestCase):
+
+    def test_arguments_are_substituted_before_reaching_the_parser(self):
+        # several parsers' message() accept no substitution arguments (q3a, cod...)
+        console = Mock()
+        console.message = Mock(spec=lambda client, text: None)
+        client = Client(console=console, cid='1')
+        client.message('hello %s, you are %s', 'joe', 'admin')
+        console.message.assert_called_once_with(client, 'hello joe, you are admin')
+
+    def test_literal_percent_without_arguments(self):
+        console = Mock()
+        client = Client(console=console, cid='1')
+        client.message('50% off')
+        console.message.assert_called_once_with(client, '50% off')
+
 if __name__ == '__main__':
     unittest.main()
 

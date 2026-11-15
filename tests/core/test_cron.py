@@ -343,5 +343,32 @@ class Test_Cron_SystemExit(unittest.TestCase):
         self.assertEqual(0, self.counter_runs)
 
 
+
+class Test_Cron_stop_waits_for_running_crontab(unittest.TestCase):
+    """
+    B3 closes the database right after stopping the cron: a crontab still running (i.e: a database query) used to
+    fail with 'read of closed file'.
+    """
+
+    def test_stop_waits(self):
+        cron = Cron(Mock())
+        cron._stopEvent = _FastEvent()
+        started = threading.Event()
+        finished = []
+
+        def slow_job():
+            started.set()
+            threading.Event().wait(0.3)
+            finished.append(True)
+
+        cron.create(slow_job, second='*')
+        thread = threading.Thread(target=cron.run, daemon=True)
+        thread.start()
+        self.assertTrue(started.wait(5))
+        cron.stop()
+        self.assertListEqual([True], finished)
+        thread.join(5)
+        self.assertFalse(thread.is_alive())
+
 if __name__ == '__main__':
     unittest.main()

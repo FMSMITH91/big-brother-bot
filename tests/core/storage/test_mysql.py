@@ -128,6 +128,20 @@ class Test_MySQL(B3TestCase, StorageAPITest):
             self.assertEqual(name, self.storage.getClient(Client(id=client_id)).name, sql_mode)
         QueryBuilder.backslash_escapes = True
 
+    def test_writes_are_visible_to_other_connections(self):
+        # B3's tables are InnoDB: a write that is never committed is lost when B3 stops
+        from b3.clients import Client
+        client_id = self.storage.setClient(Client(name='joe', guid='joeguid'))
+        other = driver.connect(host=MYSQL_TEST_HOST, user=MYSQL_TEST_USER, password=MYSQL_TEST_PASSWORD,
+                               database=MYSQL_TEST_DB)
+        try:
+            cursor = other.cursor()
+            cursor.execute("SELECT name FROM clients WHERE id = %s", (client_id,))
+            self.assertEqual([('joe',)], [tuple(row) for row in cursor.fetchall()])
+            cursor.close()
+        finally:
+            other.close()
+
     def test_widen_password_column(self):
         # GIVEN a clients.password column created by an older B3 version
         self.storage.query('ALTER TABLE `clients` MODIFY `password` VARCHAR(32) DEFAULT NULL')

@@ -693,3 +693,15 @@ class Test_Plugin_requiresPlugins(B3TestCase):
         self.plugin_list[0]['disabled'] = True
         plugins = self.load()
         self.assertTrue(plugins['admin'].isEnabled())
+
+    def test_unlisted_requirement_disabled_in_config(self):
+        # i.e: [plugins] geowelcome only, with disabled_plugins: geolocation
+        when(self.console.config).is_plugin_disabled(ANY).thenReturn(False)
+        when(self.console.config).is_plugin_disabled('depbase').thenReturn(True)
+        self.add('depchild')
+        with patch.object(self.console, 'warning') as warning_mock:
+            plugins = self.load()
+        self.assertListEqual(['admin', 'depbase', 'depchild'], list(plugins.keys()))
+        self.assertFalse(plugins['depbase'].isEnabled())
+        self.assertFalse(plugins['depchild'].isEnabled())
+        self.assertEqual(1, len([c for c in warning_mock.mock_calls if 'will be disabled too' in str(c)]))

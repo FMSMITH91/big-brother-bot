@@ -280,6 +280,19 @@ def vars2printf(inputstr):
         return ''
 
 
+def format_message(msg, args):
+    """
+    Apply printf-style substitution arguments to a chat message.
+    Without arguments the message is returned untouched, so a literal '%' (typed by a player, or in a player
+    name) never raises.
+    :param msg: The message
+    :param args: The tuple of substitution arguments (may be empty)
+    """
+    if args and msg:
+        return msg % args
+    return msg
+
+
 def escape(text, esc):
     """
     Return a copy of 'text' with 'esc' character escaped
@@ -338,9 +351,12 @@ def clearscreen():
     """
     Clear the current shell screen according to the OS being used.
     """
+    if not sys.stdout.isatty():
+        # nothing to clear (output redirected to a file, a service journal...): 'clear' would only print an error
+        return
     if sys.platform == 'win32':
         os.system('cls')
-    else:
+    elif os.environ.get('TERM') not in (None, '', 'dumb', 'unknown'):
         os.system('clear')
 
 
