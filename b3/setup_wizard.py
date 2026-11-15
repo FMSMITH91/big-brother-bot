@@ -320,13 +320,24 @@ class Wizard(object):
         if os.path.isfile(path):
             shutil.copy2(path, path + '.bak')
             self.say('\nThe previous file was saved as %s.bak' % path)
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(text)
+        write_private(path, text)
         self.say('\nSaved %s' % path)
         self.say('Start B3 now. In game, type !iamgod in the chat to become super admin (works once, on a new '
                  'database).')
         self.say('Every other setting (plugins, messages, time format...) is in that file, with comments.')
         return path
+
+
+def write_private(path, text):
+    """
+    Write the configuration readable by its owner only: B3 needs the RCON and database passwords in clear to log
+    in (as in any b3.ini), so the file itself is protected. On Windows the file lives in the user's profile.
+    """
+    if os.path.exists(path):
+        os.chmod(path, 0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        f.write(text)
 
 
 def check_ip(answer):

@@ -105,6 +105,9 @@ class Test_wizard(unittest.TestCase):
         self.assertIn('\n# punkbuster: @b3/conf/plugin_punkbuster.ini', text)
         self.assertNotIn('punkbuster', [p['name'] for p in config.get_plugins()])
         self.assertIn('does not exist yet', output)
+        if os.name == 'posix':
+            # it holds the RCON and database passwords: owner only
+            self.assertEqual(0o600, os.stat(self.path).st_mode & 0o777)
         self.assertIn('!iamgod', output)
 
     def test_remote_server_rcon_game_with_mysql(self):
