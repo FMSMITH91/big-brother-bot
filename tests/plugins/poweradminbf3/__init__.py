@@ -71,6 +71,9 @@ class Bf3TestCase(unittest.TestCase):
 
         with logging_disabled():
             self.console.startup()
+        # the tests never need the scheduler: if it is left running, its Clients.sync job (every 5 minutes) can fire
+        # in the middle of a test whose mocked server reports no players and remove the test's clients
+        self.console.cron.stop()
 
         # load the admin plugin
         with logging_disabled():
