@@ -37,6 +37,7 @@ import re
 from b3.functions import getCmd
 from b3.functions import getStuffSoundingLike
 from b3.functions import right_cut
+from b3.querybuilder import escape_string
 from configparser import NoOptionError
 from threading import Timer
 
@@ -45,6 +46,18 @@ from threading import Timer
 #   JUMPRUN DEDICATED CODE                                                                                             #
 #                                                                                                                      #
 ########################################################################################################################
+
+def _sql(template, args):
+    """
+    Fill an SQL template from JumperPlugin.sql, escaping every string argument so that player-supplied
+    values (way names, map names, demo names) cannot break out of the quoted literals.
+    :param template: The SQL template
+    :param args: A single argument or a tuple of arguments
+    """
+    if not isinstance(args, tuple):
+        args = (args,)
+    return template % tuple(escape_string(a) if isinstance(a, str) else a for a in args)
+
 
 class JumpRun(object):
 
@@ -193,7 +206,7 @@ class JumpRun(object):
         if the client made a new personal record.
         """
         # check if the client made his personal record on this map and this way
-        cursor = self.p.console.storage.query(self.p.sql['jr1'] % (self.client.id, self.mapname, self.way_id))
+        cursor = self.p.console.storage.query(_sql(self.p.sql['jr1'], (self.client.id, self.mapname, self.way_id)))
         if cursor.EOF:
             self.insert()
             cursor.close()
@@ -222,7 +235,7 @@ class JumpRun(object):
         Return True if the client established a new absolute record on this map and on the given way_id, False otherwise.
         """
         # check if the client made an absolute record on this map on the specified way_id
-        cursor = self.p.console.storage.query(self.p.sql['jr2'] % (self.mapname, self.way_id, self.way_time))
+        cursor = self.p.console.storage.query(_sql(self.p.sql['jr2'], (self.mapname, self.way_id, self.way_time)))
         if cursor.EOF:
             cursor.close()
             return True
@@ -241,8 +254,8 @@ class JumpRun(object):
         Insert the jumprun in the storage.
         """
         demo = self.demo.replace("'", "\'") if self.demo else None
-        self.p.console.storage.query(self.p.sql['jr7'] % (self.client.id, self.mapname, self.way_id, self.way_time,
-                                                          self.time_add, self.time_edit, demo))
+        self.p.console.storage.query(_sql(self.p.sql['jr7'], (self.client.id, self.mapname, self.way_id, self.way_time,
+                                                          self.time_add, self.time_edit, demo)))
         self.p.debug('stored new jumprun : %r' % self)
 
     def update(self):
@@ -250,8 +263,8 @@ class JumpRun(object):
         Update the jumprun in the storage.
         """
         demo = self.demo.replace("'", "\'") if self.demo else None
-        self.p.console.storage.query(self.p.sql['jr8'] % (self.way_time, self.time_add, demo,
-                                                          self.client.id, self.mapname, self.way_id))
+        self.p.console.storage.query(_sql(self.p.sql['jr8'], (self.way_time, self.time_add, demo,
+                                                          self.client.id, self.mapname, self.way_id)))
         self.p.debug('updated jumprun : %r' % self)
 
     def delete(self):
@@ -259,7 +272,7 @@ class JumpRun(object):
         Delete the jumprun from the storage.
         """
         self.unlinkdemo()
-        self.p.console.storage.query(self.p.sql['jr9'] % self.jumprun_id)
+        self.p.console.storage.query(_sql(self.p.sql['jr9'], self.jumprun_id))
         self.p.debug('removed jumprun : %r' % self)
 
     def __repr__(self):
@@ -695,7 +708,7 @@ class JumperPlugin(b3.plugin.Plugin):
         """
         Return a list of jumprun records for the given map
         """
-        cursor = self.console.storage.query(self.sql['jr3'] % (mapname, mapname))
+        cursor = self.console.storage.query(_sql(self.sql['jr3'], (mapname, mapname)))
         if cursor.EOF:
             cursor.close()
             return []
@@ -722,7 +735,7 @@ class JumperPlugin(b3.plugin.Plugin):
         """
         Return a list of jumprun records for the given client on the given mapname
         """
-        cursor = self.console.storage.query(self.sql['jr4'] % (client.id, mapname))
+        cursor = self.console.storage.query(_sql(self.sql['jr4'], (client.id, mapname)))
         if cursor.EOF:
             cursor.close()
             return []
@@ -744,7 +757,7 @@ class JumperPlugin(b3.plugin.Plugin):
         """
         Return a list of top jumpruns for the given mapname
         """
-        c1 = self.console.storage.query(self.sql['jr5'] % mapname)
+        c1 = self.console.storage.query(_sql(self.sql['jr5'], mapname))
         if c1.EOF:
             c1.close()
             return []
@@ -752,7 +765,7 @@ class JumperPlugin(b3.plugin.Plugin):
         records = []
         while not c1.EOF:
             r1 = c1.getRow()
-            c2 = self.console.storage.query(self.sql['jr6'] % (mapname, int(r1['way_id'])))
+            c2 = self.console.storage.query(_sql(self.sql['jr6'], (mapname, int(r1['way_id']))))
             while not c2.EOF:
                 r2 = c2.getRow()
                 client = self.adminPlugin.findClientPrompt('@%s' % r2['client_id'])
@@ -1014,15 +1027,15 @@ class JumperPlugin(b3.plugin.Plugin):
         way_name = m.group('way_name')
 
         mapname = self.console.game.mapName
-        cursor = self.console.storage.query(self.sql['jw1'] % (mapname, way_id))
+        cursor = self.console.storage.query(_sql(self.sql['jw1'], (mapname, way_id)))
 
         if cursor.EOF:
             # new entry for this way_id on this map
-            self.console.storage.query(self.sql['jw2'] % (mapname, way_id, way_name))
+            self.console.storage.query(_sql(self.sql['jw2'], (mapname, way_id, way_name)))
             client.message('^7added alias for way ^3%d^7: ^2%s' % (way_id, way_name))
         else:
             # update old entry with the new name
-            self.console.storage.query(self.sql['jw3'] % (way_name, mapname, way_id))
+            self.console.storage.query(_sql(self.sql['jw3'], (way_name, mapname, way_id)))
             client.message('^7updated alias for way ^3%d^7: ^2%s' % (way_id, way_name))
 
         cursor.close()

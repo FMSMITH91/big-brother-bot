@@ -70,9 +70,6 @@ class PostgresqlStorage(DatabaseStorage):
         if not self.dsnDict['path'] or not self.dsnDict['path'][1:]:
             raise AttributeError("missing PostgreSQL database name in %(protocol)s://%(user)s:******@%(host)s:%(port)s%(path)s" % self.dsnDict)
 
-        # patch the QueryBuilder class
-        patch_query_builder(self.console)
-
     ####################################################################################################################
     #                                                                                                                  #
     #   CONNECTION INITIALIZATION/TERMINATION/RETRIEVAL                                                                #
@@ -260,28 +257,3 @@ class PostgresqlStorage(DatabaseStorage):
         if self.db and not self.db.closed:
             return True
         return False
-
-########################################################################################################################
-##                                                                                                                    ##
-##  PATCH THE QUERYBUILDER CLASS                                                                                      ##
-##                                                                                                                    ##
-########################################################################################################################
-
-from b3.querybuilder import QueryBuilder
-
-def patch_query_builder(console):
-
-    def new_escape(self, word):
-        """
-        Escape quotes from a given string.
-        :param word: The string on which to perform the escape
-        """
-        if isinstance(word, int) or isinstance(word, int) or isinstance(word, complex) or isinstance(word, float):
-            return str(word)
-        elif word is None:
-            return "'None'"
-        else:
-            return "'%s'" % word.replace("'", "''")
-
-    console.bot('patching QueryBuilder.escape: %s -> %s' % (id(QueryBuilder.escape), id(new_escape)))
-    QueryBuilder.escape = new_escape

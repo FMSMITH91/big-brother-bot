@@ -279,6 +279,33 @@ class Test_cmd_xlrid(XlrstatsTestCase):
         self.assertEqual('12345', pstats.id_token)
         self.assertEqual(['Token saved!'], self.p1.message_history)
 
+    def test_token_cannot_inject_sql(self):
+        # WHEN the token tries to break out of the quoted id_token value to set the caller's skill
+        evil = "x',skill=99999,id_token='y"
+        self.p1.says("!xlrid %s" % evil)
+        pstats = self.p.get_PlayerStats(self.p1)
+        # THEN it is stored verbatim and nothing else changes
+        self.assertEqual(evil, pstats.id_token)
+        self.assertNotEqual(99999, pstats.skill)
+
+
+class Test_ctime(XlrstatsTestCase):
+
+    def test_player_name_cannot_inject_sql(self):
+        # GIVEN
+        self.init()
+        evil = 'x"||(SELECT password FROM clients WHERE id=1)||"\' y\''
+        player = FakeClient(console=self.console, name=evil, guid="EVIL_GUID")
+        player.connects("3")
+        # WHEN the player's play time is recorded on disconnect
+        self.p._ctimePlugin.update_time_stats_connected(player)
+        self.p._ctimePlugin.update_time_stats_exit(player.cid)
+        # THEN the name is stored verbatim
+        cursor = self.console.storage.query("SELECT guid, nick FROM ctime")
+        row = cursor.getRow()
+        self.assertEqual('EVIL_GUID', row['guid'])
+        self.assertEqual(evil, row['nick'])
+
 
 class Test_kill(XlrstatsTestCase):
     """

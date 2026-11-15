@@ -70,6 +70,9 @@ Run the test suite with:
 .venv/bin/python -m pytest tests
 ```
 
+The `publist` plugin, which reports your server's address to the old bigbrotherbot.net master server list, is no
+longer loaded automatically. To opt in, add a `publist:` line to the `[plugins]` section of `b3.ini`.
+
 Note on encodings: game log files are read, and RCON traffic is encoded, using the `encoding` option of the `[server]`
 section of `b3.ini` (default `latin-1`; the Counter-Strike: GO and Insurgency parsers default to `utf-8`).
 

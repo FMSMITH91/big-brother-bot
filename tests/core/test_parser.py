@@ -174,3 +174,44 @@ class Test_getWrap(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+from tests import B3TestCase
+
+
+class Test_read_game_log(B3TestCase):
+    """
+    The game server may still be writing the last line when B3 reads the log: that fragment must be held back
+    and joined with the rest on the next read, not parsed as two broken lines.
+    """
+
+    def setUp(self):
+        import tempfile
+        B3TestCase.setUp(self)
+        self.console.encoding = 'utf-8'
+        fd, self.path = tempfile.mkstemp()
+        os_module = __import__('os')
+        os_module.close(fd)
+        self.addCleanup(os_module.remove, self.path)
+        self.console.input = open(self.path, 'rb')
+        self.addCleanup(self.console.input.close)
+
+    def append(self, data):
+        with open(self.path, 'ab') as f:
+            f.write(data)
+
+    def test_partial_line_with_split_utf8_character(self):
+        self.append('L 1: say "hello"\nL 2: say "Pl'.encode('utf-8') + b'\xc3')  # half of the 2-byte 'ä'
+        self.assertEqual(['L 1: say "hello"\n'], self.console.read())
+        self.assertEqual([], self.console.read())  # nothing new: the fragment stays buffered
+        self.append(b'\xa4yer"\n')
+        self.assertEqual(['L 2: say "Pl\u00e4yer"\n'], self.console.read())
+
+    def test_complete_lines_are_returned_immediately(self):
+        self.append(b'a\nb\n')
+        self.assertEqual(['a\n', 'b\n'], self.console.read())
+
+    def test_str_input_still_supported(self):
+        # FakeConsole and older code paths feed str lines
+        self.assertEqual(['x\n'], self.console.completeLines(['x\n', 'partial']))
+        self.assertEqual(['partial rest\n'], self.console.completeLines([' rest\n']))

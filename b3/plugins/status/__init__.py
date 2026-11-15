@@ -36,6 +36,7 @@ import time
 
 from b3 import functions
 from b3.functions import sanitizeMe
+from b3.querybuilder import escape_string
 from configparser import NoOptionError
 from ftplib import FTP
 from xml.dom.minidom import Document
@@ -477,11 +478,11 @@ class StatusPlugin(b3.plugin.Plugin):
         Store server information in the database.
         """
         if self._enableDBsvarSaving:
-            # remove forbidden sql characters
-            k = re.sub("'", "", str(k))
-            v = re.sub("'", "", str(v))[:255]  # length of the database varchar field
+            k = escape_string(str(k))
+            v = escape_string(str(v)[:255])  # length of the database varchar field
             try:
-                if self.console.storage.dsnDict['protocol'] == 'postgresql':
+                if self.console.storage.dsnDict['protocol'] in ('postgresql', 'sqlite'):
+                    # portable "upsert" (ON DUPLICATE KEY UPDATE below is MySQL-only)
                     self.console.storage.query("""UPDATE %s SET value='%s' WHERE name='%s';""" % (self._tables['svars'], v, k))
                     self.console.storage.query("""INSERT INTO %s (name, value) SELECT '%s', '%s' WHERE NOT EXISTS (
                                                   SELECT 1 FROM %s WHERE name='%s');""" % (self._tables['svars'], k, v,

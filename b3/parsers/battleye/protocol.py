@@ -125,9 +125,9 @@ class BattleyeServer(Thread):
         self.port = port
         self.password = password
 
-        self.command_queue = queue.Queue([])    # put here commands to be sent
+        self.command_queue = queue.Queue()    # put here commands to be sent
         self.observers = set()                  # functions to call when a BattleEye event is received
-        self.read_queue = queue.Queue([])       # get here packets received
+        self.read_queue = queue.Queue()       # get here packets received
         self.sent_data_seq = []
         self.server = None
         self.write_queue = deque([])            # put here packets to be sent

@@ -189,6 +189,19 @@ class Test_game_events_parsing(EventParsingTestCase):
         self.assertEqual("111.222.200.50", client_from_db.ip)
 
 
+class Test_battleye_protocol(unittest.TestCase):
+
+    def test_queues_accept_items(self):
+        # queue.Queue([]) passed a list as maxsize: Python 3 raised TypeError on every put(), so the
+        # BattlEye login reply could never be queued and Arma servers could not be connected to at all
+        from b3.parsers.battleye.protocol import BattleyeServer
+        server = BattleyeServer('127.0.0.1', 2302, 'password')
+        server.command_queue.put('players')
+        server.read_queue.put(b'packet')
+        self.assertEqual('players', server.command_queue.get_nowait())
+        self.assertEqual(b'packet', server.read_queue.get_nowait())
+
+
 class Test_event_routing(EventParsingTestCase):
 
     def test_unhandled_player_message_is_not_a_kick(self):

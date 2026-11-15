@@ -89,7 +89,7 @@ class Test_MySQL(B3TestCase, StorageAPITest):
         try:
             db = driver.connect(host=MYSQL_TEST_HOST, user=MYSQL_TEST_USER, password=MYSQL_TEST_PASSWORD)
         except driver.OperationalError as message:
-            self.fail("Error %d:\n%s" % (message[0], message[1]))
+            self.fail("Error %d:\n%s" % (message.args[0], message.args[1]))
 
         db.query("DROP DATABASE IF EXISTS `%s`" % MYSQL_TEST_DB)
         db.query("CREATE DATABASE `%s` CHARACTER SET utf8;" % MYSQL_TEST_DB)
@@ -113,6 +113,20 @@ class Test_MySQL(B3TestCase, StorageAPITest):
              'penalties',
              'data',
             ]), set(self.storage.getTables()))
+
+    def test_backslashes_and_quotes_round_trip(self):
+        from b3.clients import Client
+        from b3.querybuilder import QueryBuilder
+        name = "a\\b 'c' \"d\" \\"
+        for i, sql_mode in enumerate(('', 'NO_BACKSLASH_ESCAPES')):
+            cursor = self.storage.db.cursor()
+            cursor.execute("SET SESSION sql_mode = %s", (sql_mode,))
+            cursor.close()
+            self.storage._detect_backslash_escapes()
+            self.assertEqual(sql_mode != 'NO_BACKSLASH_ESCAPES', QueryBuilder.backslash_escapes)
+            client_id = self.storage.setClient(Client(name=name, guid='guid%s' % i))
+            self.assertEqual(name, self.storage.getClient(Client(id=client_id)).name, sql_mode)
+        QueryBuilder.backslash_escapes = True
 
 if __name__ == '__main__':
     unittest.main()

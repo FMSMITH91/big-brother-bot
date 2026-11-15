@@ -310,6 +310,16 @@ class Test_commands(JumperTestCase):
                               '[Rookie] Mark (@%s) with 0:02:02.000' % self.mark.id,
                               '[Explorer] Mike (@%s) with 0:01:24.000' % self.mike.id], self.mike.message_history)
 
+    def test_cmd_setway_with_quote(self):
+        # GIVEN
+        self.console.game.mapName = 'ut42_bstjumps_u2'
+        # WHEN a way name containing a quote is set (twice: INSERT then UPDATE path)
+        self.mike.says("!setway 1 Bob's way")
+        self.mike.says("!setway 1 Bob's 'other' way")
+        # THEN
+        cursor = self.console.storage.query("SELECT way_name FROM jumpways WHERE way_id = 1")
+        self.assertEqual("Bob's 'other' way", cursor.getRow()['way_name'])
+
     ####################################################################################################################
     #                                                                                                                  #
     #   OTHER COMMANDS                                                                                                 #

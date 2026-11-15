@@ -41,40 +41,37 @@ from time import sleep
 modulePath = pkg_handler.resource_directory(__name__)
 
 
+def autorestart_command(args=None):
+    """
+    Return the command (as an argument list, so paths and options containing spaces need no quoting)
+    used to run the B3 child process in auto-restart mode.
+    :param args: Extra command line arguments
+    """
+    command = [sys.executable]
+    if not main_is_frozen():
+        # running from sources: run the B3 script with the current interpreter
+        # (the frozen application is the executable itself, so there is no script to pass)
+        script = os.path.join(modulePath[:-3], 'b3_run.py')
+        if not os.path.isfile(script):
+            # must be running from the wheel, so there is no b3_run
+            script = os.path.join(modulePath[:-3], 'b3', 'run.py')
+        command.append(script)
+    return command + list(args or []) + ['--autorestart']
+
+
 def run_autorestart(args=None):
     """
     Run B3 in auto-restart mode.
     """
     restart_num = 0
-
-    if main_is_frozen():
-        # if we are running the frozen application we do not
-        # need to run any script, just the executable itself
-        script = ''
-    else:
-        # if we are running from sources, then sys.executable is set to `python`
-        script = os.path.join(modulePath[:-3], 'b3_run.py')
-        if not os.path.isfile(script):
-            # must be running from the wheel, so there is no b3_run
-            script = os.path.join(modulePath[:-3], 'b3', 'run.py')
-        if os.path.isfile(script + 'c'):
-            script += 'c'
-
-    if args:
-        script = '%s %s %s --autorestart' % (sys.executable, script, ' '.join(args))
-    else:
-        script = '%s %s --autorestart' % (sys.executable, script)
+    command = autorestart_command(args)
 
     while True:
 
         try:
 
-            try:
-                import subprocess32 as subprocess
-            except ImportError:
-                import subprocess
-
-            status = subprocess.call(script, shell=True)
+            import subprocess
+            status = subprocess.call(command)
 
             sys.stdout.write('Exited with status: %s ... ' % status)
             sys.stdout.flush()

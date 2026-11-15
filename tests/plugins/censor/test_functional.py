@@ -22,6 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
+import sys
 from unittest.mock import Mock
 from tests.plugins.censor import CensorTestCase
 

@@ -123,7 +123,7 @@ class HomefrontParser(Parser):
                 self.bot('Getting configs from %s', ini_file)
                 f = self.config.getpath('server', 'inifile')
                 if os.path.isfile(f):
-                    self.input  = open(f, 'r', encoding=self.encoding or 'latin-1', errors='replace')
+                    self.input  = open(f, 'rb')  # bytes: lines are decoded once complete, see Parser.completeLines()
                     self._ini_file = f
 
         if not self._ini_file:

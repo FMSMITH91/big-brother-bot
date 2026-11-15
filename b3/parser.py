@@ -93,6 +93,7 @@ class Parser(object):
     _multiline_noprefix = False # whether B3 adds > to multiline messages
     _paused = False  # set to True when B3 is paused
     _pauseNotice = False  # whether to notice B3 being paused
+    _partialLine = ''  # trailing game log bytes read before the game server finished writing the line
     _plugins = OrderedDict()  # plugin instances
     _port = 0  # the port used by the gameserver for clients connection
     _publicIp = ''  # game server public ip address
@@ -358,7 +359,7 @@ class Parser(object):
             self.screen.write('Using gamelog    : %s\n' % b3.getShortPath(os.path.abspath(f)))
 
             if os.path.isfile(f):
-                self.input = open(f, 'r', encoding=self.encoding or 'latin-1', errors='replace')
+                self.input = open(f, 'rb')  # bytes: lines are decoded once complete, see Parser.completeLines()
                 if self.config.has_option('server', 'seek'):
                     seek = self.config.getboolean('server', 'seek')
                     if seek:
@@ -549,6 +550,7 @@ class Parser(object):
         self._paused = False
         self._pauseNotice = False
         self.input.seek(0, os.SEEK_END)
+        self._partialLine = ''
 
     def loadEvents(self):
         """
@@ -642,8 +644,9 @@ class Parser(object):
                 collection = glob.glob(search)
                 return collection
 
-            if p_config_path is None:
-                # no plugin configuration file path specified: we can still load the plugin
+            if not p_config_path:
+                # no plugin configuration file path specified (None, or an empty 'name:' entry in the [plugins]
+                # section, which would otherwise resolve to the current directory): we can still load the plugin
                 # if there is non need for a configuration file, otherwise we will lookup one
                 if not p_clazz.requiresConfigFile:
                     self.debug('No configuration file specified for plugin %s: is not required either' % p_name)
@@ -873,9 +876,6 @@ class Parser(object):
                 console.bot('Plugin %s (%s - %s) loaded', plugin_name, version, author)
             finally:
                 console.screen.flush()
-
-        if 'publist' not in self._plugins:
-            _load_plugin(self, 'publist')
 
         if self.config.has_option('server', 'game_log'):
             game_log = self.config.get('server', 'game_log')
@@ -1312,8 +1312,29 @@ class Parser(object):
                        'the log was probably either rotated or emptied. B3 will now re-adjust to the new '
                        'size of the log' % (str(self.input.tell()), str(filestats.st_size)))
             self.input.seek(0, os.SEEK_END)
+            self._partialLine = ''
         # NOTE: __read is defined at runtime in __new__
-        return self.__read(self.input)
+        return self.completeLines(self.__read(self.input))
+
+    def completeLines(self, lines):
+        """
+        Return only complete game log lines. If the game server was still writing the last line when we read it
+        (no trailing newline yet), keep that fragment and prepend it to the next read instead of parsing it twice
+        as two broken lines (and, for multi-byte encodings, decoding a split character as garbage).
+        :param lines: The lines just read from the game log
+        """
+        if not lines:
+            return []
+        lines = list(lines)
+        if self._partialLine:
+            lines[0] = self._partialLine + lines[0]
+            self._partialLine = ''
+        newlines = (b'\n', b'\r') if isinstance(lines[-1], bytes) else ('\n', '\r')
+        if not lines[-1].endswith(newlines):
+            self._partialLine = lines.pop()
+        # the game log is read as bytes so that a multi-byte character split across two reads stays intact
+        encoding = self.encoding or 'latin-1'
+        return [x.decode(encoding, 'replace') if isinstance(x, bytes) else x for x in lines]
 
     def shutdown(self):
         """
