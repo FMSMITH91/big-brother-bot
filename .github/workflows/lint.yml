@@ -1,0 +1,29 @@
+name: lint
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install tools
+        run: pip install ruff pip-audit
+      # syntax errors, undefined names, invalid comparisons, redefined names
+      - name: ruff
+        run: ruff check --select E9,F63,F7,F82,F811 --target-version py39 --exclude b3/tools/debug b3 b3_run.py b3_debug.py setup.py examples
+      # no compile warnings, and every file parses with the oldest supported Python (3.9)
+      - name: syntax
+        run: python scripts/check_syntax.py .
+      # known vulnerabilities in the dependencies
+      - name: pip-audit
+        run: pip-audit -r requirements.txt -r optional-requirements.txt --progress-spinner off

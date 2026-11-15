@@ -67,8 +67,34 @@ Run the test suite with:
 
 ```bash
 .venv/bin/pip install -r test-requirements.txt
-.venv/bin/python -m pytest tests
+.venv/bin/python -m pytest tests/core
+./scripts/start-tests-plugins.sh     # each plugin's tests in their own process
+.venv/bin/python -m pytest tests/functional   # end-to-end: the real bot against a fake Urban Terror server
+python scripts/check_syntax.py .     # no compile warnings, valid Python 3.9 syntax everywhere
 ```
+
+MySQL and PostgreSQL tests are skipped unless a server is available (see the `MYSQL_TEST_*` / `POSTGRESQL_TEST_*`
+variables in `.github/workflows/tests.yml`).
+
+### Continuous integration
+
+GitHub Actions runs on every pull request:
+
+- **tests**: core and plugin tests on Python 3.9–3.14 with MySQL 8 and PostgreSQL 16, the MySQL tests against
+  MariaDB 11, the end-to-end smoke test, and a coverage report (kept as a build artifact).
+- **lint**: ruff (syntax errors, undefined or redefined names), `scripts/check_syntax.py`, and `pip-audit` (known
+  vulnerabilities in the dependencies).
+- **codeql**: GitHub's security scanner (results in the repository's *Security* tab), also weekly.
+- **Dependabot** opens pull requests for dependency and GitHub Actions updates.
+
+SonarCloud currently uses *Automatic Analysis*, which cannot import test coverage. To send coverage to SonarCloud:
+
+1. In SonarCloud, open the project's *Administration → Analysis Method* and turn off *Automatic Analysis*.
+2. In SonarCloud, create a token (*My Account → Security*) and add it to this GitHub repository as the secret
+   `SONAR_TOKEN` (*Settings → Secrets and variables → Actions → Secrets*).
+3. Add the repository variable `SONAR_CI_ANALYSIS` with the value `true` (same page, *Variables* tab).
+
+The `coverage` job then runs the SonarCloud analysis itself, using `sonar-project.properties`.
 
 The `publist` plugin, which reports your server's address to the old bigbrotherbot.net master server list, is no
 longer loaded automatically. To opt in, add a `publist:` line to the `[plugins]` section of `b3.ini`.

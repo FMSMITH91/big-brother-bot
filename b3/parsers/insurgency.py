@@ -327,7 +327,7 @@ class InsurgencyParser(Parser):
         self.game.mapName = new_map
 
     @ger.gameEvent(r'^Loading map "(?P<new_map>\S+)"$')
-    def on_started_map(self, new_map):
+    def on_loading_map(self, new_map):
         # L 08/26/2012 - 03:49:56: Loading map "de_nuke"
         self.game.mapName = new_map
 

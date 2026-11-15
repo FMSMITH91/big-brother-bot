@@ -6,6 +6,9 @@ on:
     branches: [master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     # pinned: the newest runner image has no prebuilt Python 3.9
@@ -40,8 +43,8 @@ jobs:
       POSTGRESQL_TEST_PASSWORD: postgres
       POSTGRESQL_TEST_DB: b3_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -49,3 +52,84 @@ jobs:
         run: ./scripts/install-deps-${{ matrix.suite }}.sh
       - name: Run tests
         run: ./scripts/start-tests-${{ matrix.suite }}.sh
+
+  # many B3 users run MariaDB rather than MySQL
+  mariadb:
+    runs-on: ubuntu-24.04
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "yes"
+          MARIADB_DATABASE: b3_test
+        ports: ["3306:3306"]
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      MYSQL_TEST_HOST: 127.0.0.1
+      MYSQL_TEST_USER: root
+      MYSQL_TEST_PASSWORD: ""
+      MYSQL_TEST_DB: b3_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: ./scripts/install-deps-core.sh
+      - name: Run the MySQL storage tests against MariaDB
+        run: python -m pytest tests/core/storage/test_mysql.py
+
+  # the real bot, in its own process, against a fake Urban Terror server (nothing inside B3 is mocked)
+  smoke:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.14"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: ./scripts/install-deps-core.sh
+      - name: Run the end-to-end smoke test
+        run: python -m pytest tests/functional --timeout=180
+
+  # test coverage of core and plugins together. The report is kept as a build artifact; it is sent to SonarCloud
+  # only when the repository variable SONAR_CI_ANALYSIS is "true" (which requires turning off SonarCloud's
+  # Automatic Analysis and adding a SONAR_TOKEN secret, see README)
+  coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # SonarCloud needs the history to tell new code from old
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: ./scripts/install-deps-core.sh
+      - name: Measure coverage
+        run: |
+          coverage run -p --rcfile=.coveragerc -m pytest -q tests/core
+          for d in tests/plugins/*/; do
+            case "$(basename "$d")" in fakeplugins|__pycache__) continue ;; esac
+            coverage run -p --rcfile=.coveragerc -m pytest -q "$d"
+          done
+          coverage combine --rcfile=.coveragerc
+          coverage xml --rcfile=.coveragerc -o coverage.xml
+          coverage report --rcfile=.coveragerc | tail -1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+      - name: SonarCloud analysis
+        if: vars.SONAR_CI_ANALYSIS == 'true'
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io

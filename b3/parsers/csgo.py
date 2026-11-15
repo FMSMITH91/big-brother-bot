@@ -241,7 +241,7 @@ class CsgoParser(Parser):
         self.game.mapName = new_map
 
     @ger.gameEvent(r'^Loading map "(?P<new_map>\S+)"$')
-    def on_started_map(self, new_map):
+    def on_loading_map(self, new_map):
         # L 08/26/2012 - 03:49:56: Loading map "de_nuke"
         self.game.mapName = new_map
 
@@ -432,7 +432,7 @@ class CsgoParser(Parser):
             self.warning("unexpected server_message : '%s' : please report this on the B3 forums" % msg)
 
     @ger.gameEvent(r'^Log file started (?P<properties>.*)$')
-    def on_server_message(self, properties):
+    def on_log_file_started(self, properties):
         pass
 
     @ger.gameEvent(r'^(?P<data>Your server needs to be restarted.*)$',
