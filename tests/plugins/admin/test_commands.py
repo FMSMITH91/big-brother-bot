@@ -2284,6 +2284,40 @@ class Test_command_secretLevel(Admin_TestCase):
         self.assertEqual(1, self.p._commands['zzqbar'].secretLevel)
 
 
+class Test_live_test_regressions(Admin_TestCase):
+    """
+    Found running B3 against a real Call of Duty 1 server.
+    """
+
+    def test_iamgod_disables_itself_without_breaking_canUse(self):
+        # after !iamgod the command level was set to the string 'none': '<=' between str and int then broke
+        # !help (which checks every command) and !iamgod for everyone until B3 restarted
+        self.init()
+        superadmin = Group(keyword='superadmin', level=100, name='Super Admin')
+        self.p.console.storage.getGroup = Mock(return_value=superadmin)
+        self.p.console.clients.lookupSuperAdmins = Mock(return_value=[])
+        client = Mock(spec=Client, groups=[], maxLevel=0)
+        self.p.cmd_iamgod(data='', client=client, cmd=Mock(spec=Command))
+        self.assertIsNone(self.p._commands['iamgod'].level)
+        for command in self.p._commands.values():
+            command.canUse(client)  # must not raise
+
+    def test_sayLoudOrPM_substitutes_arguments_for_every_parser(self):
+        # the q3a (cod...) parsers' say()/saybig()/message() take no substitution arguments
+        self.init()
+        self.p.console.say = Mock(spec=lambda text: None)
+        self.p.console.saybig = Mock(spec=lambda text: None)
+        self.p.console.message = Mock(spec=lambda client, text: None)
+        client = Client(console=self.p.console, cid='1', name='joe')
+        cmd = Command(self.p, 'foo', 0, lambda *args: None)
+        for prefix, target in (('!', self.p.console.message), ('@', self.p.console.say), ('&', self.p.console.saybig)):
+            cmd.prefix = prefix
+            cmd.loud = prefix in ('@', self.p.cmdPrefixLoud)
+            cmd.big = prefix in ('&', self.p.cmdPrefixBig)
+            cmd.sayLoudOrPM(client, 'command %s level changed to %s', 'time', '0-100')
+            self.assertEqual('command time level changed to 0-100', target.call_args[0][-1])
+
+
 class Test_cmd_clientinfo_sensitive_fields(Admin_functional_test):
 
     def setUp(self):

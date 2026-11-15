@@ -449,6 +449,7 @@ class MainConfig(B3ConfigParserMixin):
     def __init__(self, config_parser):
         self._config_parser = config_parser
         self._plugins = []
+        self._disabled_plugins = set()  # plugin names disabled in the configuration, listed or not
         if isinstance(self._config_parser, XmlConfigParser):
             self._init_plugins_from_xml()
         elif isinstance(self._config_parser, CfgConfigParser):
@@ -460,6 +461,8 @@ class MainConfig(B3ConfigParserMixin):
         self._plugins = []
         for p in self._config_parser.get('plugins/plugin'):
             x = p.get('disabled')
+            if x is not None and x.lower() in ('yes', '1', 'on', 'true'):
+                self._disabled_plugins.add((p.get('name') or '').lower())
             self._plugins.append({
                 'name': p.get('name'),
                 'conf': p.get('config'),
@@ -475,6 +478,7 @@ class MainConfig(B3ConfigParserMixin):
             disabled_plugins = []
         else:
             disabled_plugins = re.split('\\W+', disabled_plugins_raw.lower())
+        self._disabled_plugins = set(disabled_plugins)
 
         def get_custom_plugin_path(plugin_name):
             try:
@@ -491,6 +495,15 @@ class MainConfig(B3ConfigParserMixin):
                     'path': get_custom_plugin_path(name),
                     'disabled': name.lower() in disabled_plugins and name.lower() not in MUST_HAVE_PLUGINS
                 })
+
+    def is_plugin_disabled(self, name):
+        """
+        Whether the configuration disables the given plugin. This also covers plugins not listed in the
+        plugins section, such as requirements of a listed plugin which B3 loads automatically.
+        :param name: The plugin name
+        """
+        name = (name or '').lower()
+        return name in self._disabled_plugins and name not in MUST_HAVE_PLUGINS
 
     def get_plugins(self):
         """

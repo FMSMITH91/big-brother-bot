@@ -764,6 +764,8 @@ class Parser(object):
                 p_data.module = self.pluginImport(p_data.name)
                 p_data.clazz = getattr(p_data.module, '%sPlugin' % p_data.name.title())
                 p_data.conf = _get_plugin_config(p_data.name, p_data.clazz)
+                # a requirement which is not listed in the plugins section can still be disabled in the configuration
+                p_data.disabled = self.config.is_plugin_disabled(p_data.name)
                 plugin_required.append(p_data.name) # load just once
 
             return [p_data]

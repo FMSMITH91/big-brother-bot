@@ -313,7 +313,10 @@ class MysqlStorage(DatabaseStorage):
                                                 user=self.dsnDict['user'],
                                                 passwd=self.dsnDict['password'],
                                                 db=self.dsnDict['path'][1:],
-                                                charset="utf8mb4")  # full Unicode (MySQL's "utf8" has no emoji)
+                                                charset="utf8mb4",  # full Unicode (MySQL's "utf8" has no emoji)
+                                                # the InnoDB tables are transactional: without autocommit nothing
+                                                # B3 writes would be saved (all three drivers accept this argument)
+                                                autocommit=True)
 
                 self.console.bot('Successfully established a connection with MySQL database')
                 self._lastConnectAttempt = 0

@@ -36,6 +36,7 @@ from b3.clients import Clients
 from b3.functions import time2minutes
 from b3.functions import getStuffSoundingLike
 from b3.functions import minutesStr
+from b3.functions import format_message
 from b3.decorators import GameEventRouter
 from b3.parser import Parser
 from b3.parsers.ravaged.ravaged_rcon import RavagedServerCommandError
@@ -290,7 +291,7 @@ class RavagedParser(Parser):
         :param msg: The message to be broadcasted
         """
         if msg and len(msg.strip()):
-            msg = msg % args
+            msg = format_message(msg, args)
             msg = "%s <FONT COLOR='#%s'> %s" % (self.msgPrefix, self._say_color, msg)
             for line in self.getWrap(msg):
                 self.output.write("say <FONT COLOR='#%s'> %s" % (self._say_color, line))
@@ -301,7 +302,7 @@ class RavagedParser(Parser):
         :param msg: The message to be broadcasted
         """
         if msg and len(msg.strip()):
-            msg = msg % args
+            msg = format_message(msg, args)
             msg = "%s <FONT COLOR='#%s'> %s" % (self.msgPrefix, self._saybig_color, msg)
             for line in self.getWrap(msg):
                 self.output.write("say <FONT COLOR='#%s'> %s" % (self._saybig_color, line))
@@ -313,7 +314,7 @@ class RavagedParser(Parser):
         :param msg: The message to be sent
         """
         if msg and len(msg.strip()):
-            msg = msg % args
+            msg = format_message(msg, args)
             msg = "%s <FONT COLOR='#%s'> %s" % (self.msgPrefix, self._private_message_color, msg)
             for line in self.getWrap(msg):
                 self.output.write("playersay %s <FONT COLOR='#%s'> %s" % (client.cid, self._private_message_color, line))

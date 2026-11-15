@@ -231,6 +231,10 @@ class TestConfig(unittest.TestCase):
         ]
         self.assertListEqual(expected_result, conf_xml.get_plugins())
         self.assertListEqual(expected_result, conf_cfg.get_plugins())
+        for conf in (conf_xml, conf_cfg):
+            self.assertTrue(conf.is_plugin_disabled('adv'))
+            self.assertFalse(conf.is_plugin_disabled('censor'))
+            self.assertFalse(conf.is_plugin_disabled('geolocation'))  # not listed, not disabled
 
 
 class Test_xml_plugins_disabled(unittest.TestCase):

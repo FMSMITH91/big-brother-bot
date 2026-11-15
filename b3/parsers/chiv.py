@@ -23,6 +23,8 @@
 # ################################################################### #
 
 import b3
+
+from b3.functions import format_message
 import sys
 import asyncore
 import socket
@@ -281,7 +283,7 @@ class ChivParser(Parser):
         Broadcast a message to all players.
         :param msg: The message to be broadcasted
         """
-        msg = self.stripColors(msg % args)
+        msg = self.stripColors(format_message(msg, args))
         packet = Packet()
         packet.msgType = MessageType.SAY_ALL
         packet.addString(msg)
@@ -292,7 +294,7 @@ class ChivParser(Parser):
         Broadcast a message to all players in a way that will catch their attention.
         :param msg: The message to be broadcasted
         """
-        msg = self.stripColors(msg % args)
+        msg = self.stripColors(format_message(msg, args))
         packet = Packet()
         packet.msgType = MessageType.SAY_ALL_BIG
         packet.addString(msg)
@@ -304,7 +306,7 @@ class ChivParser(Parser):
         :param client: The client to who send the message
         :param text: The message to be sent
         """
-        text = self.stripColors(text % args)
+        text = self.stripColors(format_message(text, args))
         packet = Packet()
         packet.msgType = MessageType.SAY
         packet.addGUID(client.guid)

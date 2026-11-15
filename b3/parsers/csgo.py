@@ -36,6 +36,7 @@ from b3.functions import minutesStr
 from b3.functions import prefixText
 from b3.functions import time2minutes
 from b3.functions import getStuffSoundingLike
+from b3.functions import format_message
 from b3.parser import Parser
 from b3.parsers.source.rcon import Rcon
 from b3.parsers.source.rcon import cvar_command
@@ -496,7 +497,7 @@ class CsgoParser(Parser):
         :param msg: The message to be broadcasted
         """
         if msg and len(msg.strip()):
-            msg = msg % args
+            msg = format_message(msg, args)
             template = 'sm_say %s'
             if "B3 Say" in self.sm_plugins:
                 template = 'b3_say %s'
@@ -511,7 +512,7 @@ class CsgoParser(Parser):
         :param msg: The message to be broadcasted
         """
         if msg and len(msg.strip()):
-            msg = msg % args
+            msg = format_message(msg, args)
             template = 'sm_hsay %s'
             if "B3 Say" in self.sm_plugins:
                 template = 'b3_hsay %s'
@@ -527,7 +528,7 @@ class CsgoParser(Parser):
         :param msg: The message to be sent
         """
         if not client.bot:  # do not talk to bots
-            msg = msg % args
+            msg = format_message(msg, args)
             if msg and len(msg.strip()):
                 template = 'sm_psay #%(guid)s "%(msg)s"'
                 if "B3 Say" in self.sm_plugins:
