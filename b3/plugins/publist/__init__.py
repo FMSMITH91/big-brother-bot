@@ -46,7 +46,7 @@ class PublistPlugin(b3.plugin.Plugin):
     requiresConfigFile = False
 
     _cronTab = None
-    _url = 'http://www.bigbrotherbot.net/master/serverping.php'
+    _url = 'https://www.bigbrotherbot.net/master/serverping.php'
     _secondUrl = None
     _heartbeat_sent = False
     _initial_heartbeat_delay_minutes = 5

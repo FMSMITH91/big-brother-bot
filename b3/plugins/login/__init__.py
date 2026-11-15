@@ -26,7 +26,6 @@ import b3.events
 import b3.plugin
 
 from b3.functions import hash_password
-from b3.querybuilder import escape_string
 from b3.functions import is_legacy_md5_hash
 from b3.functions import layer_legacy_md5_hash
 from b3.functions import password_needs_rehash
@@ -133,8 +132,8 @@ class LoginPlugin(b3.plugin.Plugin):
                 cursor.moveNext()
             cursor.close()
             for client_id, stored in legacy:
-                self.console.storage.query("UPDATE clients SET password = '%s' WHERE id = %d" % (
-                    escape_string(layer_legacy_md5_hash(stored)), client_id))
+                self.console.storage.query("UPDATE clients SET password = %s WHERE id = %s",
+                                           (layer_legacy_md5_hash(stored), client_id))
             if legacy:
                 self.info('protected %s legacy MD5 password hash(es) with salted PBKDF2', len(legacy))
         except Exception as e:

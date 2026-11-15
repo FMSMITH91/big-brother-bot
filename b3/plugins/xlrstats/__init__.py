@@ -38,7 +38,7 @@ import _thread
 import threading
 import urllib.request, urllib.error, urllib.parse
 
-from b3.querybuilder import escape_string
+from b3.querybuilder import SQL
 from b3.functions import getCmd
 from b3.functions import right_cut
 from configparser import NoOptionError
@@ -52,6 +52,15 @@ ASSISTER = "assister"
 #   MAIN PLUGIN XLRSTATS - HANDLES ALL CORE STATISTICS FUNCTIONALITY                                                   #
 #                                                                                                                      #
 ########################################################################################################################
+
+
+def _sql(template, table, *values):
+    """
+    Build an SQL statement from a template whose first %s is the table name: the other %s placeholders
+    are filled with the given values as bind parameters (player names, guids and weapon names are player
+    controlled, so they never go into the SQL text).
+    """
+    return SQL(template % ((table.replace('%', '%%'),) + ('%s',) * len(values)), values)
 
 class XlrstatsPlugin(b3.plugin.Plugin):
 
@@ -578,7 +587,7 @@ class XlrstatsPlugin(b3.plugin.Plugin):
 
     def get_WeaponStats(self, name):
         s = WeaponStats()
-        q = """SELECT * from %s WHERE name = '%s' LIMIT 1""" % (self.weaponstats_table, escape_string(name))
+        q = _sql("""SELECT * from %s WHERE name = %s LIMIT 1""", self.weaponstats_table, name)
         cursor = self.query(q)
         if cursor and not cursor.EOF:
             r = cursor.getRow()
@@ -595,7 +604,7 @@ class XlrstatsPlugin(b3.plugin.Plugin):
 
     def get_Bodypart(self, name):
         s = Bodyparts()
-        q = """SELECT * from %s WHERE name = '%s' LIMIT 1""" % (self.bodyparts_table, escape_string(name))
+        q = _sql("""SELECT * from %s WHERE name = %s LIMIT 1""", self.bodyparts_table, name)
         cursor = self.query(q)
         if cursor and not cursor.EOF:
             r = cursor.getRow()
@@ -616,7 +625,7 @@ class XlrstatsPlugin(b3.plugin.Plugin):
         if not name:
             name = 'UnknownMap'
         s = MapStats()
-        q = """SELECT * from %s WHERE name = '%s' LIMIT 1""" % (self.mapstats_table, escape_string(name))
+        q = _sql("""SELECT * from %s WHERE name = %s LIMIT 1""", self.mapstats_table, name)
         cursor = self.query(q)
         if cursor and not cursor.EOF:
             r = cursor.getRow()
@@ -728,7 +737,7 @@ class XlrstatsPlugin(b3.plugin.Plugin):
 
     def get_ActionStats(self, name):
         s = ActionStats()
-        q = """SELECT * from %s WHERE name = '%s' LIMIT 1""" % (self.actionstats_table, escape_string(name))
+        q = _sql("""SELECT * from %s WHERE name = %s LIMIT 1""", self.actionstats_table, name)
         cursor = self.query(q)
         if cursor and not cursor.EOF:
             r = cursor.getRow()
@@ -2189,11 +2198,10 @@ class CtimePlugin(b3.plugin.Plugin):
             self.debug('CTIME LEFT: player: %s played this time: %s sec', ts.client.exactName, diff)
             self.debug('CTIME LEFT: player: %s played this time: %s', ts.client.exactName, self.formatTD(diff))
             #INSERT INTO `ctime` (`guid`, `came`, `left`) VALUES ("6fcc4f6d9d8eb8d8457fd72d38bb1ed2", 1198187868, 1226081506)
-            # guid and name are player-controlled: single-quoted, escaped SQL literals (double quotes are identifiers
-            # in standard SQL and were not escaped at all)
-            q = """INSERT INTO %s (guid, came, gone, nick) VALUES ('%s', %s, %s, '%s')""" % (self.ctime_table,
-                escape_string(ts.client.guid), int(time.mktime(ts.came.timetuple())),
-                int(time.mktime(ts.left.timetuple())), escape_string(ts.client.name))
+            # guid and name are player-controlled: they are bound as parameters, never written into the SQL text
+            q = _sql("""INSERT INTO %s (guid, came, gone, nick) VALUES (%s, %s, %s, %s)""", self.ctime_table,
+                ts.client.guid, int(time.mktime(ts.came.timetuple())),
+                int(time.mktime(ts.left.timetuple())), ts.client.name)
             self.query(q)
 
             self._clients[clientid].left = None
@@ -2334,21 +2342,21 @@ class PlayerStats(StatObject):
     id_token = ""    # player identification token for webfront v3
 
     def _insertquery(self):
-        q = """INSERT INTO %s (client_id, kills, deaths, teamkills, teamdeaths, suicides, ratio, skill, assists,
+        q = _sql("""INSERT INTO %s (client_id, kills, deaths, teamkills, teamdeaths, suicides, ratio, skill, assists,
                assistskill, curstreak, winstreak, losestreak, rounds, hide, fixed_name, id_token) VALUES (%s, %s, %s,
-               %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, '%s', '%s')""" % (self._table, self.client_id, self.kills,
+               %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", self._table, self.client_id, self.kills,
                self.deaths, self.teamkills, self.teamdeaths, self.suicides, self.ratio, self.skill, self.assists,
                self.assistskill, self.curstreak, self.winstreak, self.losestreak, self.rounds, self.hide,
-               escape_string(self.fixed_name), escape_string(self.id_token))
+               self.fixed_name, self.id_token)
         return q
 
     def _updatequery(self):
-        q = """UPDATE %s SET client_id=%s, kills=%s, deaths=%s, teamkills=%s, teamdeaths=%s, suicides=%s, ratio=%s,
+        q = _sql("""UPDATE %s SET client_id=%s, kills=%s, deaths=%s, teamkills=%s, teamdeaths=%s, suicides=%s, ratio=%s,
                skill=%s, assists=%s, assistskill=%s, curstreak=%s, winstreak=%s, losestreak=%s, rounds=%s, hide=%s,
-               fixed_name='%s', id_token='%s' WHERE id= %s""" % (self._table, self.client_id, self.kills, self.deaths,
+               fixed_name=%s, id_token=%s WHERE id= %s""", self._table, self.client_id, self.kills, self.deaths,
                self.teamkills, self.teamdeaths, self.suicides, self.ratio, self.skill, self.assists, self.assistskill,
-               self.curstreak, self.winstreak, self.losestreak, self.rounds, self.hide, escape_string(self.fixed_name),
-               escape_string(self.id_token), self.id)
+               self.curstreak, self.winstreak, self.losestreak, self.rounds, self.hide, self.fixed_name,
+               self.id_token, self.id)
         return q
 
 
@@ -2365,13 +2373,13 @@ class WeaponStats(StatObject):
     teamkills = 0
 
     def _insertquery(self):
-        q = """INSERT INTO %s (name, kills, suicides, teamkills) VALUES ('%s', %s, %s, %s)""" % (
-            self._table, escape_string(self.name), self.kills, self.suicides, self.teamkills)
+        q = _sql("""INSERT INTO %s (name, kills, suicides, teamkills) VALUES (%s, %s, %s, %s)""",
+            self._table, self.name, self.kills, self.suicides, self.teamkills)
         return q
 
     def _updatequery(self):
-        q = """UPDATE %s SET name='%s', kills=%s, suicides=%s, teamkills=%s WHERE id=%s""" % (
-            self._table, escape_string(self.name), self.kills, self.suicides, self.teamkills, self.id)
+        q = _sql("""UPDATE %s SET name=%s, kills=%s, suicides=%s, teamkills=%s WHERE id=%s""",
+            self._table, self.name, self.kills, self.suicides, self.teamkills, self.id)
         return q
 
 
@@ -2416,13 +2424,13 @@ class Bodyparts(StatObject):
     teamkills = 0
 
     def _insertquery(self):
-        q = """INSERT INTO %s (name, kills, suicides, teamkills) VALUES ('%s', %s, %s, %s)""" % (
-            self._table, escape_string(self.name), self.kills, self.suicides, self.teamkills)
+        q = _sql("""INSERT INTO %s (name, kills, suicides, teamkills) VALUES (%s, %s, %s, %s)""",
+            self._table, self.name, self.kills, self.suicides, self.teamkills)
         return q
 
     def _updatequery(self):
-        q = """UPDATE %s SET name='%s', kills=%s, suicides=%s, teamkills=%s WHERE id=%s""" % (
-            self._table, escape_string(self.name), self.kills, self.suicides, self.teamkills, self.id)
+        q = _sql("""UPDATE %s SET name=%s, kills=%s, suicides=%s, teamkills=%s WHERE id=%s""",
+            self._table, self.name, self.kills, self.suicides, self.teamkills, self.id)
         return q
 
 
@@ -2440,13 +2448,13 @@ class MapStats(StatObject):
     rounds = 0
 
     def _insertquery(self):
-        q = """INSERT INTO %s (name, kills, suicides, teamkills, rounds) VALUES ('%s', %s, %s, %s, %s)""" % (
-            self._table, escape_string(self.name), self.kills, self.suicides, self.teamkills, self.rounds)
+        q = _sql("""INSERT INTO %s (name, kills, suicides, teamkills, rounds) VALUES (%s, %s, %s, %s, %s)""",
+            self._table, self.name, self.kills, self.suicides, self.teamkills, self.rounds)
         return q
 
     def _updatequery(self):
-        q = """UPDATE %s SET name='%s', kills=%s, suicides=%s, teamkills=%s, rounds=%s WHERE id=%s""" % (
-            self._table, escape_string(self.name), self.kills, self.suicides, self.teamkills, self.rounds, self.id)
+        q = _sql("""UPDATE %s SET name=%s, kills=%s, suicides=%s, teamkills=%s, rounds=%s WHERE id=%s""",
+            self._table, self.name, self.kills, self.suicides, self.teamkills, self.rounds, self.id)
         return q
 
 
@@ -2541,11 +2549,11 @@ class ActionStats(StatObject):
     count = 0
 
     def _insertquery(self):
-        q = """INSERT INTO %s (name, count) VALUES ('%s', %s)""" % (self._table, escape_string(self.name), self.count)
+        q = _sql("""INSERT INTO %s (name, count) VALUES (%s, %s)""", self._table, self.name, self.count)
         return q
 
     def _updatequery(self):
-        q = """UPDATE %s SET name='%s', count=%s WHERE id=%s""" % (self._table, escape_string(self.name), self.count, self.id)
+        q = _sql("""UPDATE %s SET name=%s, count=%s WHERE id=%s""", self._table, self.name, self.count, self.id)
         return q
 
 
@@ -2585,16 +2593,14 @@ class BattleStats(StatObject):
     scores = {}
 
     def _insertquery(self):
-        q = """INSERT INTO %s (map_id, game_type, total_players, start_time, end_time, scores)
-               VALUES ('%s', %s, %s, %s, %s, '%s')""" % (self._table, self.map_id, self.game_type, self.total_players,
-               self.start_time, self.end_time, self.scores)
-        return q
+        return _sql("""INSERT INTO %s (map_id, game_type, total_players, start_time, end_time, scores)
+               VALUES (%s, %s, %s, %s, %s, %s)""", self._table, self.map_id, self.game_type, self.total_players,
+                    self.start_time, self.end_time, str(self.scores))
 
     def _updatequery(self):
-        q = """UPDATE %s SET map_id=%s, game_type='%s', total_players=%s, start_time=%s, end_time=%s,
-            scores='%s' """ % (self._table, self.map_id, self.game_type, self.total_players, self.start_time,
-            self.end_time, self.scores)
-        return q
+        return _sql("""UPDATE %s SET map_id=%s, game_type=%s, total_players=%s, start_time=%s, end_time=%s,
+            scores=%s WHERE id=%s""", self._table, self.map_id, self.game_type, self.total_players, self.start_time,
+                    self.end_time, str(self.scores), self.id)
 
 
 class PlayerBattles(StatObject):

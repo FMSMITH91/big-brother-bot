@@ -49,3 +49,43 @@ class Test_storeServerinfo(B3TestCase):
         value = "Joe's \\ \"server\" \\"
         self.p.storeServerinfo('sv_hostname', value)
         self.assertEqual(value, self.svar('sv_hostname'))
+
+
+class Test_client_storage(B3TestCase):
+
+    @patch("b3.cron.PluginCronTab")
+    def setUp(self, pluginCronTab_mock):
+        B3TestCase.setUp(self)
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+        conf = CfgConfigParser()
+        conf.loadFromString(dedent(r"""
+            [settings]
+            interval: 60
+            output_file: %s/status.xml
+            enableDBsvarSaving: no
+            enableDBclientSaving: yes
+            """ % self.tmpdir))
+        self.p = StatusPlugin(self.console, conf)
+        self.p.onLoadConfig()
+        self.p.onStartup()  # the test console uses SQLite
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+        B3TestCase.tearDown(self)
+
+    def test_player_name_with_quotes_is_stored(self):
+        # the client row used to be written with only ' backslash-escaped, which SQLite and PostgreSQL reject
+        from b3.fake import FakeClient
+        name = "O'Neil \\ \"x\""
+        joe = FakeClient(self.console, name=name, guid="joeguid")
+        joe.connects('1')
+        self.p.update()
+        cursor = self.console.storage.query("SELECT * FROM %s" % self.p._tables['cvars'])
+        rows = []
+        while not cursor.EOF:
+            rows.append(cursor.getRow())
+            cursor.moveNext()
+        cursor.close()
+        self.assertIn(name, [row.get('Name') for row in rows])

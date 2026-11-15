@@ -23,19 +23,91 @@
 # ################################################################### #
 
 __author__  = 'ThorN'
-__version__ = '1.3.0'
+__version__ = '1.4.0'
+
+import re
+
+_PLACEHOLDER = re.compile(r'%(%|s)')
+
 
 def escape_string(value):
     """
     Escape a value for use *inside* a single-quoted SQL string literal ('...').
     Single quotes are doubled (standard SQL, understood by MySQL, SQLite and PostgreSQL); backslashes are doubled
-    as well when the active storage treats them as escape characters (MySQL). Use this when building raw SQL.
+    as well when the active storage treats them as escape characters (MySQL).
+    Prefer bind parameters (storage.query(sql, params) with %s placeholders): this is kept for old plugins.
     :param value: The value to escape (converted to str)
     """
     value = str(value)
     if QueryBuilder.backslash_escapes:
         value = value.replace('\\', '\\\\')
     return value.replace("'", "''")
+
+
+def literal(value):
+    """
+    Return the given value as an SQL literal: numbers as-is, everything else as an escaped single-quoted string.
+    """
+    if isinstance(value, (int, float, complex)):
+        return str(value)
+    return "'%s'" % escape_string(value)
+
+
+def _raw(fragment):
+    """
+    Return a hand-written SQL fragment ready to be joined to a statement that uses %s placeholders.
+    """
+    if isinstance(fragment, SQL):
+        return fragment.text, fragment.params
+    return str(fragment).replace('%', '%%'), ()
+
+
+class SQL(str):
+    """
+    An SQL statement (or part of one) together with its bind parameters.
+
+    `text` holds the statement with %s placeholders (a literal % is written %%) and `params` the values to bind:
+    the storage layer executes the two separately, so values can never change the meaning of the query.
+    The string value itself is the statement with the values inlined as escaped literals, which is what older
+    code (and the logs) expect: existing plugins that concatenate or log queries keep working.
+    """
+
+    def __new__(cls, text, params=()):
+        params = tuple(params)
+        values = iter(params)
+        inlined = _PLACEHOLDER.sub(lambda m: '%' if m.group(1) == '%' else literal(next(values)), text)
+        obj = str.__new__(cls, inlined)
+        obj.text = text
+        obj.params = params
+        return obj
+
+    def __add__(self, other):
+        if not isinstance(other, str):
+            return NotImplemented
+        text, params = _raw(other)
+        return SQL(self.text + text, self.params + params)
+
+    def __radd__(self, other):
+        if not isinstance(other, str):
+            return NotImplemented
+        text, params = _raw(other)
+        return SQL(text + self.text, params + self.params)
+
+    def __reduce__(self):
+        return SQL, (self.text, self.params)
+
+
+def join(separator, parts):
+    """
+    Join SQL fragments (SQL objects or hand-written strings) keeping their bind parameters.
+    """
+    texts = []
+    params = ()
+    for part in parts:
+        text, part_params = _raw(part)
+        texts.append(text)
+        params += part_params
+    return SQL(_raw(separator)[0].join(texts), params)
 
 
 class QueryBuilder(object):
@@ -51,19 +123,21 @@ class QueryBuilder(object):
         """
         self.db = db
 
+    @staticmethod
+    def _param(value):
+        """
+        Return the value to bind for the given value.
+        None is stored as the string 'None', as B3 always did when it inlined values into its queries.
+        """
+        return 'None' if value is None else value
+
     def escape(self, word):
         """
         Return the given value as an SQL literal: numbers as-is, everything else as a properly escaped
-        single-quoted string. (B3 used to emit "..." with only double quotes backslash-escaped, which a value
-        ending in a backslash could break out of on MySQL and any double quote could break out of on SQLite.)
+        single-quoted string. Kept for old plugins: B3 itself binds values instead (see SQL).
         :param word: The value to escape
         """
-        if isinstance(word, (int, float, complex)):
-            return str(word)
-        elif word is None:
-            return "'None'"
-        else:
-            return "'%s'" % escape_string(word)
+        return literal(self._param(word))
 
     def quoteArgs(self, args):
         """
@@ -97,42 +171,32 @@ class QueryBuilder(object):
         Format a field clause in SQL according to the given parameters.
         :param field: The comparision type for this clause.
         :param value: The value of the comparision.
+        :return: an SQL object (the value is a bind parameter)
         """
         field = field.strip()
 
         if type(value) == list or type(value) == tuple:
-            values = []
-            for v in value:
-                values.append(self.escape(v))
-            return "`" + field + "` IN(" + ",".join(values) + ")"
-        elif value is None:
-            value = self.escape('')
-        else:
-            value = self.escape(value)
+            return SQL("`" + field + "` IN(" + ",".join(['%s'] * len(value)) + ")",
+                       [self._param(v) for v in value])
+
+        value = '' if value is None else value
 
         if len(field) >= 2:
-            if field[-2:] == ">=":
-                return "`" + field[:-2].strip() + "` >= " + value
-            elif field[-2:] == "<=":
-                return "`" + field[:-2].strip() + "` <= " + value
-            elif field[-1] == "<":
-                return "`" + field[:-1].strip() + "` < " + value
-            elif field[-1] == ">":
-                return "`" + field[:-1].strip() + "` > " + value
-            elif field[-1] == "=":
-                return "`" + field[:-1].strip() + "` = " + value
-            elif field[-1] == "%" and field[0] == "%":
-                return "`" + field[1:-1].strip() + "` LIKE '%" + value[1:-1] + "%'"
+            for operator in ('>=', '<=', '<', '>', '='):
+                if field.endswith(operator):
+                    return SQL("`" + field[:-len(operator)].strip() + "` " + operator + " %s", [value])
+            if field[-1] == "%" and field[0] == "%":
+                return SQL("`" + field[1:-1].strip() + "` LIKE %s", ['%' + str(value) + '%'])
             elif field[-1] == "%":
-                return "`" + field[:-1].strip() + "` LIKE '" + value[1:-1] + "%'"
+                return SQL("`" + field[:-1].strip() + "` LIKE %s", [str(value) + '%'])
             elif field[0] == '%':
-                return "`" + field[1:].strip() + "` LIKE '%" + value[1:-1] + "'"
+                return SQL("`" + field[1:].strip() + "` LIKE %s", ['%' + str(value)])
             elif field[0] == '&':
-                return "`" + field[1:].strip() + "` & " + value
+                return SQL("`" + field[1:].strip() + "` & %s", [value])
             elif field[0] == '|':
-                return "`" + field[1:].strip() + "` | " + value
+                return SQL("`" + field[1:].strip() + "` | %s", [value])
 
-        return "`" + field + "` = " + value
+        return SQL("`" + field + "` = %s", [value])
 
     def WhereClause(self, fields=None, values=None, concat=' and '):
         """
@@ -140,6 +204,7 @@ class QueryBuilder(object):
         :param fields: The fields of the where clause.
         :param values: The value of each field.
         :param concat: The concat value for multiple where clauses
+        :return: an SQL object, or `fields` itself when it is a hand-written clause
         """
         sql = []
         if isinstance(fields, tuple) and values is None \
@@ -192,7 +257,7 @@ class QueryBuilder(object):
             # its type is unknown, nothing we can do
             return fields
 
-        return concat.join(sql)
+        return join(concat, sql)
 
     def SelectQuery(self, fields, table, where='', orderby='', limit=0, offset='', groupby='', having='', **keywords):
         """
@@ -210,7 +275,7 @@ class QueryBuilder(object):
         sql = ['SELECT %s FROM `%s`' % (self.fieldStr(fields), table)]
 
         if where:
-            sql.append("WHERE %s" % self.WhereClause(where))
+            sql.append(join('', ["WHERE ", self.WhereClause(where)]))
         if groupby:
             sql.append("GROUP BY %s" % groupby)
         if having:
@@ -224,7 +289,7 @@ class QueryBuilder(object):
         if limit:
             sql.append(str(limit))
 
-        return " ".join(sql)
+        return join(" ", sql)
 
     def UpdateQuery(self, data, table, where, delayed=None): 
         """
@@ -241,14 +306,8 @@ class QueryBuilder(object):
 
         sql += table + " SET "
 
-        sets = []
-        for k, v in data.items():
-            sets.append(self.FieldClause(k, v))
-
-        sql += ", ".join(sets)
-        sql += " WHERE " + self.WhereClause(where)
-
-        return sql
+        sets = [self.FieldClause(k, v) for k, v in data.items()]
+        return join('', [sql, join(", ", sets), " WHERE ", self.WhereClause(where)])
 
     def InsertQuery(self, data, table, delayed=None): 
         """
@@ -264,15 +323,9 @@ class QueryBuilder(object):
 
         sql += "INTO " + table
 
-        keys = []
-        values = []
-        for k, v in data.items():
-            keys.append(k)
-            values.append(self.escape(v))
-
-        sql += "(" + self.fieldStr(keys) + ") VALUES (" + ", ".join(values) + ")"
-
-        return sql
+        keys = list(data.keys())
+        sql = sql.replace('%', '%%') + "(" + self.fieldStr(keys) + ") VALUES (" + ", ".join(['%s'] * len(keys)) + ")"
+        return SQL(sql, [self._param(data[k]) for k in keys])
 
     def ReplaceQuery(self, data, table, delayed=None): 
         """
@@ -288,12 +341,6 @@ class QueryBuilder(object):
 
         sql += "INTO " + table
 
-        keys = []
-        values = []
-        for k, v in data.items():
-            keys.append(k)
-            values.append(self.escape(v))
-
-        sql += "(" + self.fieldStr(keys) + ") VALUES (" + ", ".join(values) + ")"
-
-        return sql
+        keys = list(data.keys())
+        sql = sql.replace('%', '%%') + "(" + self.fieldStr(keys) + ") VALUES (" + ", ".join(['%s'] * len(keys)) + ")"
+        return SQL(sql, [self._param(data[k]) for k in keys])

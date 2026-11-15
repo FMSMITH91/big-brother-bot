@@ -26,7 +26,6 @@ import b3
 import b3.events
 import b3.functions
 from . import functions
-from b3.querybuilder import escape_string
 import re
 import string
 import sys
@@ -1580,7 +1579,7 @@ class Clients(dict):
     def escape_like(cls, value):
         """
         Escape the LIKE wildcards (% and _) of the given value so that they are matched literally, when used
-        in a LIKE pattern with ESCAPE '!' (the result still needs to be escaped as an SQL string literal).
+        in a LIKE pattern with ESCAPE '!' (pass the result as a bind parameter).
         """
         e = cls.LIKE_ESCAPE
         return value.replace(e, e + e).replace('%', e + '%').replace('_', e + '_')
@@ -1592,10 +1591,9 @@ class Clients(dict):
         """
         storage = self.console.storage
         pattern = '%' + self.escape_like(name) + '%'
-        query = "SELECT * FROM clients WHERE name LIKE '" + escape_string(pattern) + "' ESCAPE '" + \
-                self.LIKE_ESCAPE + "' ORDER BY time_edit DESC LIMIT 5"
+        query = "SELECT * FROM clients WHERE name LIKE %s ESCAPE '" + self.LIKE_ESCAPE + "' ORDER BY time_edit DESC LIMIT 5"
         clients = []
-        cursor = storage.query(query)
+        cursor = storage.query(query, (pattern,))
         try:
             while not cursor.EOF:
                 client = Client()
