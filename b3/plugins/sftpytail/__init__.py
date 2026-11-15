@@ -434,7 +434,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
             key_types = [x for x in key_types if x is not None]
             if not key_types:
                 raise ValueError("can't identify private key type")
-            last_error = None
+            last_error = paramiko.SSHException("could not load private key %s" % self.private_key_file)
             for key_type in key_types:
                 try:
                     with open(self.private_key_file, "r") as f:

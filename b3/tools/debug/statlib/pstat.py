@@ -108,6 +108,9 @@ functions/methods.  Their inclusion here is for function name consistency.
 import string
 import copy
 from types import *
+
+# Python 2 'types' names used throughout this vendored library (from types import * no longer provides them)
+ListType, TupleType, StringType, IntType, FloatType = list, tuple, str, int, float
 from functools import cmp_to_key
 
 

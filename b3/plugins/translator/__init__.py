@@ -46,17 +46,7 @@ import re
 import sys
 import time
 
-try:
-    # import the getCmd function
-    import b3.functions.getCmd as getCmd
-except ImportError:
-    # keep backward compatibility
-    def getCmd(instance, cmd):
-        cmd = 'cmd_%s' % cmd
-        if hasattr(instance, cmd):
-            func = getattr(instance, cmd)
-            return func
-        return None
+from b3.functions import getCmd
 
 
 class TranslatorPlugin(b3.plugin.Plugin):

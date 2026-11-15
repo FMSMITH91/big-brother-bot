@@ -754,3 +754,25 @@ class Test_run_loop(RavagedTestCase):
         # THEN the half initialized connection was closed and the setup was run again
         self.assertEqual(2, setup_calls['n'])
         self.assertTrue(connections[0].stop.called)
+
+
+class Test_rcon_auth(unittest.TestCase):
+
+    def make_server(self, responses):
+        from b3.parsers.ravaged.ravaged_rcon import RavagedServer
+        server = RavagedServer.__new__(RavagedServer)
+        server.user, server.password = 'admin', 'secret'
+        server.log = Mock()
+        server.command = Mock(side_effect=responses)
+        return server
+
+    def test_unexpected_password_response_raises(self):
+        # the error used to be created but never raised, so B3 carried on as if it were logged in
+        from b3.parsers.ravaged.ravaged_rcon import RavagedServerCommandError
+        server = self.make_server(['Enter password', 'Something unexpected'])
+        self.assertRaises(RavagedServerCommandError, server.auth)
+
+    def test_login_failed_raises(self):
+        from b3.parsers.ravaged.ravaged_rcon import RavagedServerError
+        server = self.make_server(['Enter password', 'Login failed'])
+        self.assertRaises(RavagedServerError, server.auth)

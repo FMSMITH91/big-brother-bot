@@ -474,7 +474,7 @@ class HomefrontParser(Parser):
         # kill example: 1100012402D1245 EXP_Frag 1100012402D1217
         # suicide example#1: Freelander Suicided Freelander (triggers when player leaves the server)
         # suicide example#2: Freelander EXP_Frag Freelander
-        match = re.search(r"^(?P<data>(?P<attacker>[^;]+)\s+(?P<aweap>[A-z0-9_-]+)\s+(?P<victim>[^;]+))$", data)
+        match = re.search(r"^(?P<data>(?P<attacker>[^;]+)\s+(?P<aweap>[A-Za-z0-9_-]+)\s+(?P<victim>[^;]+))$", data)
         ## [int: Killer SteamID] [string: DamageType] [int: Victim SteamID]
         #match = re.search(r"^(?P<data>(?P<auid>.*)\s+(?P<aweap>[A-z0-9_-]+)\s+(?P<vuid>.*))$", data)
         if not match:
