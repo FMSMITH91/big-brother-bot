@@ -1758,7 +1758,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             for i in range(0, self._randnum):
                 newpassword += str(random.randint(1, 9))
 
-            self.debug('private password set to: %s' % newpassword)
+            self.debug('private password set (%s characters)' % len(newpassword or ''))  # never log the password
 
             if newpassword is None:
                 client.message('^1ERROR: ^7could not set public mode off because \

@@ -136,7 +136,7 @@ class RavagedServer(Thread):
             self.log.warning(response)
             raise RavagedServerError(response)
         else:
-            RavagedServerCommandError("unexpected response: %r" % response)
+            raise RavagedServerCommandError("unexpected response: %r" % response)
 
 
     def command(self, command):

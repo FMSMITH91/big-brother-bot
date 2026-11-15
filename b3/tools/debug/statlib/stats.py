@@ -259,6 +259,9 @@ import string
 import copy
 from types import *
 
+# Python 2 'types' names used throughout this vendored library (from types import * no longer provides them)
+ListType, TupleType, StringType, IntType, FloatType = list, tuple, str, int, float
+
 from b3.tools.debug.statlib import pstat
 from functools import cmp_to_key
 
