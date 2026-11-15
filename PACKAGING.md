@@ -35,11 +35,10 @@ Python packages (any platform):
 
     pip install -r build-requirements.txt
     python -m build
+    python scripts/check_dist.py dist/b3-*.whl
 
 (The workflow installs exact, hash-checked versions of build and setuptools from `.github/ci-requirements.txt` and
 builds with `--no-isolation`.)
-
-    python scripts/check_dist.py dist/b3-*.whl
 
 Windows installer (on Windows, with Python 3.14 and [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
