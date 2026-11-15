@@ -1,0 +1,134 @@
+name: release
+
+# Pushing a version tag (v2.0.0, or v2.0.0b1 for a pre-release) builds the Python packages and the Windows
+# installer, tests the installer on Windows and publishes them as a GitHub release.
+# On pull requests that touch the packaging, the same builds and tests run without publishing anything.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - setup.py
+      - setup.cfg
+      - MANIFEST.in
+      - installer/**
+      - scripts/set_version.py
+      - scripts/check_dist.py
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-packages:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            version=$(python scripts/set_version.py "$REF_NAME")
+          else
+            # test builds get a dev version so they can never be mistaken for a release
+            current=$(grep -oP "^b3_version = '\K[^']+" setup.py)
+            version=$(python scripts/set_version.py "${current}dev${GITHUB_RUN_NUMBER}")
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install -r build-requirements.txt
+          python -m build --outdir dist .
+      # (the file names use the normalized version: 1.12dev5 becomes 1.12.dev5)
+      - name: Check the wheel has every B3 file
+        run: python scripts/check_dist.py dist/*.whl
+      - name: Install the wheel in a clean environment and run it
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python -m venv /tmp/b3venv
+          /tmp/b3venv/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/b3venv/bin/b3_run --version | grep -F "v$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-packages
+          path: dist/
+          if-no-files-found: error
+
+  windows-installer:
+    needs: python-packages
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          # must match EMBED_VERSION's minor version in installer/windows/build_installer.py
+          python-version: "3.14"
+      - uses: actions/download-artifact@v5
+        with:
+          name: python-packages
+          path: dist
+      - name: Inno Setup 6
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+      - name: Build the installer
+        env:
+          VERSION: ${{ needs.python-packages.outputs.version }}
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist\*.whl).FullName
+          python installer/windows/build_installer.py $wheel --version $env:VERSION --out installer-dist
+      - name: Install silently and run B3
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.python-packages.outputs.version }}
+        run: |
+          $setup = "installer-dist\b3-$env:VERSION-win64-setup.exe"
+          $dir = "$env:RUNNER_TEMP\b3"
+          Start-Process -Wait -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", "/LOG=$env:RUNNER_TEMP\setup.log"
+          if (-not (Test-Path "$dir\b3.cmd")) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "b3.cmd was not installed" }
+          if (-not (Test-Path "$env:USERPROFILE\.b3\b3.ini")) { throw "the starting b3.ini was not created" }
+          $out = & "$dir\b3.cmd" --version
+          Write-Output $out
+          if ($out -notmatch [regex]::Escape("v$env:VERSION")) { throw "b3.cmd --version did not report $env:VERSION" }
+          # the libraries and data files B3 and its plugins need at runtime
+          & "$dir\python\python.exe" -c "import b3, b3.parsers.cod, b3.storage.sqlite, b3.plugins.xlrstats, pymysql, psycopg2, requests, feedparser, dateutil, paramiko, os; p = os.path.dirname(b3.__file__); assert os.path.isfile(os.path.join(p, 'plugins', 'geolocation', 'lib', 'geoip', 'db', 'GeoIP.dat')); print('runtime OK')"
+          if ($LASTEXITCODE -ne 0) { throw "runtime check failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer-dist/*.exe
+          if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: [python-packages, windows-installer]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.python-packages.outputs.version }}
+        run: |
+          flags=""
+          # a, b and dev versions (2.0.0b1...) are pre-releases: the update check only offers them on the beta channel
+          if echo "$VERSION" | grep -Eq '(a|b|dev)[0-9]*$'; then flags="--prerelease"; fi
+          gh release create "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --title "B3 $VERSION" --generate-notes --verify-tag $flags

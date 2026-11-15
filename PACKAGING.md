@@ -1,61 +1,49 @@
-BigBrotherBot (B3) packaging documentation
-==========================================
+BigBrotherBot (B3) packaging
+============================
 
-B3 is distributed as different packages:
+Every release on GitHub has three downloads, all built by the `release` workflow
+(`.github/workflows/release.yml`):
 
-  - Python sources package as a zip file
-  - Python wheel package
-  - Win32 zip package
-  - Win32 installer package (built with InnoSetup Installer)
+  - `b3-<version>-py3-none-any.whl`: the Python wheel (`pip install b3-<version>-py3-none-any.whl`, then run `b3_run`)
+  - `b3-<version>.tar.gz`: the source package
+  - `b3-<version>-win64-setup.exe`: the Windows installer. It contains its own Python (the official embeddable
+    Python from python.org) with B3 and its libraries installed, so users do not need to install Python.
 
-# Bumping the version number
+# Making a release
 
-You need the bumpversion tool for that task. See https://pypi.python.org/pypi/bumpversion/
+1. Make sure master is green and the CHANGELOG is up to date.
+2. Tag the commit and push the tag:
 
-Usage:
+        git tag v2.0.0
+        git push origin v2.0.0
 
-    bumpversion patch # will change "1.10.0" to "1.10.1"
-    bumpversion minor # will change "1.10.0" to "1.11.0" 
-    bumpversion major # will change "1.10.0" to "2.0.0"
+   The workflow sets the version from the tag (`scripts/set_version.py`), builds the wheel and source package,
+   checks that the wheel contains every B3 file, installs it in a clean environment, builds the Windows installer,
+   installs that silently on a Windows machine and runs B3 from it, then creates the GitHub release with the
+   three files and generated release notes.
 
+Version numbers follow the scheme the B3 update check understands: `2.0.0`, or `2.0.0a1` / `2.0.0b1` for
+pre-releases (`rc` is not part of it). A tag with `a`, `b` or `dev` is published as a GitHub pre-release, which
+the update check only offers on the beta channel.
 
-# Packaging B3
+To also record the version in the repository, run `python scripts/set_version.py 2.0.0` and merge that change
+before tagging.
 
-To be able to build B3 distribution packages you need to have installed Python 3.9+ on your system.
-You can check your python version by starting the python interpreter in a terminal window (or command 
-prompt on win32 platform). Also you need to make sure to have `python` in your PATH environment variable.  
-You also need to have installed [GIT](http://git-scm.com/) on your system and make sure that the `git` command
-is in your PATH environment. Once the building process is completed you will find the built package(s) inside the 
-*dist* directory.
+# Building locally
 
-## Source and wheel distribution
+Python packages (any platform):
 
-Open a terminal window (or command prompt if on win32 platform) and type the following commands:
+    pip install -r build-requirements.txt
+    python -m build
+    python scripts/check_dist.py dist/b3-*.whl
 
- - clone big brother bot repository:
-    - `git clone https://github.com/BigBrotherBot/big-brother-bot.git`
-    - `cd big-brother-bot`
- - build source and wheel packages:
-    - `python setup.py release`
+Windows installer (on Windows, with Python 3.14 and [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
-## Windows
+    python installer/windows/build_installer.py dist/b3-<version>-py3-none-any.whl --version <version>
 
-Install [InnoSetup](http://www.jrsoftware.org/isinfo.php).  
-Install [psycopg2](http://www.stickpeople.com/projects/python/win-psycopg/).  
-Install [pycripto](http://www.voidspace.org.uk/python/modules.shtml#pycrypto).  
-Install [paramiko](http://blog.victorjabur.com/2011/06/08/modules-python-library-compiled-for-windows-32-and-64-unofficial-windows-binaries-for-python/).  
-Install [cx_Freeze](https://pypi.python.org/pypi/cx_Freeze/4.3.4).  
-Make sure to have `pip` in your PATH environment.  
-  
-Open a command prompt window and type the following:
+The embeddable Python version and its SHA-256 are pinned in `installer/windows/build_installer.py`
+(`EMBED_VERSION`, `EMBED_SHA256`); when changing it, update the Python version of the `windows-installer` job in
+the workflow to the same minor version.
 
- - clone big brother bot repository:
-    - `git clone https://github.com/BigBrotherBot/big-brother-bot.git`
-    - `cd big-brother-bot`
- - install python requirements:
-    - `pip install -r requirements.txt`
-    - `pip install -r build-requirements.txt`
- - update `installer/innosetup/build.yaml` config file with the path to your InnoSetup compiler.
- - build the frozen application:
-    - `python setup.py egg_info`
-    - `python setup.py build_exe`
+Pull requests that change the packaging run the same builds and tests, without publishing anything; the built
+files can be downloaded from the workflow run's artifacts.

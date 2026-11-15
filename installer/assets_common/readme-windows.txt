@@ -1,35 +1,45 @@
 ================================================================================
-This is the readme file for the windows binary releases.
-The License of this software is in license.txt
+BigBrotherBot (B3) for Windows
+The license of this software is in license.txt
+Source, issues and releases: https://github.com/FMSMITH91/big-brother-bot
 ================================================================================
-More information about this tool can be found on http://www.bigbrotherbot.net
-================================================================================
 
-Congratulations on the excellent decision you made by installing BigBrotherBot! 
-The leading ingame (auto) administration tool for gameservers.
+B3 is an in-game administration bot for game servers: commands, admin levels,
+warnings, bans, statistics and more, through plugins.
 
-This program also depends on a MySQL database to store it's data. Make sure
-you are able to connect to such a database before you start using B3.
-More info about this here: http://wiki.bigbrotherbot.net/installation:start
+This installer contains everything B3 needs: its own copy of Python (in the
+"python" folder) with B3 and its libraries installed. You do not need to
+install Python.
 
-NOTE for upgraders:
-Are you using the win32 installer version? In that case we've made a backup of 
-your BigBrotherBot/conf folder and your plugin config files(if they previously
-existed) in BigBrotherBot/conf/backup. You should always make backups of your 
-configs prior to installing a new version of B3 on top of your old version.  
+FIRST RUN
+---------
+1. Edit your configuration file:
+      %USERPROFILE%\.b3\b3.ini
+   (Start menu > BigBrotherBot > Edit B3 configuration). The installer created
+   it from the sample conf\b3.distribution.ini if you did not have one yet.
+   Set at least: the game parser, the game server address, RCON password and
+   game log file, and the database. The comments in the file explain each
+   setting.
+2. Database: B3 stores players, admins, warnings and bans in a database.
+   SQLite needs nothing installed (database: sqlite://C:/path/to/b3.db).
+   MySQL/MariaDB and PostgreSQL are supported too.
+3. Start B3: Start menu > BigBrotherBot > Run B3 (or run b3.cmd).
+   Type !iamgod in the game chat to become super admin (works once, on a
+   fresh database).
 
-================================================================================
-IMPORTANT: The windows binary relies on these systemfiles to work:
+FOLDERS
+-------
+  b3.cmd       starts B3 (b3.cmd --help lists the options)
+  conf\        sample configuration files for B3 and every plugin: copy the
+               ones you need next to your b3.ini before editing them
+  extplugins\  put third party plugins here
+  python\      the Python runtime used by B3 (do not edit)
 
-   OLEAUT32.dll - C:\Windows\system32\OLEAUT32.dll
-   USER32.dll - C:\Windows\system32\USER32.dll
-   SHELL32.dll - C:\Windows\system32\SHELL32.dll
-   KERNEL32.dll - C:\Windows\system32\KERNEL32.dll
-   WSOCK32.dll - C:\Windows\system32\WSOCK32.dll
-   ADVAPI32.dll - C:\Windows\system32\ADVAPI32.dll
-   WS2_32.dll - C:\Windows\system32\WS2_32.dll
-   ole32.dll - C:\Windows\system32\ole32.dll
+B3 writes its log files and its SQLite database (if you use one) in
+%USERPROFILE%\.b3 unless your b3.ini says otherwise.
 
-If you have any errors indicating that you miss some of these files you'll have 
-to collect them yourself. We are not allowed to distribute them.
+UPGRADING
+---------
+Install the new version over the old one. Your b3.ini and everything else in
+%USERPROFILE%\.b3 is kept.
 ================================================================================
