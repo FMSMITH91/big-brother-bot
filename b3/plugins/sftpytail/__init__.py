@@ -382,7 +382,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
             except KeyError:
                 continue
             if keys:
-                hostkeytype = list(keys.keys())[0]
+                hostkeytype = next(iter(keys))
                 self.info('using host key of type %s found for %s' % (hostkeytype, name))
                 return keys[hostkeytype]
         return None
