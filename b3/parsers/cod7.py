@@ -48,7 +48,10 @@ class Cod7Parser(b3.parsers.cod5.Cod5Parser):
     OutputClass = Cod7Rcon
 
     _guidLength = 5
-    _usePreMatchLogic = True
+    # Pre-match logic (ignore kills/damage between a map load and the start of the match) is opt-in with
+    # 'use_prematch_logic: yes' in the [server] section. It was dormant from 2014 to 2026 (B3 never called this
+    # parser's parse_line()), and when the [3arc]democlient never joins it ignores every kill until the map ends.
+    _usePreMatchLogic = False
     _preMatch = False
     _elFound = True
     _igBlockFound = False
@@ -233,8 +236,9 @@ class Cod7Parser(b3.parsers.cod5.Cod5Parser):
             self.write('setadmindvar g_logsync %s' % self._logSync)
             self.write('setadmindvar g_logTimeStampInSeconds 0')
 
-        else:
-            # Initgame after ExitLevel
+        elif func == 'OnInitgame':
+            # InitGame after ExitLevel (map change): the ExitLevel/ShutdownGame flags have been used. This used to be
+            # a plain 'else', which cleared both flags on every line, so the round change test above never matched
             self._elFound = False
             self._sgFound = False
 

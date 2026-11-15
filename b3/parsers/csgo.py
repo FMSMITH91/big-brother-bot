@@ -38,6 +38,7 @@ from b3.functions import time2minutes
 from b3.functions import getStuffSoundingLike
 from b3.parser import Parser
 from b3.parsers.source.rcon import Rcon
+from b3.parsers.source.rcon import cvar_command
 from b3.parsers.source.rcon import quote_rcon_arg
 from b3.parsers.source.rcon import sanitize_rcon_arg
 
@@ -917,7 +918,7 @@ class CsgoParser(Parser):
         """
         if re.match('^[a-z0-9_.]+$', cvarName, re.I):
             self.debug('Set cvar %s = [%s]', cvarName, value)
-            self.write(self.getCommand('set', name=cvarName, value=value))
+            self.output.write(cvar_command(cvarName, value))
         else:
             self.error('%s is not a valid cvar name', cvarName)
 

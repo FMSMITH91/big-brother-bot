@@ -7,4 +7,4 @@ CREATE TABLE IF NOT EXISTS `%s` (
   PRIMARY KEY (`id`),
   KEY `target_id` (`target_id`),
   KEY `killer_id` (`killer_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

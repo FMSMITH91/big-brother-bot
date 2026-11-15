@@ -5,4 +5,4 @@ name VARCHAR(32) NOT NULL,
 PRIMARY KEY (id),
 KEY client_id (client_id),
 UNIQUE KEY name (name)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

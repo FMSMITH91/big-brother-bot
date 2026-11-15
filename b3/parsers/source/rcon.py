@@ -74,6 +74,15 @@ def quote_rcon_arg(value):
     return '"%s"' % sanitize_rcon_arg(value)
 
 
+def cvar_command(name, value):
+    """
+    Return the rcon command setting a cvar on a Source engine server: "<name> <quoted value>".
+    (There is no 'set' command template in the Source parsers: getCommand('set') returned None and setCvar used to
+    send nothing at all.)
+    """
+    return '%s %s' % (name, quote_rcon_arg(value))
+
+
 ########################################################################################################################
 ##                                                                                                                    ##
 ##  PATCH SourceRcon.receive CLASS TO DETECT BAD RCON PASSWORD                                                        ##

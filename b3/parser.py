@@ -194,6 +194,8 @@ class Parser(object):
         :param conf: The B3 configuration file
         :param options: command line options
         """
+        # per-instance copies of the class-level containers (event maps, handlers, message cache...)
+        b3.functions.own_class_containers(self)
         self._timeStart = self.time()
 
         # store in the parser whether we are running B3 in autorestart mode so

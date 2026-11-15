@@ -10,4 +10,4 @@ CREATE TABLE IF NOT EXISTS `%s` (
   PRIMARY KEY (`id`),
   KEY `weapon_id` (`weapon_id`),
   KEY `player_id` (`player_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
