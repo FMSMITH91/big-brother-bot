@@ -94,5 +94,54 @@ class Test_WhereClause(unittest.TestCase):
         self.assertEqual('', buf.getvalue())
 
 
+class Test_bind_parameters(unittest.TestCase):
+
+    def setUp(self):
+        self._backslash_escapes = QueryBuilder.backslash_escapes
+        QueryBuilder.backslash_escapes = False
+
+    def tearDown(self):
+        QueryBuilder.backslash_escapes = self._backslash_escapes
+
+    def test_values_are_kept_out_of_the_sql_text(self):
+        evil = "' OR 1=1 --"
+        query = QueryBuilder().SelectQuery('*', 'clients', {'name': evil}, 'id', 1)
+        self.assertEqual("SELECT * FROM `clients` WHERE `name` = %s ORDER BY id LIMIT 1", query.text)
+        self.assertEqual((evil,), query.params)
+        # the string value is still the old, escaped form for code that logs or concatenates queries
+        self.assertEqual("SELECT * FROM `clients` WHERE `name` = ''' OR 1=1 --' ORDER BY id LIMIT 1", str(query))
+
+    def test_insert_update_and_like(self):
+        qb = QueryBuilder()
+        insert = qb.InsertQuery({'name': "O'Neil", 'connections': 3, 'greeting': None}, 'clients')
+        self.assertEqual("INSERT INTO clients(`name`, `connections`, `greeting`) VALUES (%s, %s, %s)", insert.text)
+        self.assertEqual(("O'Neil", 3, 'None'), insert.params)
+        update = qb.UpdateQuery({'name': 'x'}, 'clients', {'id': 5})
+        self.assertEqual("UPDATE clients SET `name` = %s WHERE `id` = %s", update.text)
+        self.assertEqual(('x', 5), update.params)
+        like = qb.FieldClause('%name%', 'joe')
+        self.assertEqual(("`name` LIKE %s", ('%joe%',)), (like.text, like.params))
+        in_clause = qb.FieldClause('id', [1, 2])
+        self.assertEqual(("`id` IN(%s,%s)", (1, 2)), (in_clause.text, in_clause.params))
+
+    def test_concatenation_keeps_parameters(self):
+        where = QueryBuilder().WhereClause({'type': 'Ban'})
+        where += ' AND time_expire > 100'
+        query = "SELECT COUNT(id) total FROM penalties WHERE " + where
+        self.assertEqual("SELECT COUNT(id) total FROM penalties WHERE `type` = %s AND time_expire > 100", query.text)
+        self.assertEqual(('Ban',), query.params)
+
+    def test_literal_percent_in_hand_written_fragments(self):
+        query = QueryBuilder().SelectQuery('*', 'clients', {'name': 'joe'}, "FIELD(name, '50%')")
+        self.assertIn("'50%%'", query.text)
+        self.assertIn("'50%'", str(query))
+
+    def test_sqlite_executes_bound_query(self):
+        db = sqlite3.connect(':memory:')
+        db.execute("CREATE TABLE clients (name TEXT)")
+        db.execute("INSERT INTO clients VALUES ('joe')")
+        query = QueryBuilder(db).SelectQuery('*', 'clients', {'name': "joe' OR '1'='1"})
+        self.assertEqual([], db.execute(query.text.replace('%s', '?'), query.params).fetchall())
+
 if __name__ == '__main__':
     unittest.main()

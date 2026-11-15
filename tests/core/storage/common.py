@@ -547,3 +547,42 @@ class StorageAPITest(object):
     def test_truncateTables_invalid_table_name(self):
         self.assertRaises(KeyError, self.storage.truncateTable, 'invalid_table')
         self.assertRaises(KeyError, self.storage.truncateTable, ['invalid_table1', ['invalid_table2']])
+    def test_querybuilder_values_are_bound(self):
+        # GIVEN a value that would change the meaning of an SQL statement written into its text
+        evil = "x' OR '1'='1 \\ %"
+        self.storage.setClient(Client(guid='guid1', name='joe'))
+        executed = []
+        real_query = self.storage._query
+
+        def spy(query, bindata=None):
+            executed.append((query, bindata))
+            return real_query(query=query, bindata=bindata)
+
+        # WHEN the storage runs a query built by the QueryBuilder
+        from unittest.mock import patch
+        with patch.object(self.storage, '_query', side_effect=spy):
+            clients = self.storage.getClientsMatching({'name': evil})
+        # THEN the value is sent as a bind parameter, not inside the SQL text
+        self.assertEqual([], clients)
+        query, bindata = executed[-1]
+        self.assertEqual((evil,), tuple(bindata))
+        self.assertNotIn("'1'", query)
+
+    def test_bound_values_round_trip(self):
+        name = "O'Neil \"the\" \\ 100% _hacker_ ;--"
+        client_id = self.storage.setClient(Client(guid='guid1', name=name))
+        self.assertEqual(name, self.storage.getClient(Client(id=client_id)).name)
+        self.assertEqual([client_id], [c.id for c in self.storage.getClientsMatching({'name': name})])
+
+    def test_named_bind_parameters(self):
+        # the chatlogger plugin writes %(name)s placeholders: they must work on every storage
+        self.storage.setClient(Client(guid='guid1', name='joe'))
+        cursor = self.storage.query("SELECT name FROM clients WHERE guid = %(guid)s", {'guid': 'guid1'})
+        self.assertEqual('joe', cursor.getValue('name'))
+        cursor.close()
+
+    def test_literal_percent_next_to_bind_parameters(self):
+        self.storage.setClient(Client(guid='guid1', name='100%'))
+        cursor = self.storage.query("SELECT name FROM clients WHERE name = '100%%' AND guid = %s", ('guid1',))
+        self.assertEqual('100%', cursor.getValue('name'))
+        cursor.close()

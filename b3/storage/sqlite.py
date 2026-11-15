@@ -24,6 +24,7 @@
 
 import b3
 import os
+import re
 
 from b3.querybuilder import QueryBuilder
 from b3.storage.common import DatabaseStorage
@@ -48,6 +49,16 @@ class SqliteStorage(DatabaseStorage):
     #   CONNECTION INITIALIZATION/TERMINATION/RETRIEVAL                                                                #
     #                                                                                                                  #
     ####################################################################################################################
+
+    def _placeholders(self, query):
+        """
+        SQLite uses ? and :name placeholders: translate the %s and %(name)s ones (and %% back to %).
+        """
+        def placeholder(m):
+            if m.group(1) == '%':
+                return '%'
+            return ':' + m.group(2) if m.group(2) else '?'
+        return re.sub(r'%(%|s|\((\w+)\)s)', placeholder, query)
 
     def connect(self):
         """
@@ -135,12 +146,12 @@ class SqliteStorage(DatabaseStorage):
                 if not v in current_tables:
                     raise KeyError("could not find table '%s' in the database" % v)
                 self.query("DELETE FROM %s;" % v)
-                self.query("DELETE FROM sqlite_sequence WHERE name='%s';" % v)
+                self.query("DELETE FROM sqlite_sequence WHERE name = %s;", (v,))
         else:
             if not table in current_tables:
                  raise KeyError("could not find table '%s' in the database" % table)
             self.query("DELETE FROM %s;" % table)
-            self.query("DELETE FROM sqlite_sequence WHERE name='%s';" % table)
+            self.query("DELETE FROM sqlite_sequence WHERE name = %s;", (table,))
 
     ####################################################################################################################
     #                                                                                                                  #

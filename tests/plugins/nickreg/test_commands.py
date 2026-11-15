@@ -22,6 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
+from unittest.mock import patch
 from tests.plugins.nickreg import NickregTestCase
 
 
@@ -125,3 +126,21 @@ class Test_commands(NickregTestCase):
         self.admin.says('!deletenick 1')
         # THEN
         self.assertListEqual(['You can\'t delete SeniorAdmin registered nicknames!'], self.admin.message_history)
+    def test_name_with_like_wildcards_is_matched_literally(self):
+        # GIVEN a registered nickname
+        self.admin.says('!registernick')
+        # WHEN a player named '%' joins (it used to be a LIKE pattern matching every registered nickname)
+        self.guest.name = '%'
+        with patch.object(self.p, 'warn_client_for_nick_steal') as warn:
+            self.p.check_client_for_nick_steal(self.guest)
+        # THEN he is not taken for the owner's impostor
+        warn.assert_not_called()
+
+    def test_name_with_quotes_can_be_registered(self):
+        self.admin.name = "O'Neil \\"
+        self.admin.clearMessageHistory()
+        self.admin.says('!registernick')
+        self.assertListEqual(['Your nick is now registered'], self.admin.message_history)
+        self.admin.clearMessageHistory()
+        self.admin.says('!registernick')
+        self.assertListEqual(["Nick O'Neil \\ is already registered"], self.admin.message_history)

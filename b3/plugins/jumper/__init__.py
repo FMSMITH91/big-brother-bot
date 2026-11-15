@@ -37,7 +37,7 @@ import re
 from b3.functions import getCmd
 from b3.functions import getStuffSoundingLike
 from b3.functions import right_cut
-from b3.querybuilder import escape_string
+from b3.querybuilder import SQL
 from configparser import NoOptionError
 from threading import Timer
 
@@ -49,14 +49,16 @@ from threading import Timer
 
 def _sql(template, args):
     """
-    Fill an SQL template from JumperPlugin.sql, escaping every string argument so that player-supplied
-    values (way names, map names, demo names) cannot break out of the quoted literals.
-    :param template: The SQL template
+    Turn an SQL template from JumperPlugin.sql into a statement with bind parameters, so that player-supplied
+    values (way names, map names, demo names) never go into the SQL text.
+    :param template: The SQL template ('%s' and '%d' mark the values)
     :param args: A single argument or a tuple of arguments
     """
     if not isinstance(args, tuple):
         args = (args,)
-    return template % tuple(escape_string(a) if isinstance(a, str) else a for a in args)
+    placeholders = re.findall(r"'?%([sd])'?", template)
+    values = tuple(int(a) if kind == 'd' else a for kind, a in zip(placeholders, args))
+    return SQL(re.sub(r"'?%[sd]'?", '%s', template), values)
 
 
 class JumpRun(object):
@@ -253,7 +255,7 @@ class JumpRun(object):
         """
         Insert the jumprun in the storage.
         """
-        demo = self.demo.replace("'", "\'") if self.demo else None
+        demo = self.demo or None
         self.p.console.storage.query(_sql(self.p.sql['jr7'], (self.client.id, self.mapname, self.way_id, self.way_time,
                                                           self.time_add, self.time_edit, demo)))
         self.p.debug('stored new jumprun : %r' % self)
@@ -262,7 +264,7 @@ class JumpRun(object):
         """
         Update the jumprun in the storage.
         """
-        demo = self.demo.replace("'", "\'") if self.demo else None
+        demo = self.demo or None
         self.p.console.storage.query(_sql(self.p.sql['jr8'], (self.way_time, self.time_add, demo,
                                                           self.client.id, self.mapname, self.way_id)))
         self.p.debug('updated jumprun : %r' % self)
@@ -638,7 +640,7 @@ class JumperPlugin(b3.plugin.Plugin):
         """
         try:
             self.debug('contacting http://api.urtjumpers.com to retrieve maps data...')
-            rt = requests.get('http://api.urtjumpers.com/?key=B3urtjumpersplugin&liste=maps&format=json', timeout=self._timeout).json()
+            rt = requests.get('https://api.urtjumpers.com/?key=B3urtjumpersplugin&liste=maps&format=json', timeout=self._timeout).json()
         except Exception as e:
             self.warning('could not connect to http://api.urtjumpers.com: %s' % e)
             return {}

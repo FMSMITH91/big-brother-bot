@@ -36,7 +36,6 @@ import time
 
 from b3 import functions
 from b3.functions import sanitizeMe
-from b3.querybuilder import escape_string
 from configparser import NoOptionError
 from ftplib import FTP
 from xml.dom.minidom import Document
@@ -411,23 +410,13 @@ class StatusPlugin(b3.plugin.Plugin):
                 client.setAttribute("State", str(c.state))
 
                 if self._enableDBclientSaving:
-                    builder_key = ""
-                    builder_value = ""
-                    # get our attributes
-                    for k, v in list(client.attributes.items()):
-                        # build the qrystring
-                        builder_key = "%s%s," % (builder_key, k)
-                        if isinstance(v, str):
-                            if "'" in v:
-                                v = "%s" % v.replace("'", "\\'")
-                        builder_value = "%s'%s'," % (builder_value, v)
-
-                    # cut last ,
-                    builder_key = builder_key[:-1]
-                    builder_value = builder_value[:-1]
-
+                    # column names are the XML attribute names set above; the values (player names...) are bound
+                    attributes = list(client.attributes.items())
+                    columns = ','.join(k for k, v in attributes)
+                    placeholders = ','.join(['%s'] * len(attributes))
                     try:
-                        self.console.storage.query("""INSERT INTO %s (%s) VALUES (%s);""" % (self._tables['cvars'], builder_key, builder_value))
+                        self.console.storage.query("""INSERT INTO %s (%s) VALUES (%s);""" % (
+                            self._tables['cvars'], columns, placeholders), tuple(str(v) for k, v in attributes))
                     except Exception:
                         # exception is already logged, just don't raise it again
                         pass
@@ -478,18 +467,18 @@ class StatusPlugin(b3.plugin.Plugin):
         Store server information in the database.
         """
         if self._enableDBsvarSaving:
-            k = escape_string(str(k))
-            v = escape_string(str(v)[:255])  # length of the database varchar field
+            k = str(k)
+            v = str(v)[:255]  # length of the database varchar field
+            table = self._tables['svars']
             try:
                 if self.console.storage.dsnDict['protocol'] in ('postgresql', 'sqlite'):
                     # portable "upsert" (ON DUPLICATE KEY UPDATE below is MySQL-only)
-                    self.console.storage.query("""UPDATE %s SET value='%s' WHERE name='%s';""" % (self._tables['svars'], v, k))
-                    self.console.storage.query("""INSERT INTO %s (name, value) SELECT '%s', '%s' WHERE NOT EXISTS (
-                                                  SELECT 1 FROM %s WHERE name='%s');""" % (self._tables['svars'], k, v,
-                                                                                           self._tables['svars'], k))
+                    self.console.storage.query("UPDATE %s SET value = %%s WHERE name = %%s;" % table, (v, k))
+                    self.console.storage.query("INSERT INTO %s (name, value) SELECT %%s, %%s WHERE NOT EXISTS ("
+                                               "SELECT 1 FROM %s WHERE name = %%s);" % (table, table), (k, v, k))
                 else:
-                    self.console.storage.query("""INSERT INTO %s (name, value) VALUES ('%s','%s') ON DUPLICATE KEY
-                                                  UPDATE value = VALUES(value);""" % (self._tables['svars'], k, v))
+                    self.console.storage.query("INSERT INTO %s (name, value) VALUES (%%s, %%s) ON DUPLICATE KEY "
+                                               "UPDATE value = VALUES(value);" % table, (k, v))
             except Exception:
                 # exception is already logged, just don't raise it again
                 pass

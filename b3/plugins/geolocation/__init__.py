@@ -23,7 +23,7 @@
 # ################################################################### #
 
 __author__ = 'Fenix'
-__version__ = '1.5'
+__version__ = '1.6'
 
 import b3
 import b3.clients
@@ -32,10 +32,9 @@ import b3.events
 import threading
 
 from .exceptions import GeolocalizationError
-from .geolocators import FreeGeoIpGeolocator
-from .geolocators import IpApiGeolocator
+from .geolocators import IpApiCoGeolocator
+from .geolocators import IpWhoIsGeolocator
 from .geolocators import MaxMindGeolocator
-from .geolocators import TelizeGeolocator
 
 
 class GeolocationPlugin(b3.plugin.Plugin):
@@ -49,7 +48,9 @@ class GeolocationPlugin(b3.plugin.Plugin):
         b3.plugin.Plugin.__init__(self, console, config)
         # create geolocators instances
         self.info('creating geolocators object instances...')
-        self._geolocators = [IpApiGeolocator(), TelizeGeolocator(), FreeGeoIpGeolocator()]
+        # online services first (they know the city, region and ISP), over HTTPS only: player IP addresses must
+        # not cross the internet in clear text. The bundled MaxMind database (country only) is the offline fallback.
+        self._geolocators = [IpWhoIsGeolocator(), IpApiCoGeolocator()]
         try:
             # append this one separately since db may be missing
             self._geolocators.append(MaxMindGeolocator())

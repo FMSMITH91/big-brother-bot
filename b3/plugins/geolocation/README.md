@@ -7,10 +7,14 @@ A [BigBrotherBot][B3] plugin which introduces geolocation capabilities. This plu
 since it doesn't provide commands or visual reaction to B3 events. The plugin intercepts new clients connection and
 retrieve geolocation data using multiple data sources:
 
-* [IP api](http://ip-api.com/)
-* [Telize](http://www.telize.com/)
-* [Free GeoIP](https://freegeoip.net/)
-* [MaxMind GeoIP](http://dev.maxmind.com/geoip/legacy/install/country/)
+* [ipwho.is](https://ipwhois.io/documentation) (HTTPS, no API key, 1000 lookups per day)
+* [ipapi.co](https://ipapi.co/api/) (HTTPS, no API key, 1000 lookups per day)
+* [MaxMind GeoIP](https://dev.maxmind.com/geoip/legacy/install/country/) (bundled offline database, country only: used
+  when both online services fail)
+
+The online services are only ever queried over HTTPS, so player IP addresses do not cross the internet in clear text.
+They still receive the IP address of every player who connects: remove them from the list in `GeolocationPlugin` if
+that is not acceptable for your server, and the plugin will use the offline database alone.
 
 For plugin developers
 ---------------------

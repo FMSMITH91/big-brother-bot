@@ -36,6 +36,7 @@ from b3.clients import ClientTempBan
 from b3.clients import ClientWarning
 from b3.clients import Penalty
 from b3.querybuilder import QueryBuilder
+from b3.querybuilder import SQL
 from b3.storage import Storage
 from b3.storage.cursor import Cursor as DBCursor
 from contextlib import contextmanager
@@ -510,7 +511,7 @@ class DatabaseStorage(Storage):
         """
         where = QueryBuilder(self.db).WhereClause({'type': type, 'client_id': client.id, 'inactive': 0})
         where += ' AND (time_expire = -1 OR time_expire > %s)' % int(time())
-        cursor = self.query("""SELECT COUNT(id) total FROM penalties WHERE %s""" % where)
+        cursor = self.query("SELECT COUNT(id) total FROM penalties WHERE " + where)
         value = int(cursor.getValue('total', 0))
         cursor.close()
         return value
@@ -612,6 +613,13 @@ class DatabaseStorage(Storage):
     #                                                                                                                  #
     ####################################################################################################################
 
+    def _placeholders(self, query):
+        """
+        Adapt the %s placeholders of a query with bind parameters to the driver's parameter style.
+        :param query: The query (placeholders written %s, as for MySQL and PostgreSQL)
+        """
+        return query
+
     def _query(self, query, bindata=None):
         """
         Execute a query on the storage layer (internal method).
@@ -643,9 +651,15 @@ class DatabaseStorage(Storage):
         if not connection:
             raise Exception('lost connection with the storage layer during query')
 
+        if bindata is None and isinstance(query, SQL) and query.params and '%%' not in query.text:
+            # a statement built by the QueryBuilder: send the values as bind parameters
+            # (statements with a literal % keep the old inlined, escaped form: drivers disagree on how to write it)
+            query, bindata = query.text, query.params
+
         try:
             # always return a cursor instance (also when EOF is reached)
-            return self._query(query=query, bindata=bindata)
+            return self._query(query=self._placeholders(query) if bindata is not None else str(query),
+                               bindata=bindata)
         except Exception as e:
             # log so we can inspect the issue and raise again
             self.console.error('Query failed [%s] %r: %s', query, bindata, e)

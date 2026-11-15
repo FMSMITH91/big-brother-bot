@@ -32,7 +32,6 @@ import os
 import re
 
 from b3.functions import getCmd
-from b3.querybuilder import escape_string
 
 
 class CallvotePlugin(b3.plugin.Plugin):
@@ -55,7 +54,7 @@ class CallvotePlugin(b3.plugin.Plugin):
     }
 
     sql = {
-        'q1': """INSERT INTO callvote VALUES (NULL, '%s', '%s', '%s', '%d', '%d', '%d', '%d')""",
+        'q1': """INSERT INTO callvote VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)""",
         'q2': """SELECT c1.name, c2.* FROM callvote AS c2 INNER JOIN clients AS c1 ON c1.id = c2.client_id ORDER BY time_add DESC LIMIT 0, 1""",
     }
 
@@ -214,12 +213,11 @@ class CallvotePlugin(b3.plugin.Plugin):
         self.callvote['max_num'] = len(self.console.clients.getList())
 
         # save the callvote in the storage
-        # type and args come from the player's vote command: escape them before putting them in the query
-        self.console.storage.query(self.sql['q1'] % (self.callvote['client'].id,
-                                                     escape_string(self.callvote['type']),
-                                                     escape_string(self.callvote['args'] if self.callvote['args'] else None),
-                                                     self.callvote['max_num'], self.callvote['num_yes'],
-                                                     self.callvote['num_no'], self.callvote['time']))
+        # type and args come from the player's vote command: they are bound, never written into the query
+        self.console.storage.query(self.sql['q1'], (self.callvote['client'].id, self.callvote['type'],
+                                                    self.callvote['args'] or None, int(self.callvote['max_num']),
+                                                    int(self.callvote['num_yes']), int(self.callvote['num_no']),
+                                                    int(self.callvote['time'])))
 
     ####################################################################################################################
     #                                                                                                                  #

@@ -25,6 +25,7 @@
 import sys
 import time
 
+from b3.plugins.geolocation.geolocators import MaxMindGeolocator
 from b3.plugins.geolocation.location import Location
 from tests.plugins.geolocation import GeolocationTestCase
 
@@ -55,9 +56,7 @@ class Test_events(GeolocationTestCase):
 
     def test_event_client_geolocation_success_maxmind(self):
         # GIVEN
-        self.p._geolocators.pop(0)
-        self.p._geolocators.pop(0)
-        self.p._geolocators.pop(0)
+        self.p._geolocators = [g for g in self.p._geolocators if isinstance(g, MaxMindGeolocator)]
         self.mike.ip = '8.8.8.8'
         # WHEN
         self.mike.connects("1")
@@ -70,9 +69,7 @@ class Test_events(GeolocationTestCase):
 
     def test_event_client_geolocation_success_maxmind_using_event_client_update(self):
         # GIVEN
-        self.p._geolocators.pop(0)
-        self.p._geolocators.pop(0)
-        self.p._geolocators.pop(0)
+        self.p._geolocators = [g for g in self.p._geolocators if isinstance(g, MaxMindGeolocator)]
         self.mike.ip = ''
         self.mike.connects("1")
         # WHEN

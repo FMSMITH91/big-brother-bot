@@ -29,7 +29,6 @@ import b3
 import b3.config
 import b3.cron
 import b3.functions
-from b3.querybuilder import escape_string
 import b3.plugin
 import os
 import _thread
@@ -142,11 +141,10 @@ class NickregPlugin(b3.plugin.Plugin):
 
     def _process_name(self, name):
         """
-        Normalize the given name by removing color codes, leading/trailing spaces,
-        escaping single quotes and making it lowercase.
+        Normalize the given name by removing color codes and leading/trailing spaces and making it lowercase.
         :param name: the name to normalize
         """
-        return escape_string(self.console.stripColors(name).lower())
+        return self.console.stripColors(name).lower()
 
     def warn_client_for_nick_steal(self, client):
         """
@@ -163,7 +161,7 @@ class NickregPlugin(b3.plugin.Plugin):
         if client and client.id and client.pbid not in ('WORLD', 'Server'):
 
             self.debug('checking if client @%s is using a registered nickname (%s)', client.id, client.name)
-            cursor = self.console.storage.query("""SELECT * FROM nicks WHERE name LIKE '%s'""" % self._process_name(client.name))
+            cursor = self.console.storage.query("SELECT * FROM nicks WHERE name = %s", (self._process_name(client.name),))
             if cursor.EOF:
                 self.debug('nickname "%s" does not seem to be registered: client @%s is legit', client.name, client.id)
             else:
@@ -199,7 +197,7 @@ class NickregPlugin(b3.plugin.Plugin):
             client.message("^7You can't see ^1%s ^7registered nicknames!" % sclient.name)
             return
 
-        cursor = self.console.storage.query("""SELECT * FROM nicks WHERE client_id = %s""" % sclient.id)
+        cursor = self.console.storage.query("SELECT * FROM nicks WHERE client_id = %s", (sclient.id,))
         if cursor.EOF:
             cmd.sayLoudOrPM(client, '^7%s ^7has no registered nickname' % sclient.name)
             cursor.close()
@@ -216,14 +214,14 @@ class NickregPlugin(b3.plugin.Plugin):
         """
         - register current name as yours
         """
-        cursor = self.console.storage.query("""SELECT * FROM nicks WHERE name LIKE '%s'""" % self._process_name(client.name))
+        cursor = self.console.storage.query("SELECT * FROM nicks WHERE name = %s", (self._process_name(client.name),))
         if not cursor.EOF:
             client.message('^7Nick ^1%s ^7is already registered' % client.name)
             cursor.close()
             return
 
         cursor.close()
-        cursor = self.console.storage.query("""SELECT COUNT(*) AS num_registered FROM nicks WHERE client_id = %s""" % client.id)
+        cursor = self.console.storage.query("SELECT COUNT(*) AS num_registered FROM nicks WHERE client_id = %s", (client.id,))
         num_registered = cursor.getValue('num_registered', 0)
         if num_registered >= self.max_nicks:
             client.message('^7You already have ^1%s ^7registered nicknames' % self.max_nicks)
@@ -231,7 +229,7 @@ class NickregPlugin(b3.plugin.Plugin):
             return
 
         cursor.close()
-        self.console.storage.query("""INSERT INTO nicks (client_id, name) VALUES ('%s', '%s')""" % (client.id, self._process_name(client.name)))
+        self.console.storage.query("INSERT INTO nicks (client_id, name) VALUES (%s, %s)", (client.id, self._process_name(client.name)))
         client.message('^7Your nick is now registered')
 
     def cmd_delnick(self,  data,  client,  cmd=None):
@@ -246,7 +244,7 @@ class NickregPlugin(b3.plugin.Plugin):
             client.message('^7Invalid data, try !help deletenick')
             return
 
-        cursor = self.console.storage.query("""SELECT * FROM nicks WHERE id = %s""" % data)
+        cursor = self.console.storage.query("SELECT * FROM nicks WHERE id = %s", (int(data),))
         if cursor.EOF:
             client.message('^7Invalid nick id supplied: ^1%s' % data)
             cursor.close()
@@ -262,5 +260,5 @@ class NickregPlugin(b3.plugin.Plugin):
                 return
 
         # proceed with the removal
-        self.console.storage.query("""DELETE FROM nicks WHERE id = %s""" % data)
+        self.console.storage.query("DELETE FROM nicks WHERE id = %s", (int(data),))
         client.message("^7Deleted nick: ^1%s" % row['name'])
