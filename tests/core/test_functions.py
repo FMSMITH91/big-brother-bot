@@ -330,3 +330,31 @@ class Test_own_class_containers(unittest.TestCase):
         one._table['k'] = 'v'
         self.assertEqual({}, two._table)
         self.assertEqual({}, TablePlugin._table)
+
+
+class Test_password_hashing(unittest.TestCase):
+
+    def test_hash_and_verify(self):
+        stored = functions.hash_password('s3cr3t \u00e9')
+        self.assertTrue(stored.startswith('pbkdf2_sha256$600000$'))
+        self.assertTrue(functions.verify_password('s3cr3t \u00e9', stored))
+        self.assertFalse(functions.verify_password('s3cr3t', stored))
+        self.assertNotEqual(stored, functions.hash_password('s3cr3t \u00e9'))  # random salt
+        self.assertFalse(functions.password_needs_rehash(stored))
+
+    def test_legacy_md5(self):
+        legacy = '9f06f2538cdbb40bce9973f60506de09'  # md5('f00')
+        self.assertTrue(functions.verify_password('f00', legacy))
+        self.assertFalse(functions.verify_password('bar', legacy))
+        self.assertTrue(functions.password_needs_rehash(legacy))
+
+    def test_layered_md5(self):
+        layered = functions.layer_legacy_md5_hash('9f06f2538cdbb40bce9973f60506de09')
+        self.assertNotIn('9f06f2538cdbb40bce9973f60506de09', layered)
+        self.assertTrue(functions.verify_password('f00', layered))
+        self.assertFalse(functions.verify_password('bar', layered))
+        self.assertTrue(functions.password_needs_rehash(layered))
+
+    def test_garbage(self):
+        for stored in ('', None, 'pbkdf2_sha256$x$y', 'plaintext'):
+            self.assertFalse(functions.verify_password('f00', stored))

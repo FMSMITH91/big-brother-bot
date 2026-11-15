@@ -26,6 +26,11 @@ import b3.events
 import b3.plugin
 
 from b3.functions import hash_password
+from b3.querybuilder import escape_string
+from b3.functions import is_legacy_md5_hash
+from b3.functions import layer_legacy_md5_hash
+from b3.functions import password_needs_rehash
+from b3.functions import verify_password
 from b3.clients import Client, Group
 from configparser import NoOptionError
 
@@ -59,6 +64,9 @@ class LoginPlugin(b3.plugin.Plugin):
         Plugin startup.
         """
         self._adminPlugin = self.console.getPlugin('admin')
+
+        # do not leave unsalted MD5 password hashes (stored by older B3 versions) in the database
+        self._layer_legacy_password_hashes()
 
         # register the events needed
         self.registerEvent('EVT_CLIENT_AUTH', self.onAuth)
@@ -110,6 +118,28 @@ class LoginPlugin(b3.plugin.Plugin):
     #                                                                                                                  #
     ####################################################################################################################
 
+    def _layer_legacy_password_hashes(self):
+        """
+        Wrap every legacy unsalted MD5 password hash in salted PBKDF2 (OWASP "layering"): the passwords keep
+        working, and each one is replaced with a direct salted hash the next time its owner logs in.
+        """
+        try:
+            legacy = []
+            cursor = self.console.storage.query("SELECT id, password FROM clients WHERE password IS NOT NULL")
+            while not cursor.EOF:
+                row = cursor.getRow()
+                if is_legacy_md5_hash(row['password']):
+                    legacy.append((int(row['id']), row['password']))
+                cursor.moveNext()
+            cursor.close()
+            for client_id, stored in legacy:
+                self.console.storage.query("UPDATE clients SET password = '%s' WHERE id = %d" % (
+                    escape_string(layer_legacy_md5_hash(stored)), client_id))
+            if legacy:
+                self.info('protected %s legacy MD5 password hash(es) with salted PBKDF2', len(legacy))
+        except Exception as e:
+            self.error('could not upgrade legacy password hashes: %s', e)
+
     def _get_client_from_db(self, client_id):
         """
         Retrieve a client from the storage layer.
@@ -136,14 +166,18 @@ class LoginPlugin(b3.plugin.Plugin):
             return
 
         if data:
-            digest = hash_password(data)
             client_from_db = self._get_client_from_db(client.id)
-            if digest == client_from_db.password:
+            if verify_password(data, client_from_db.password):
                 client.setvar(self, 'loggedin', 1)
                 if client.groupsRestricted:
                     client.liftGroupRestriction()
                 else:
                     client.groupBits = client.var(self, 'login_groupbits').value
+                if password_needs_rehash(client_from_db.password):
+                    # upgrade a legacy (unsalted MD5) hash now that we know the password
+                    client.password = hash_password(data)
+                    client.save()
+                    self.info('upgraded the password hash of client @%s', client.id)
                 client.message('You are successfully logged in')
             else:
                 client.message('^1***Access denied***^7')

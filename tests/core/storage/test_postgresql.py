@@ -107,6 +107,19 @@ class Test_PostgreSQL(B3TestCase, StorageAPITest):
         B3TestCase.tearDown(self)
         self.storage.shutdown()
 
+    def test_widen_password_column(self):
+        # GIVEN a clients.password column created by an older B3 version
+        self.storage.query('ALTER TABLE clients ALTER COLUMN password TYPE VARCHAR(32)')
+        # WHEN B3 connects
+        self.storage.widen_password_column()
+        # THEN a salted password hash fits in it
+        from b3.clients import Client
+        from b3.functions import hash_password, verify_password
+        stored = hash_password('f00')
+        client_id = self.storage.setClient(Client(name='joe', guid='joeguid', password=stored))
+        self.assertTrue(verify_password('f00', self.storage.getClient(Client(id=client_id)).password))
+
+
 if __name__ == '__main__':
     unittest.main()
 

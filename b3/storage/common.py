@@ -49,6 +49,12 @@ class DatabaseStorage(Storage):
     _reName = re.compile(r'([A-Z])')
     _reVar = re.compile(r'_([a-z])')
 
+    # length needed by clients.password for b3.functions.hash_password() hashes, and the queries a backend
+    # provides to read the current length and widen the column (None: nothing to migrate, e.g. SQLite)
+    PASSWORD_COLUMN_LENGTH = 255
+    _password_column_length_query = None
+    _widen_password_column_query = None
+
     db = None
     dsn = None
     dsnDict = None
@@ -573,6 +579,25 @@ class DatabaseStorage(Storage):
         :raise KeyError: If the table is not present in the database
         """
         raise NotImplementedError
+
+    def widen_password_column(self):
+        """
+        Make sure clients.password can hold salted password hashes: B3 used to create it as VARCHAR(32) (for
+        unsalted MD5 digests). Runs on every connection; does nothing once the column is wide enough.
+        """
+        if not self._password_column_length_query or not self.db:
+            return
+        try:
+            cursor = self.query(self._password_column_length_query)
+            length = None if cursor.EOF else cursor.getValue('len')
+            cursor.close()
+            if length is not None and int(length) < self.PASSWORD_COLUMN_LENGTH:
+                self.console.info('Widening clients.password from %s to %s characters (salted password hashes)...',
+                                  length, self.PASSWORD_COLUMN_LENGTH)
+                self.query(self._widen_password_column_query % self.PASSWORD_COLUMN_LENGTH)
+        except Exception as e:
+            self.console.error('Could not widen the clients.password column: login plugin passwords cannot be saved '
+                               'until it is VARCHAR(%s): %s', self.PASSWORD_COLUMN_LENGTH, e)
 
     def getTables(self):
         """
