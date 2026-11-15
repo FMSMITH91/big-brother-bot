@@ -93,6 +93,9 @@ class Test_wizard(unittest.TestCase):
         self.assertEqual('sqlite://' + os.path.join(self.home, 'b3.db').replace('\\', '/'), config.get('b3', 'database'))
         self.assertEqual('b3', config.get('b3', 'bot_name'))
         self.assertEqual('auto', config.get('b3', 'time_zone'))
+        # the log goes next to b3.ini (found in the 2.0.0b2 VM test: it went to the install folder)
+        self.assertEqual('@home/b3.log', config.get('b3', 'logfile'))
+        self.assertEqual(os.path.join(self.home, 'b3.log'), b3.getAbsolutePath('@home/b3.log'))
         self.assertEqual(('127.0.0.1', '28960', '127.0.0.1', 'p@ss%word', log, 'off'),
                          tuple(config.get('server', k) for k in ('public_ip', 'port', 'rcon_ip', 'rcon_password',
                                                                   'game_log', 'punkbuster')))
