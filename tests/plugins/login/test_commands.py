@@ -166,6 +166,21 @@ class Test_cmd_login(LoginTestCase):
         self.assertEqual(128, self.jack.groupBits)
         self.assertTrue(self.jack.isvar(self.p, 'loggedin'))
 
+    def test_first_password_chosen_with_login(self):
+        # GIVEN a super admin without password (live CoD1 test, 2026-11-15: demoted to reg, he could not run
+        # !setpassword and nobody else could set his password: he was locked out)
+        joe = FakeClient(self.console, name="Joe", guid="joeguid", groupBits=128)
+        joe.connects("1")
+        self.assertEqual(2, joe.groupBits)
+        # WHEN he chooses a password with !login
+        joe.clearMessageHistory()
+        joe.says("!login n3wpass")
+        # THEN it is saved (hashed) and he is logged in with his real groups
+        self.assertEqual(['Your password has been saved and you are logged in'], joe.message_history)
+        self.assertEqual(128, joe.groupBits)
+        self.assertTrue(joe.isvar(self.p, 'loggedin'))
+        self.assertTrue(verify_password('n3wpass', self.p._get_client_from_db(joe.id).password))
+
     def test_login_upgrades_legacy_md5_hash(self):
         # GIVEN jack's password stored by an older B3 version (unsalted MD5)
         self.jack.connects("0")
@@ -296,3 +311,23 @@ class Test_not_logged_in_demotion(LoginTestCase):
         self.assertEqual(128, self.jack.groupBits)
         self.assertEqual(100, self.jack.maxLevel)
         self.assertEqual(128, self.p._get_client_from_db(self.jack.id).groupBits)
+
+
+class Test_cmd_login_below_passwdlevel(LoginTestCase):
+
+    def setUp(self):
+        LoginTestCase.setUp(self)
+        self.init_plugin("""
+            [settings]
+            thresholdlevel: 20
+            passwdlevel: 80
+        """)
+
+    def test_first_password_not_chosen_by_player_below_passwdlevel(self):
+        joe = FakeClient(self.console, name="Joe", guid="joeguid", groupBits=32)
+        joe.connects("1")
+        joe.clearMessageHistory()
+        joe.says("!login n3wpass")
+        self.assertEqual(['***Access denied***'], joe.message_history)
+        self.assertEqual(2, joe.groupBits)
+        self.assertFalse(self.p._get_client_from_db(joe.id).password)

@@ -341,6 +341,7 @@ class XlrstatsPlugin(b3.plugin.Plugin):
         sql_main = os.path.join(b3.getAbsolutePath('@b3/plugins/xlrstats/sql'), self.console.storage.protocol)
         xlr_tables = {x: getattr(self, x) for x in dir(self) if x.endswith('_table')}
         current_tables = self.console.storage.getTables()
+        created_tables = set()
 
         for k, v in list(xlr_tables.items()):
             if v not in current_tables:
@@ -354,6 +355,7 @@ class XlrstatsPlugin(b3.plugin.Plugin):
                     except Exception as e:
                         self.error("could not create schema for database table '%s': %s", v, e)
                     else:
+                        created_tables.add(v)
                         self.info('created database table: %s', v)
                 else:
                     self.error("could not create schema for database table '%s': missing SQL script '%s'", v, sql_path)
@@ -374,17 +376,41 @@ class XlrstatsPlugin(b3.plugin.Plugin):
         }
 
         for k, v in list(update_schema[self.console.storage.protocol].items()):
+            if v in created_tables:
+                # just created from the current schema: nothing to upgrade
+                continue
             sql_path = os.path.join(sql_main, k)
             if os.path.isfile(sql_path):
                 with open(sql_path, 'r') as sql_file:
                     # execute statements separately since we need to substitute the table name
                     for q in self.console.storage.getQueriesFromFile(sql_file):
+                        added = re.search(r'\bADD\s+`?(\w+)`?', q, re.IGNORECASE)
+                        if added and self._column_exists(v, added.group(1)):
+                            # already upgraded (this used to fail, and be logged as an error, at every start)
+                            continue
                         try:
                             self.console.storage.query(q % v)
                         except Exception:
-                            # DONT LOG HERE!!! (schema might have already changed so executing the update query will
-                            # raise an exception without actually changing the database table structure (which is OK!)
+                            # the storage layer has logged the error: the table may already be up to date
                             pass
+
+    def _column_exists(self, table, column):
+        """
+        Tell whether the given table has the given column.
+        """
+        # read the column names straight from a driver cursor: B3's cursor wrapper drops the result description
+        # of a query that returns no row
+        try:
+            db = self.console.storage.getConnection()
+            cursor = db.cursor()
+            try:
+                cursor.execute('SELECT * FROM %s LIMIT 0' % table)
+                return column in [d[0] for d in (cursor.description or [])]
+            finally:
+                cursor.close()
+        except Exception as e:
+            self.debug('could not read the columns of table %s: %s', table, e)
+            return False
 
     def load_config_tables(self):
         """

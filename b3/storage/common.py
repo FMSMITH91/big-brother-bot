@@ -758,7 +758,8 @@ class DatabaseStorage(Storage):
         :return: List of strings
         """
         lines = [x.strip() for x in sqlfile if x and not x.startswith('#') and not x.startswith('--')]
-        return [x.strip() for x in ' '.join(lines).split(';') if x]
+        # strip before testing: the text after the last ';' (a newline, spaces) is not a statement
+        return [q for q in (x.strip() for x in ' '.join(lines).split(';')) if q]
 
     @staticmethod
     def _createPenaltyFromRow(row):

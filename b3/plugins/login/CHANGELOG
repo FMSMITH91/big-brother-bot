@@ -7,3 +7,5 @@
                                - improved plugin startup and configuration file loading
 1.3   - 31/08/2014 - Fenix     - syntax cleanup
 1.4   - 12/07/2015 - Fenix     - make use of Plugin.getSetting to load configuration values
+1.5   - 15/11/2026 -           - a privileged player allowed to set passwords (passwdlevel) who has no password yet
+                                 chooses his first one with !login: the demotion locked out a server's only super admin
