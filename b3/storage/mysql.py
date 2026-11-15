@@ -309,7 +309,7 @@ class MysqlStorage(DatabaseStorage):
                                                 user=self.dsnDict['user'],
                                                 passwd=self.dsnDict['password'],
                                                 db=self.dsnDict['path'][1:],
-                                                charset="utf8")
+                                                charset="utf8mb4")  # full Unicode (MySQL's "utf8" has no emoji)
 
                 self.console.bot('Successfully established a connection with MySQL database')
                 self._lastConnectAttempt = 0

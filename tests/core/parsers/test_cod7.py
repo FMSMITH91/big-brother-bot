@@ -135,6 +135,50 @@ class Test_parseLine(Cod7TestCase):
         self.assertEqual(1, OnInitgame.call_count)
 
 
+class Test_prematch_logic(Cod7TestCase):
+
+    KILL = Test_parseLine.KILL
+
+    def feed(self, *lines):
+        for line in lines:
+            with patch.object(self.console, 'queueEvent'):
+                with patch.object(self.console, 'OnInitgame', return_value=None):
+                    with patch.object(self.console, 'OnExitlevel', return_value=None):
+                        with patch.object(self.console, 'OnShutdowngame', return_value=None):
+                            self.console.parseLine(line)
+
+    def kill_is_handled(self):
+        with patch.object(self.console, 'OnK', return_value=None) as OnK:
+            self.console.parseLine(self.KILL)
+        return OnK.called
+
+    def test_off_by_default(self):
+        # dormant from 2014 to 2026: kills must keep being handled after a map change unless it is enabled
+        self.assertFalse(Cod7Parser._usePreMatchLogic)
+        self.console._usePreMatchLogic = False
+        self.console._preMatch = False
+        self.feed('1:00 ExitLevel: executed', '1:01 ShutdownGame:', '1:05 InitGame: \\mapname\\mp_cairo')
+        self.assertTrue(self.kill_is_handled())
+
+    def test_map_change_starts_prematch_when_enabled(self):
+        self.console._usePreMatchLogic = True
+        self.console._preMatch = False
+        self.feed('1:00 ExitLevel: executed', '1:01 ShutdownGame:', '1:05 InitGame: \\mapname\\mp_cairo')
+        self.assertTrue(self.console._preMatch)
+        self.assertFalse(self.kill_is_handled())
+
+    def test_round_change_ends_prematch(self):
+        # InitGame after ShutdownGame without ExitLevel is a round change: the pre-match must end.
+        # The flags used to be cleared on every line, so this never happened.
+        self.console._usePreMatchLogic = True
+        self.console._preMatch = True
+        self.console._elFound = False
+        self.console._igBlockFound = False
+        self.feed('2:00 ShutdownGame:', '2:05 InitGame: \\mapname\\mp_cairo')
+        self.assertFalse(self.console._preMatch)
+        self.assertTrue(self.kill_is_handled())
+
+
 class Test_pluginsStarted(Cod7TestCase):
 
     def test_admin_plugin_is_not_patched(self):

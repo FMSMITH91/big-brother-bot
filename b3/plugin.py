@@ -120,6 +120,8 @@ class Plugin(object):
         :param console: The console implementation
         :param config: The plugin configuration file
         """
+        # per-instance copies of the class-level containers (commands, settings, caches...)
+        b3.functions.own_class_containers(self)
         self.console = console
         self.eventmanager = b3.events.eventManager
         self.eventmap = dict()

@@ -92,7 +92,7 @@ class Test_MySQL(B3TestCase, StorageAPITest):
             self.fail("Error %d:\n%s" % (message.args[0], message.args[1]))
 
         db.query("DROP DATABASE IF EXISTS `%s`" % MYSQL_TEST_DB)
-        db.query("CREATE DATABASE `%s` CHARACTER SET utf8;" % MYSQL_TEST_DB)
+        db.query("CREATE DATABASE `%s` CHARACTER SET utf8mb4;" % MYSQL_TEST_DB)
 
         dsn = "mysql://%s:%s@%s/%s" % (MYSQL_TEST_USER, MYSQL_TEST_PASSWORD, MYSQL_TEST_HOST, MYSQL_TEST_DB)
         self.storage = self.console.storage = MysqlStorage(dsn, splitDSN(dsn), self.console)

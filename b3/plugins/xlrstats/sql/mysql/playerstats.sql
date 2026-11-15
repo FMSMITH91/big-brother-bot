@@ -18,4 +18,4 @@ CREATE TABLE IF NOT EXISTS `%s` (
   `fixed_name` VARCHAR(32) NOT NULL DEFAULT '',  PRIMARY KEY (`id`),
   `id_token` VARCHAR(10) NOT NULL DEFAULT '',
   UNIQUE KEY `client_id` (`client_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

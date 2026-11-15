@@ -37,7 +37,13 @@ class SchedulerPlugin(b3.plugin.Plugin):
 
     _tasks = None
     _tzOffset = 0
-    _restart_tasks = set()
+    _restart_tasks = None
+
+    def __init__(self, console, config=None):
+        # per-instance set (a class-level set was shared by every scheduler plugin instance); created before the
+        # base constructor runs because it may load the configuration, which schedules the restart tasks
+        self._restart_tasks = set()
+        b3.plugin.Plugin.__init__(self, console, config)
 
     ####################################################################################################################
     #                                                                                                                  #
@@ -157,11 +163,12 @@ class Task(object):
         self.plugin = plugin
         self.config = config
         
-        self.name = config.attrib['name']
-        if not 'name' in config.attrib:
-            self.plugin.info("attribute 'name' not found in task")
-        else:
+        if 'name' in config.attrib:
             self.name = config.attrib['name']
+        else:
+            # the name is only used in log messages: a task without one is still valid
+            self.name = '%s #%s' % (config.tag, id(self))
+            self.plugin.info("attribute 'name' not found in task: using %s", self.name)
 
         self.plugin.debug("setting up %s [%s]", self.__class__.__name__, self.name)
 

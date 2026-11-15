@@ -917,7 +917,9 @@ class CsgoParser(Parser):
         """
         if re.match('^[a-z0-9_.]+$', cvarName, re.I):
             self.debug('Set cvar %s = [%s]', cvarName, value)
-            self.write(self.getCommand('set', name=cvarName, value=value))
+            # Source engine: a cvar is set with "<name> <value>" (there is no 'set' command template for this
+            # parser, so getCommand('set') returned None and nothing was ever sent)
+            self.output.write('%s %s' % (cvarName, quote_rcon_arg(value)))
         else:
             self.error('%s is not a valid cvar name', cvarName)
 

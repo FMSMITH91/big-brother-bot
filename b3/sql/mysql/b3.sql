@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS `aliases` (
   PRIMARY KEY (id),
   UNIQUE KEY `alias` (`alias`,`client_id`),
   KEY `client_id` (`client_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `ipaliases` (
   `id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS `ipaliases` (
   PRIMARY KEY (id),
   UNIQUE KEY `ipalias` (`ip`,`client_id`),
   KEY `client_id` (`client_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `clients` (
   `id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS `clients` (
   UNIQUE KEY `guid` (`guid`),
   KEY `group_bits` (`group_bits`),
   KEY `name` (`name`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `groups` (
   `id` INT(10) UNSIGNED NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS `groups` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `keyword` (`keyword`),
   KEY `level` (`level`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO `groups` (`id`, `time_edit`, `name`, `keyword`, `time_add`, `level`) VALUES (128, 0, 'Super Admin', 'superadmin', UNIX_TIMESTAMP(), 100);
 INSERT INTO `groups` (`id`, `time_edit`, `name`, `keyword`, `time_add`, `level`) VALUES (64, 0, 'Senior Admin', 'senioradmin', UNIX_TIMESTAMP(), 80);
@@ -85,10 +85,10 @@ CREATE TABLE IF NOT EXISTS `penalties` (
   KEY `admin_id` (`admin_id`),
   KEY `inactive` (`inactive`),
   KEY `client_id` (`client_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `data` (
   `data_key` VARCHAR(255) NOT NULL,
   `data_value` VARCHAR(255) NOT NULL,
   PRIMARY KEY (`data_key`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -67,7 +67,7 @@ class StatusPlugin(b3.plugin.Plugin):
                             name VARCHAR(255) NOT NULL,
                             value VARCHAR(255) NOT NULL,
                             PRIMARY KEY (id), UNIQUE KEY name (name)
-                         ) ENGINE=MyISAM DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;""",
+                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;""",
 
             'cvars': """CREATE TABLE IF NOT EXISTS %(cvars)s (
                             id INT(3) NOT NULL AUTO_INCREMENT,
@@ -86,7 +86,7 @@ class StatusPlugin(b3.plugin.Plugin):
                             Team INT(1) NOT NULL ,
                             ColorName VARCHAR(32) NOT NULL,
                             PRIMARY KEY (id)
-                         ) ENGINE = MYISAM DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;"""
+                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;"""
         },
         'postgresql': {
 

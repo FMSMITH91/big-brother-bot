@@ -97,3 +97,26 @@ class Test_daily_task(SchedulerTestCase):
         self.assertEqual(22, self.p._convertCronHourToUTC('0'))
         self.assertEqual('*', self.p._convertCronHourToUTC('*'))
         self.assertEqual('1/4', self.p._convertCronHourToUTC('3/4'))
+
+
+class Test_task_config(SchedulerTestCase):
+
+    def test_task_without_name(self):
+        # the name attribute is optional (only used in log messages): this used to raise KeyError
+        self.load_plugin("""<configuration plugin="scheduler">
+            <hourly>
+                <rcon>say hello</rcon>
+            </hourly>
+        </configuration>""")
+        self.assertEqual(1, len(self.p._tasks))
+        self.assertTrue(self.p._tasks[0].name)
+
+    def test_restart_tasks_are_per_instance(self):
+        p1 = self.load_plugin("""<configuration plugin="scheduler">
+            <restart name="r1"><rcon>say restarted</rcon></restart>
+        </configuration>""")
+        p2 = self.load_plugin("""<configuration plugin="scheduler"/>""")
+        self.assertEqual(1, len(p1._restart_tasks))
+        self.assertEqual(0, len(p2._restart_tasks))
+        for t in p1._tasks:
+            t.cancel()

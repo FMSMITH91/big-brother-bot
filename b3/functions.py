@@ -82,6 +82,30 @@ def hide_url_password(url):
     return urllib.parse.urlunsplit(parts._replace(netloc=netloc))
 
 
+def own_class_containers(obj):
+    """
+    Give an object its own copy of every dict, list and set it inherits from its class hierarchy.
+
+    Many B3 parsers and plugins declare mutable containers as class attributes (event maps, caches, command
+    tables, client lists...) and then fill them in place. Those containers are shared by every instance of the
+    class (and of its subclasses), so state leaks from one parser/plugin instance into another. Call this first
+    thing in a constructor to make such state per instance; values are deep-copied (falling back to a shallow
+    copy for anything that cannot be deep-copied).
+    :param obj: The object (a Parser or Plugin instance)
+    """
+    import copy
+    for name in dir(type(obj)):
+        if name.startswith('__') or name in obj.__dict__:
+            continue
+        value = getattr(type(obj), name, None)
+        if type(value) in (dict, list, set):
+            try:
+                value = copy.deepcopy(value)
+            except Exception:
+                value = copy.copy(value)
+            setattr(obj, name, value)
+
+
 def getModule(name):
     """
     Return a module given its name.

@@ -288,3 +288,45 @@ class Test_confirm(unittest.TestCase):
             msg = functions.confirm(client)
         self.assertFalse(urlopen.called)
         self.assertEqual('The B3 developer confirmation service is no longer available', msg)
+
+
+class Test_own_class_containers(unittest.TestCase):
+
+    def test_instances_do_not_share_class_level_containers(self):
+        class Base(object):
+            table = {'a': {'x': 1}}
+            items = []
+            tags = set()
+            name = 'unchanged'
+
+            def __init__(self):
+                functions.own_class_containers(self)
+
+        class Child(Base):
+            pass
+
+        one, two, child = Base(), Base(), Child()
+        one.table['b'] = 2
+        one.table['a']['x'] = 99
+        one.items.append(1)
+        one.tags.add('t')
+        for other in (two, child):
+            self.assertEqual({'a': {'x': 1}}, other.table)
+            self.assertEqual([], other.items)
+            self.assertEqual(set(), other.tags)
+        self.assertEqual({'a': {'x': 1}}, Base.table)  # the class default is untouched
+        self.assertEqual('unchanged', one.name)
+
+    def test_plugin_constructor_gives_each_instance_its_own_containers(self):
+        from unittest.mock import Mock
+        from b3.plugin import Plugin
+
+        class TablePlugin(Plugin):
+            requiresConfigFile = False
+            _table = {}
+
+        one = TablePlugin(Mock())
+        two = TablePlugin(Mock())
+        one._table['k'] = 'v'
+        self.assertEqual({}, two._table)
+        self.assertEqual({}, TablePlugin._table)

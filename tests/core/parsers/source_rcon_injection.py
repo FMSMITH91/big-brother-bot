@@ -120,3 +120,15 @@ class RconInjectionChecks(object):
         with patch.object(self.parser.output, 'write') as write_mock:
             self.assertIsNone(self.parser.getCvar('sv_cheats; quit'))
         self.assertFalse(write_mock.called)
+
+    def test_setCvar_sends_the_command(self):
+        # there is no 'set' command template for the Source parsers: setCvar used to send nothing at all
+        with patch.object(self.parser.output, 'write') as write_mock:
+            self.parser.setCvar('mp_timelimit', 30)
+        self.assertEqual(['mp_timelimit "30"'], self.written_commands(write_mock))
+
+    def test_setCvar_value_cannot_inject(self):
+        with patch.object(self.parser.output, 'write') as write_mock:
+            self.parser.setCvar('hostname', self.EVIL)
+        commands = self.assert_safe(write_mock, 1)
+        self.assertTrue(commands[0].startswith('hostname "hello'), commands[0])
