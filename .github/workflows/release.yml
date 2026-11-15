@@ -40,7 +40,8 @@ jobs:
             version=$(python scripts/set_version.py "$REF_NAME")
           else
             # test builds get a dev version so they can never be mistaken for a release
-            current=$(grep -oP "^b3_version = '\K[^']+" setup.py)
+            # (master's own version may already carry a/b/dev: keep only the numbers)
+            current=$(grep -oP "^b3_version = '\K[0-9.]+" setup.py)
             version=$(python scripts/set_version.py "${current}dev${GITHUB_RUN_NUMBER}")
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
