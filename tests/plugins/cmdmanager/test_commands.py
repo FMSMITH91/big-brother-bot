@@ -28,6 +28,7 @@ import tempfile
 
 from textwrap import dedent
 from mockito import when, unstub, ANY
+import unittest
 from b3.config import CfgConfigParser, XmlConfigParser
 from b3.plugin import Plugin
 from b3.plugins.cmdmanager import GRANT_SET_ATTR, CmdmanagerPlugin
@@ -500,3 +501,71 @@ class Test_update_config_file(Cmdmanager_TestCase):
         finally:
             unstub()
         self.assertEqual(self.XML_CONTENT, self._read(path))
+
+    COMMENTED_INI = dedent(r"""
+        # plugin configuration
+        [settings]
+        message = %s was here
+
+        [commands]
+        ; who may use !zzqtest
+        zzqtest: mod
+        other-oth = admin   ; trailing
+
+        ; end of file
+        """)
+
+    def test_cmdlevel_ini_keeps_comments_and_formatting(self):
+        # found on a live server: the write-back used to drop every comment and blank line of plugin_admin.ini
+        path = self._register_plugin('plugin_zzqtest.ini', self.COMMENTED_INI, CfgConfigParser)
+        self.superadmin.says("!cmdlevel zzqtest admin")
+        self.assertEqual(self.COMMENTED_INI.replace('zzqtest: mod', 'zzqtest: admin'), self._read(path))
+
+    def test_cmdalias_ini_keeps_comments_and_formatting(self):
+        path = self._register_plugin('plugin_zzqtest.ini', self.COMMENTED_INI, CfgConfigParser)
+        self.superadmin.says("!cmdalias zzqtest zzq")
+        self.assertEqual(self.COMMENTED_INI.replace('zzqtest: mod', 'zzqtest-zzq: mod'), self._read(path))
+
+
+class Test_set_ini_command(unittest.TestCase):
+
+    def set(self, content, command='foo', name='foo', level='admin'):
+        return CmdmanagerPlugin.set_ini_command(content, command, name, level)
+
+    def test_replace_keeps_separator_style(self):
+        self.assertEqual(('[commands]\nfoo = admin\n', True), self.set('[commands]\nfoo = mod\n'))
+
+    def test_replace_entry_with_alias(self):
+        self.assertEqual(('[commands]\nfoo-f: admin\n', True), self.set('[commands]\nFoo-old: mod\n', name='foo-f'))
+
+    def test_other_commands_untouched(self):
+        content = '[commands]\nfoobar: mod\nbar-foo: mod\n'
+        self.assertEqual((content + 'foo: admin\n', False), self.set(content))
+
+    def test_duplicate_entries_removed(self):
+        self.assertEqual(('[commands]\nfoo: admin\n; x\n', True), self.set('[commands]\nfoo: mod\n; x\nfoo-f: user\n'))
+
+    def test_new_entry_after_last_entry_of_section(self):
+        content = '[commands]\nbar: mod\n\n; comment\n[settings]\nfoo: 1\n'
+        self.assertEqual(('[commands]\nbar: mod\nfoo: admin\n\n; comment\n[settings]\nfoo: 1\n', False), self.set(content))
+
+    def test_empty_section_without_final_newline(self):
+        self.assertEqual(('[commands]\nfoo: admin\n', False), self.set('[commands]'))
+
+    def test_windows_line_endings(self):
+        self.assertEqual(('[commands]\r\nfoo: admin\r\n', True), self.set('[commands]\r\nfoo: mod\r\n'))
+
+    def test_no_commands_section(self):
+        self.assertEqual((None, False), self.set('[settings]\nfoo: mod\n'))
+
+    def test_failed_write_is_reported(self):
+        # a failed write must reach write_config_file, which tells the admin
+        tmpdir = tempfile.mkdtemp()
+        try:
+            target = os.path.join(tmpdir, 'plugin.ini')
+            os.mkdir(target)  # replacing a directory with a file fails
+            with self.assertRaises(OSError):
+                CmdmanagerPlugin._write_file(target, 'x')
+            self.assertListEqual(['plugin.ini'], os.listdir(tmpdir))  # temporary file cleaned up
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)

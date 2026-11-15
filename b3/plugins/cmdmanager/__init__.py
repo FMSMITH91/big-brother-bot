@@ -30,13 +30,11 @@ import b3.plugin
 import b3.plugins.admin
 import b3.events
 import types
-import io
 import os
 import re
 import shutil
 import tempfile
 
-from configparser import ConfigParser
 from configparser import NoOptionError
 from configparser import NoSectionError
 from b3.config import XmlConfigParser
@@ -169,33 +167,73 @@ class CmdmanagerPlugin(b3.plugin.Plugin):
 
     def write_ini_config_file(self, command, data):
         """
-        Write the new command configuration in the plugin configuration file
+        Write the new command configuration in the plugin configuration file.
+        Only the line of the command in the [commands] section changes: comments, blank lines and the formatting of
+        the rest of the file are kept as they are.
         """
-        # read the config file (no interpolation: B3 config values contain bare '%' characters, e.g. message templates)
-        config = ConfigParser(interpolation=None, strict=False, allow_no_value=True)
-        config.read(command.plugin.config.fileName, encoding='utf-8')
-
-        # if there is no commands section
-        if not config.has_section('commands'):
+        with open(command.plugin.config.fileName, encoding='utf-8', newline='') as f:
+            content = f.read()
+        content, found = self.set_ini_command(content, command.command, data['command_name'], data['command_level'])
+        if content is None:
             raise NoSectionError('could not find <commands> section in plugin <%s> config file' % data['plugin_name'])
-
-        # remove the old entry
-        found = False
-        for temp in config.options('commands'):
-            search = temp.split('-')[0]
-            if search == command.command:
-                config.remove_option('commands', temp)
-                found = True
-
-        # set the new command option value
-        config.set('commands', data['command_name'], data['command_level'])
         self.debug('%s command <%s> in plugin <%s> config file', 'updated' if found else 'created new entry for',
                                                                  command.command, data['plugin_name'])
+        self._write_file(command.plugin.config.fileName, content)
 
-        # build the whole new content first so that a failure can't leave the config file truncated
-        buf = io.StringIO()
-        config.write(buf)
-        self._write_file(command.plugin.config.fileName, buf.getvalue())
+    @staticmethod
+    def set_ini_command(content, command, name, level):
+        """
+        Set the level of a command in the [commands] section of an ini configuration file content.
+        The first entry of the command (with or without an alias) is replaced keeping its 'key: value' or
+        'key = value' style; any further entry of the same command is removed. Without an entry, a new line is
+        added after the last entry of the section.
+        :param content: The configuration file content
+        :param command: The command name
+        :param name: The new entry name (the command name, with its alias if any)
+        :param level: The new command level
+        :return: (new content, whether the command had an entry) or (None, False) without a [commands] section
+        """
+        lines = content.splitlines(True)
+        newline = '\r\n' if '\r\n' in content else '\n'
+        section = None
+        has_section = False
+        found = False
+        last_entry = None
+        result = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith('[') and stripped.endswith(']'):
+                section = stripped[1:-1].strip()
+                if section == 'commands' and not has_section:
+                    has_section = True
+                    last_entry = len(result) + 1  # until an entry is found: right after the section header
+            elif section == 'commands' and stripped and stripped[0] not in ';#' and not line[0].isspace():
+                separator = min([i for i in (line.find(':'), line.find('=')) if i != -1], default=-1)
+                key = (line[:separator] if separator != -1 else line).strip().lower()
+                if key.split('-')[0].strip() == command:
+                    if found:
+                        continue  # duplicate entry for the same command: drop it
+                    found = True
+                    if separator == -1:
+                        separator_text = ': '
+                    else:
+                        # keep the spacing around the separator: 'foo: mod', 'foo = mod'...
+                        value = line[separator + 1:]
+                        separator_text = line[len(line[:separator].rstrip()):separator + 1] + \
+                            (value[:len(value) - len(value.lstrip(' \t'))] or ' ')
+                    line = '%s%s%s%s' % (name, separator_text, level, newline if line.endswith(('\n', '\r')) else '')
+                result.append(line)
+                last_entry = len(result)
+                continue
+            result.append(line)
+        if not has_section:
+            return None, False
+        if not found:
+            previous = result[last_entry - 1]
+            if not previous.endswith(('\n', '\r')):
+                result[last_entry - 1] = previous + newline
+            result.insert(last_entry, '%s: %s%s' % (name, level, newline))
+        return ''.join(result), found
 
     def write_xml_config_file(self, command, data):
         """
