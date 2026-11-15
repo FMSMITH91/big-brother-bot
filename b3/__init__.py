@@ -38,12 +38,13 @@ from configparser import NoOptionError
 from configparser import NoSectionError
 
 __author__ = 'ThorN'
-__version__ = '1.12'
+__version__ = '2.0.0dev'
 
 modulePath = pkg_handler.resource_directory(__name__)
 
 versionId = 'v%s' % __version__
-version = '^8www.bigbrotherbot.net ^0(^8b3^0) ^9%s ^9[^3IronPigeon^9]^3' % versionId
+# shown in game (B3 ONLINE message, !b3): www.bigbrotherbot.net is gone
+version = '^8BigBrotherBot ^0(^8b3^0) ^9%s^3' % versionId
 
 confdir = None
 console = None

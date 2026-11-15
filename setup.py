@@ -33,7 +33,7 @@ from setuptools import setup
 from setuptools.command.egg_info import egg_info as orig_egg_info
 
 # set by scripts/set_version.py (the release workflow sets it from the git tag)
-b3_version = '1.12'
+b3_version = '2.0.0dev'
 
 PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))  # directory where this file is in
 DIST_DIR = os.path.join(PROJECT_DIR, 'dist')  # directory where all the final builds will be found
