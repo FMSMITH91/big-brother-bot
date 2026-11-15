@@ -59,7 +59,7 @@ __version__ = '2.8.1'
 
 import time
 import threading
-import Queue
+import queue
 import b3.clients
 import b3.events
 
@@ -93,7 +93,7 @@ BUILD_NUMBER_R17 = 560541
 class Bfbc2Parser(AbstractParser):
 
     gameName = 'bfbc2'
-    saybigqueue = Queue.Queue()
+    saybigqueue = queue.Queue()
     saybigqueuelistener = None
 
     _gameServerVars = (
@@ -131,7 +131,7 @@ class Bfbc2Parser(AbstractParser):
         AbstractParser.startup(self)
 
         self.saybigqueuelistener = threading.Thread(target=self.saybigqueuelistenerworker)
-        self.saybigqueuelistener.setDaemon(True)
+        self.saybigqueuelistener.daemon = True
         self.saybigqueuelistener.start()
 
         # add BFBC2 specific commands
@@ -150,7 +150,7 @@ class Bfbc2Parser(AbstractParser):
         """
         self.info('connecting all players...')
         plist = self.getPlayerList()
-        for cid, p in plist.iteritems():
+        for cid, p in plist.items():
             client = self.clients.getByCID(cid)
             if not client:
                 name = p['name']
@@ -550,15 +550,15 @@ def frostbiteClientMessageBigMethod(self, msg):
     if msg and len(msg.strip())>0:
         # do we have a queue?
         if not hasattr(self, 'messagebigqueue'):
-            self.messagebigqueue = Queue.Queue()
+            self.messagebigqueue = queue.Queue()
         # fill the queue
         text = self.console.stripColors(self.console.msgPrefix + ' [pm] ' + msg)
         for line in self.console.getWrap(text):
             self.messagebigqueue.put(line)
         # create a thread that executes the worker and pushes out the queue
-        if not hasattr(self, 'messagebighandler') or not self.messagebighandler.isAlive():
+        if not hasattr(self, 'messagebighandler') or not self.messagebighandler.is_alive():
             self.messagebighandler = threading.Thread(target=self.messagebigqueueworker)
-            self.messagebighandler.setDaemon(True)
+            self.messagebighandler.daemon = True
             self.messagebighandler.start()
         else:
             self.console.verbose('messagebighandler for %s isAlive' %self.name)

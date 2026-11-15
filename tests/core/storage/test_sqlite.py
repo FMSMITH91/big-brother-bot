@@ -22,7 +22,8 @@
 #                                                                     #
 # ################################################################### #
 
-import nose
+
+import unittest
 
 from b3.functions import splitDSN
 from b3.storage.sqlite import SqliteStorage
@@ -58,6 +59,6 @@ class Test_sqlite(B3TestCase, StorageAPITest):
             ]), set(self.storage.getTables()))
 
 if __name__ == '__main__':
-    nose.main()
+    unittest.main()
     
     

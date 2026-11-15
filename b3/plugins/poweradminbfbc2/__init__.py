@@ -30,7 +30,6 @@ import b3.config
 import b3.events
 import b3.plugin
 import re
-import string
 import threading
 import time
 
@@ -165,7 +164,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
                     newteam = '1'
                 try:
                     self.console.write(('admin.movePlayer', client.cid, newteam, 0, 'true'))
-                except FrostbiteCommandFailedError, err:
+                except FrostbiteCommandFailedError as err:
                     self.warning('could not move player, server replied %s' % err)
 
     def onRoundStart(self, event):
@@ -193,7 +192,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
                 self.console.write(('admin.setPlaylist', mode))
                 client.message('Server playlist changed to %s' % mode)
                 client.message('Type !map <mapname> to change server mode now')
-            except FrostbiteCommandFailedError, err:
+            except FrostbiteCommandFailedError as err:
                 client.message('Failed to change game mode. Server replied with: %s' % err)
 
     def teambalance(self):
@@ -225,22 +224,21 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
             clients = self.console.clients.getList()
             for c in clients:
                 if c.teamId == bigTeam:
-                    teamTimeVar = c.isvar(self, 'teamtime')
-                    if not teamTimeVar:
+                    if not c.isvar(self, 'teamtime'):
                         self.debug('client has no variable teamtime')
                         c.setvar(self, 'teamtime', self.console.time())
                         self.verbose('Client variable teamtime set to: %s' % c.var(self, 'teamtime').value)
-                    playerTeamTimes[c.cid] = teamTimeVar.value
+                    playerTeamTimes[c.cid] = c.var(self, 'teamtime').value
 
             self.debug('playerTeamTimes: %s' % str(playerTeamTimes))
-            sortedPlayersTeamTimes = sorted(playerTeamTimes.iteritems(), key=lambda (k,v): (v,k))
+            sortedPlayersTeamTimes = sorted(iter(playerTeamTimes.items()), key=lambda k_v: (k_v[1],k_v[0]))
             self.debug('sortedPlayersTeamTimes: %s' % sortedPlayersTeamTimes)
 
-            for c, teamtime in sortedPlayersTeamTimes[:howManyMustSwitch]:
+            for cid, teamtime in sortedPlayersTeamTimes[:howManyMustSwitch]:
                 try:
-                    self.debug('forcing %s to the other team' % c.cid)
-                    self.console.write(('admin.movePlayer', c.cid, smallTeam, 0, 'true'))
-                except FrostbiteCommandFailedError, err:
+                    self.debug('forcing %s to the other team' % cid)
+                    self.console.write(('admin.movePlayer', cid, smallTeam, 0, 'true'))
+                except FrostbiteCommandFailedError as err:
                     self.error(err)
 
     def getTeams(self):
@@ -249,11 +247,11 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
         """
         team1players = []
         team2players = []
-        for name, clientdata in self.console.getPlayerList().iteritems():
+        for name, clientdata in self.console.getPlayerList().items():
             if str(clientdata['teamId']) == '1':
                 team1players.append(name)
             elif str(clientdata['teamId']) == '2':
-                team1players.append(name)
+                team2players.append(name)
         return team1players, team2players
 
     ####################################################################################################################
@@ -313,7 +311,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
                 self.debug('executing configfile = [%s]', data)
                 try:
                     self.console.write(('admin.runScript', '%s' % data))
-                except FrostbiteCommandFailedError, err:
+                except FrostbiteCommandFailedError as err:
                     self.warning('could not run script: %s' % err)
                     client.message('ERROR: %s' % str(err))
             else:
@@ -329,7 +327,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
             self.debug('executing punkbuster command = [%s]', data)
             try:
                 self.console.write(('punkBuster.pb_sv_command', '%s' % data))
-            except FrostbiteCommandFailedError, err:
+            except FrostbiteCommandFailedError as err:
                 self.warning('could not send punkbuster command: %s' % err)
                 client.message('ERROR: %s' % str(err))
 
@@ -453,7 +451,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
                 try:
                     self.console.write(('vars.%s' % varName, value))
                     client.message('%s set' % varName)
-                except FrostbiteCommandFailedError, err:
+                except FrostbiteCommandFailedError as err:
                     client.message('ERROR setting %s : %s' % (varName, err))
 
     def cmd_paget(self, data, client, cmd=None):
@@ -477,7 +475,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
         else:
             match = self.console.getMapsSoundingLike(data)
             if len(match) > 1:
-                client.message('Do you mean: %s?' % string.join(match,', '))
+                client.message('Do you mean: %s?' % ', '.join(match))
             elif len(match) == 1:
                 levelname = match[0]
                 currentLevelCycle = self.console.write(('mapList.list',))
@@ -502,14 +500,14 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
         if not x:
             try:
                 cmd.sayLoudOrPM(client, '%s %s %s' % (client.cid, client.ip, client.guid))
-            except FrostbiteCommandFailedError, err:
+            except FrostbiteCommandFailedError as err:
                 client.message('Error, server replied %s' % err)
         else:
             try:
                 sclient = self._adminPlugin.findClientPrompt(x[0], client)
                 if sclient:
                     cmd.sayLoudOrPM(client, '%s %s %s' % (sclient.cid, sclient.ip, sclient.guid))
-            except FrostbiteCommandFailedError, err:
+            except FrostbiteCommandFailedError as err:
                 client.message('Error, server replied %s' % err)
         
     def cmd_pakill(self, data, client, cmd=None):
@@ -533,7 +531,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
                         self.console.write(('admin.killPlayer', sclient.cid))
                         if reason:
                             self.console.say('%s was terminated by server admin for : %s' % (sclient.name, reason))
-                    except FrostbiteCommandFailedError, err:
+                    except FrostbiteCommandFailedError as err:
                         client.message('Error, server replied %s' % err)
 
     def cmd_pachangeteam(self, data, client, cmd=None):
@@ -553,7 +551,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
                 try:
                     self.console.write(('admin.movePlayer', sclient.cid, newteam, 0, 'true'))
                     cmd.sayLoudOrPM(client, '%s forced to the other team' % sclient.cid)
-                except FrostbiteCommandFailedError, err:
+                except FrostbiteCommandFailedError as err:
                     client.message('Error, server replied %s' % err)
         
     def cmd_paspectate(self, data, client, cmd=None):
@@ -569,7 +567,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
                 try:
                     self.console.write(('admin.movePlayer', sclient.cid, 0, 0, 'true'))
                     cmd.sayLoudOrPM(client, '%s forced to spectate' % sclient.name)
-                except FrostbiteCommandFailedError, err:
+                except FrostbiteCommandFailedError as err:
                     client.message('Error, server replied %s' % err)
         
     def cmd_pamatch(self, data, client, cmd=None): 

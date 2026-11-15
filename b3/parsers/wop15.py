@@ -29,7 +29,6 @@ import b3
 import b3.events
 import b3.parser
 import re
-import string
 
 from b3.parsers.q3a.abstractParser import AbstractParser
 
@@ -195,7 +194,7 @@ class Wop15Parser(AbstractParser):
         
         # initialize connected clients
         plist = self.getPlayerList()
-        for cid, c in plist.iteritems():
+        for cid, c in plist.items():
             userinfostring = self.queryClientUserInfoByCid(cid)
             if userinfostring:
                 self.OnClientuserinfo(None, userinfostring)
@@ -224,7 +223,7 @@ class Wop15Parser(AbstractParser):
             if client:
                 # update existing client
                 bclient['ip'] = client.ip
-                for k, v in bclient.iteritems():
+                for k, v in bclient.items():
                     setattr(client, k, v)
 
     def OnClientdisconnect(self, action, data, match=None):
@@ -254,7 +253,7 @@ class Wop15Parser(AbstractParser):
 
     def OnSay(self, action, data, match=None):
         # 3:59 say: 1 general chat
-        msg = string.split(data, ' ', 1)
+        msg = data.split(' ', 1)
         if not len(msg) == 2:
             return None
 
@@ -273,7 +272,7 @@ class Wop15Parser(AbstractParser):
 
     def OnSayteam(self, action, data, match=None):
         # 4:06 sayteam: 1 teamchat
-        msg = string.split(data, ' ', 1)
+        msg = data.split(' ', 1)
         if not len(msg) == 2:
             return None
 
@@ -416,7 +415,7 @@ class Wop15Parser(AbstractParser):
 
     def OnItem(self, action, data, match=None):
         # Item: 5 weapon_betty
-        cid, item = string.split(data, ' ', 1)
+        cid, item = data.split(' ', 1)
         client = self.getByCidOrJoinPlayer(cid)
         if client:
             return self.getEvent('EVT_CLIENT_ITEM_PICKUP', item, client)
@@ -438,7 +437,7 @@ class Wop15Parser(AbstractParser):
             client = self.clients.getByCID(bclient['cid'])
             if client:
                 # update existing client
-                for k, v in bclient.iteritems():
+                for k, v in bclient.items():
                     setattr(client, k, v)
             else:
                 cid = bclient['cid']
@@ -477,7 +476,7 @@ class Wop15Parser(AbstractParser):
         :param info: The infostring to be parsed.
         """
         # 3 n\Dr.Schraube\t\0\model\padman/padsoldier_red\hmodel\padman/padsoldier_red\c1\4\c2\1\hc\100\w\0\l\0...
-        player_id, info = string.split(info, ' ', 1)
+        player_id, info = info.split(' ', 1)
 
         if info[:1] != '\\':
             info = '\\' + info
@@ -544,7 +543,7 @@ class Wop15Parser(AbstractParser):
         Join all the connected clients.
         """
         plist = self.getPlayerList()
-        for cid, c in plist.iteritems():
+        for cid, c in plist.items():
             client = self.clients.getByCID(cid)
             if client:
                 self.debug('Joining client: %s' % client.name)
@@ -621,8 +620,9 @@ class Wop15Parser(AbstractParser):
         try:
             if DEBUG_EVENTS:
                 self.verbose2(event)
-        finally:
-            return b3.parser.Parser.queueEvent(self, event, expire)
+        except Exception:
+            pass
+        return b3.parser.Parser.queueEvent(self, event, expire)
 
     ####################################################################################################################
     #                                                                                                                  #

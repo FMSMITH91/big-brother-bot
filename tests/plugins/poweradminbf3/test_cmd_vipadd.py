@@ -57,14 +57,14 @@ vipadd: 0
     def test_frostbite_error(self):
         self.joe.connects("joe")
         self.superadmin.connects('superadmin')
-        when(self.console).write(('reservedSlotsList.add', 'Joe')).thenRaise(CommandFailedError(['f00']))
+        when(self.console, strict=False).write(('reservedSlotsList.add', 'Joe')).thenRaise(CommandFailedError(['f00']))
         self.superadmin.clearMessageHistory()
         self.superadmin.says("!vipadd joe")
         self.assertEqual(["Error: ['f00']"], self.superadmin.message_history)
 
 
     def test_nominal(self):
-        when(self.console).write()
+        when(self.console, strict=False).write()
         self.joe.connects('Joe')
         self.superadmin.connects('superadmin')
         self.superadmin.clearMessageHistory()

@@ -79,7 +79,6 @@ import b3
 import b3.clients
 import b3.events
 import re
-import string
 
 from b3.parsers.q3a.abstractParser import AbstractParser
 
@@ -324,7 +323,7 @@ class Q3Parser(AbstractParser):
         # initialize connected clients
         self.info('Discover connected clients')
         plist = self.getPlayerList()
-        for cid, c in plist.iteritems():
+        for cid, c in plist.items():
             userinfostring = self.queryClientUserInfoByCid(cid)
             if userinfostring:
                 self.OnClientuserinfochanged(None, userinfostring)
@@ -366,7 +365,7 @@ class Q3Parser(AbstractParser):
         Parse an infostring.
         :param info: The infostring to be parsed.
         """
-        player_id, info = string.split(info, ' ', 1)
+        player_id, info = info.split(' ', 1)
         # If userinfo not starting with \ character, prepend it to avoid breaking regex
         if info[:1] != '\\':
             info = '\\' + info
@@ -430,7 +429,7 @@ class Q3Parser(AbstractParser):
 
             if client:
                 # update existing client
-                for k, v in bclient.iteritems():
+                for k, v in bclient.items():
                     setattr(client, k, v)
                 # use the full client as reference now
                 bclient = client
@@ -687,7 +686,7 @@ class Q3Parser(AbstractParser):
     def connectClient(self, ccid):
         players = self.getPlayerList()
         self.verbose('connectClient() = %s' % players)
-        for cid, p in players.iteritems():
+        for cid, p in players.items():
             if int(cid) == int(ccid):
                 self.debug('Client found in status/playerList')
                 return p
@@ -934,10 +933,10 @@ class Q3Parser(AbstractParser):
         """
         plist = self.getPlayerList()
         mlist = dict()
-        for cid, c in plist.iteritems():
+        for cid, c in plist.items():
             client = self.getByCidOrJoinPlayer(cid)
             if client:
-                if client.guid and 'guid' in c.keys():
+                if client.guid and 'guid' in list(c.keys()):
                     if client.guid == c['guid']:
                         # player matches
                         self.debug('in-sync %s == %s', client.guid, c['guid'])
@@ -945,7 +944,7 @@ class Q3Parser(AbstractParser):
                     else:
                         self.debug('no-sync %s <> %s', client.guid, c['guid'])
                         client.disconnect()
-                elif client.ip and 'ip' in c.keys():
+                elif client.ip and 'ip' in list(c.keys()):
                     if client.ip == c['ip']:
                         # player matches
                         self.debug('in-sync %s == %s', client.ip, c['ip'])

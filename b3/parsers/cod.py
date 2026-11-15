@@ -30,7 +30,6 @@ import b3
 import b3.events
 import b3.parsers.punkbuster
 import re
-import string
 
 from b3.parsers.q3a.abstractParser import AbstractParser
 from threading import Timer
@@ -430,10 +429,10 @@ class CodParser(AbstractParser):
             data = data[1:]
 
         # decode the server data
-        if self.encoding:
+        if self.encoding and isinstance(data, bytes):
             try:
                 data = data.decode(self.encoding)
-            except Exception, msg:
+            except Exception as msg:
                 self.warning('ERROR: decoding data: %r', msg)
 
         if client.name != match.group('name'):
@@ -457,10 +456,10 @@ class CodParser(AbstractParser):
             data = data[1:]
 
         # decode the server data
-        if self.encoding:
+        if self.encoding and isinstance(data, bytes):
             try:
                 data = data.decode(self.encoding)
-            except Exception, msg:
+            except Exception as msg:
                 self.warning('ERROR: decoding data: %r', msg)
 
         if client.name != match.group('name'):
@@ -483,10 +482,10 @@ class CodParser(AbstractParser):
             data = data[1:]
 
         # decode the server data
-        if self.encoding:
+        if self.encoding and isinstance(data, bytes):
             try:
                 data = data.decode(self.encoding)
-            except Exception, msg:
+            except Exception as msg:
                 self.warning('ERROR: decoding data: %r', msg)
 
         client.name = match.group('name')
@@ -514,7 +513,7 @@ class CodParser(AbstractParser):
         return self.getEvent('EVT_GAME_EXIT', data=data)
 
     def OnItem(self, action, data, match=None):
-        guid, cid, name, item = string.split(data, ';', 3)
+        guid, cid, name, item = data.split(';', 3)
         client = self.clients.getByCID(cid)
         if client:
             return self.getEvent('EVT_CLIENT_ITEM_PICKUP', data=item, client=client)
@@ -552,7 +551,7 @@ class CodParser(AbstractParser):
         """
         players = self.getPlayerList()
         self.verbose('connectClient() = %s' % players)
-        for cid, p in players.iteritems():
+        for cid, p in players.items():
             #self.debug('cid: %s, ccid: %s, p: %s' %(cid, ccid, p))
             if int(cid) == int(ccid):
                 self.debug('%s found in status/playerList' % p['name'])
@@ -729,7 +728,7 @@ class CodParser(AbstractParser):
         plist = self.getPlayerList(maxRetries=4)
         mlist = {}
 
-        for cid, c in plist.iteritems():
+        for cid, c in plist.items():
             client = self.clients.getByCID(cid)
             if client:
                 if client.guid and 'guid' in c and not self.IpsOnly:
@@ -761,7 +760,7 @@ class CodParser(AbstractParser):
         """
         players = self.getPlayerList(maxRetries=4)
         self.verbose('authorizeClients() = %s' % players)
-        for cid, p in players.iteritems():
+        for cid, p in players.items():
             sp = self.clients.getByCID(cid)
             if sp:
                 # Only set provided data, otherwise use the currently set data

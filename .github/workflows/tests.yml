@@ -1,0 +1,48 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.12", "3.13"]
+        suite: [core, plugins]
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: b3_test
+        ports: ["3306:3306"]
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: b3_test
+        ports: ["5432:5432"]
+        options: --health-cmd=pg_isready --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      MYSQL_TEST_HOST: 127.0.0.1
+      MYSQL_TEST_USER: root
+      MYSQL_TEST_PASSWORD: ""
+      MYSQL_TEST_DB: b3_test
+      POSTGRESQL_TEST_HOST: 127.0.0.1
+      POSTGRESQL_TEST_USER: postgres
+      POSTGRESQL_TEST_PASSWORD: postgres
+      POSTGRESQL_TEST_DB: b3_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: ./scripts/install-deps-${{ matrix.suite }}.sh
+      - name: Run tests
+        run: ./scripts/start-tests-${{ matrix.suite }}.sh

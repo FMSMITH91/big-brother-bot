@@ -37,6 +37,11 @@ CMD_TERMINATOR = '\x04'
 
 
 class FrontlineConnectionError(Exception):
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     pass
 
 
@@ -50,7 +55,7 @@ class Client(asyncore.dispatcher_with_send):
         self._username = username
         self._password = password
         self.keepalive = keepalive
-        self._buffer_in = ''
+        self._buffer_in = b''
         self.authed = False
         self._handlers = set()
         self._auth_failures = 0
@@ -58,6 +63,19 @@ class Client(asyncore.dispatcher_with_send):
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect( (self._host, self._port) )
         
+    @property
+    def encoding(self):
+        """
+        The encoding used on the wire (Frontline uses ANSI strings): defaults to the console encoding.
+        """
+        return getattr(self.console, 'encoding', None) or 'latin-1'
+
+    def _send_text(self, text):
+        """
+        Encode the given str and send it to the game server.
+        """
+        self.send(text.encode(self.encoding, 'replace'))
+
     def handle_connect(self):
         self.console.info('now connected to Frontline gameserver: waiting for challenge')
         self.authed = False
@@ -85,7 +103,7 @@ class Client(asyncore.dispatcher_with_send):
                 for handler_func in self._handlers:
                     try:
                         handler_func(p)
-                    except Exception, err:
+                    except Exception as err:
                         self.console.exception(err)
                 p = self._readPacket()
 
@@ -129,10 +147,10 @@ class Client(asyncore.dispatcher_with_send):
 
         """
         self.console.info("logging to Frontline server with username %r" % self._username)
-        hashed_password = md5.new("%s%s" % (challenge, self._password)).hexdigest()
+        hashed_password = md5(("%s%s" % (challenge, self._password)).encode(self.encoding, 'replace')).hexdigest()
         try:
-            self.send('RESPONSE %s %s' % (self._username, hashed_password))
-        except socket.error, e:
+            self._send_text('RESPONSE %s %s' % (self._username, hashed_password))
+        except socket.error as e:
             self.console.error(repr(e))
 
     def ping(self):
@@ -155,14 +173,15 @@ class Client(asyncore.dispatcher_with_send):
         #self.console.verbose("sending RCON %s" % text)
         packet = "%s%s" % (text.strip(), CMD_TERMINATOR)
         try:
-            self.send(packet)
-        except socket.error, e:
+            self._send_text(packet)
+        except socket.error as e:
             self.console.error(repr(e))
         
     def _readPacket(self):
-        if CMD_TERMINATOR in self._buffer_in:
-            p = self._buffer_in.split(CMD_TERMINATOR, 1)[0]
-            self._buffer_in = self._buffer_in[len(p)+1:]
+        terminator = CMD_TERMINATOR.encode('ascii')
+        if terminator in self._buffer_in:
+            raw, self._buffer_in = self._buffer_in.split(terminator, 1)
+            p = raw.decode(self.encoding, 'replace')
             self._inspect_packet(p)
             return p
 

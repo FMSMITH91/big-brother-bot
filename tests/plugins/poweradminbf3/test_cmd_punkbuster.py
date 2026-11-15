@@ -24,7 +24,7 @@
 
 import time
 
-from mock import patch, call
+from unittest.mock import patch, call
 from mockito import when, verify
 from b3.config import CfgConfigParser
 from b3.plugins.poweradminbf3 import Poweradminbf3Plugin
@@ -46,20 +46,20 @@ punkbuster-punk: 20
 
 
     def test_pb_inactive(self):
-        when(self.console).write(('punkBuster.isActive',)).thenReturn(['false'])
+        when(self.console, strict=False).write(('punkBuster.isActive',)).thenReturn(['false'])
         self.superadmin.clearMessageHistory()
         self.superadmin.says('!punkbuster test')
         self.assertEqual(['Punkbuster is not active'], self.superadmin.message_history)
 
     def test_pb_active(self):
-        when(self.console).write(('punkBuster.isActive',)).thenReturn(['true'])
+        when(self.console, strict=False).write(('punkBuster.isActive',)).thenReturn(['true'])
         self.superadmin.clearMessageHistory()
         self.superadmin.says('!punkbuster test')
         self.assertEqual([], self.superadmin.message_history)
         verify(self.console).write(('punkBuster.pb_sv_command', 'test'))
 
     def test_pb_active(self):
-        when(self.console).write(('punkBuster.isActive',)).thenReturn(['true'])
+        when(self.console, strict=False).write(('punkBuster.isActive',)).thenReturn(['true'])
         self.superadmin.clearMessageHistory()
         self.superadmin.says('!punk test')
         self.assertEqual([], self.superadmin.message_history)

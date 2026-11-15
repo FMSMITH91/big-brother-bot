@@ -529,7 +529,7 @@ class AltitudeParser(Parser):
         ## Also, we have no way to query the exact list of currently connected
         ## players, so we use the last ping report as they are quite frequent
         players = {}
-        for cid in self._last_ping_report.keys():
+        for cid in list(self._last_ping_report.keys()):
             client = self.clients.getByCID(cid)
             if client:
                 players[cid] = client
@@ -715,7 +715,7 @@ class AltitudeParser(Parser):
         Returns a dict having players' id for keys and players' scores for values
         """
         scores = {} 
-        for cid, client in self.getPlayerList().items():
+        for cid, client in list(self.getPlayerList().items()):
             scores[cid] = client.kills
         return scores
         
@@ -724,7 +724,7 @@ class AltitudeParser(Parser):
         Called if b3.admin.penalizeClient() does not know a given penalty type. 
         Overwrite this to add customized penalties for your game like 'slap', 'nuke', 
         'mute' or anything you want.
-        /!\ This method must return True if the penalty was inflicted.
+        /!\\ This method must return True if the penalty was inflicted.
         """
         # no other penalty than kick, tempban, ban that I'm aware of
         pass
@@ -767,7 +767,7 @@ class AltitudeParser(Parser):
             ## erase Altitude command file content so the Altitude
             ## server wron't try to redo those commands on restart
             self.output.clear()
-        except Exception, e:
+        except Exception as e:
             self.error(e)
         finally:
             ## call original shutdown()
@@ -836,7 +836,9 @@ class AltitudeRcon():
     def __init__(self, console, commandfile):
         self.console = console
         self._commandfile_name = commandfile
-        self._fh = open(commandfile, 'a')
+        # commands are written with the console encoding (B3 'server/encoding' setting)
+        self._file_encoding = getattr(console, 'encoding', None) or 'UTF-8'
+        self._fh = open(commandfile, 'a', encoding=self._file_encoding, errors='replace')
         
     def writelines(self, lines):
         for line in lines:
@@ -847,7 +849,7 @@ class AltitudeRcon():
         To send a command to the server, the format to respect is :
         [server port],[command type],[data]
         """
-        self.console.verbose(u'RCON :\t %s' % cmd)
+        self.console.verbose('RCON :\t %s' % cmd)
         self._fh.write("%s,console,%s\n" % (self.console._port, cmd))
         
     def flush(self):
@@ -869,4 +871,4 @@ class AltitudeRcon():
         Delete all content off the command file
         """
         self.close()
-        self._fh = open(self._commandfile_name, 'w')
+        self._fh = open(self._commandfile_name, 'w', encoding=self._file_encoding, errors='replace')

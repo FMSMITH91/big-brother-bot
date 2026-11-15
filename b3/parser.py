@@ -30,11 +30,10 @@ import os
 import sys
 import re
 import time
-import thread
+import _thread
 import datetime
 import dateutil.tz
-import Queue
-import imp
+import queue
 import atexit
 import socket
 import glob
@@ -49,7 +48,7 @@ import b3.cron
 import b3.parsers.q3a.rcon
 import b3.timezones
 
-from ConfigParser import NoOptionError
+from configparser import NoOptionError
 from collections import OrderedDict
 from b3 import __version__ as currentVersion
 from b3.clients import Clients
@@ -178,7 +177,7 @@ class Parser(object):
     #
     #   Exits occurring in the main thread do not need to be synchronised.
 
-    exiting = thread.allocate_lock()
+    exiting = _thread.allocate_lock()
     exitcode = None
 
     def __new__(cls, *args, **kwargs):
@@ -255,13 +254,13 @@ class Parser(object):
 
         if self._publicIp and self._publicIp[0:1] in ('~', '/'):
             # load ip from a file
-            f = file(b3.getAbsolutePath(self._publicIp, decode=True))
+            f = open(b3.getAbsolutePath(self._publicIp, decode=True))
             self._publicIp = f.read().strip()
             f.close()
 
         if self._rconIp[0:1] in ('~', '/'):
             # load ip from a file
-            f = file(b3.getAbsolutePath(self._rconIp, decode=True))
+            f = open(b3.getAbsolutePath(self._rconIp, decode=True))
             self._rconIp = f.read().strip()
             f.close()
 
@@ -313,7 +312,7 @@ class Parser(object):
             # setup storage module
             dsn = self.config.get('b3', 'database')
             self.storage = b3.storage.getStorage(dsn=dsn, dsnDict=splitDSN(dsn), console=self)
-        except (AttributeError, ImportError), e:
+        except (AttributeError, ImportError) as e:
             # exit if we don't manage to setup the storage module: B3 will stop working upon Admin
             # Plugin loading so it makes no sense to keep going with the console initialization
             self.critical('Could not setup storage module: %s', e)
@@ -358,7 +357,7 @@ class Parser(object):
             self.screen.write('Using gamelog    : %s\n' % b3.getShortPath(os.path.abspath(f)))
 
             if os.path.isfile(f):
-                self.input = file(f, 'r')
+                self.input = open(f, 'r', encoding=self.encoding or 'latin-1', errors='replace')
                 if self.config.has_option('server', 'seek'):
                     seek = self.config.getboolean('server', 'seek')
                     if seek:
@@ -373,7 +372,7 @@ class Parser(object):
         try:
             # setup rcon
             self.output = self.OutputClass(self, (self._rconIp, self._rconPort), self._rconPassword)
-        except Exception, err:
+        except Exception as err:
             self.screen.write(">>> Cannot setup RCON: %s\n" % err)
             self.screen.flush()
             self.critical("Cannot setup RCON: %s" % err, exc_info=err)
@@ -438,12 +437,12 @@ class Parser(object):
             queuesize = self.config.getint('b3', 'event_queue_size')
         except NoOptionError:
             queuesize = 50
-        except ValueError, err:
+        except ValueError as err:
             queuesize = 50
             self.warning(err)
 
         self.debug("Creating the event queue with size %s", queuesize)
-        self.queue = Queue.Queue(queuesize)
+        self.queue = queue.Queue(queuesize)
 
         atexit.register(self.shutdown)
 
@@ -475,7 +474,7 @@ class Parser(object):
         self.bot("All plugins started")
         self.pluginsStarted()
         self.bot("Starting event dispatching thread")
-        thread.start_new_thread(self.handleEvents, ())
+        _thread.start_new_thread(self.handleEvents, ())
         self.bot("Start reading game events")
         self.run()
 
@@ -703,7 +702,7 @@ class Parser(object):
                 clz = getattr(mod, '%sPlugin' % p['name'].title())
                 cfg = _get_plugin_config(p['name'], clz, p['conf'])
                 plugins[p['name']] = PluginData(name=p['name'], module=mod, clazz=clz, conf=cfg, disabled=p['disabled'])
-            except Exception, err:
+            except Exception as err:
                 self.error('Could not load plugin %s' % p['name'], exc_info=err)
 
         # check for AdminPlugin
@@ -753,7 +752,7 @@ class Parser(object):
                                 self.debug('Plugin %s has unmet dependency : %s : trying to load plugin %s...' % (p_data.name, r, r))
                                 collection += _get_plugin_data(PluginData(name=r))
                                 self.debug('Plugin %s dependency satisfied: %s' % (p_data.name, r))
-                            except Exception, ex:
+                            except Exception as ex:
                                 raise MissingRequirement('missing required plugin: %s : %s' % (r, extract_tb(sys.exc_info()[2])), ex)
 
                     return collection
@@ -773,10 +772,10 @@ class Parser(object):
 
         # construct a list of all the plugins which needs to be loaded
         # here below we will discard all the plugin which have unmet dependency
-        for plugin_name, plugin_data in plugins.items():
+        for plugin_name, plugin_data in list(plugins.items()):
             try:
                 plugin_list += _get_plugin_data(plugin_data)
-            except MissingRequirement, err:
+            except MissingRequirement as err:
                 self.error('Could not load plugin %s' % plugin_name, exc_info=err)
 
         plugin_dict = {x.name: x for x in plugin_list}      # dict(str, PluginData)
@@ -817,7 +816,7 @@ class Parser(object):
             try:
                 self.bot('Loading plugin #%s : %s [%s]', plugin_num, plugin_data.name, plugin_conf_path)
                 self._plugins[plugin_data.name] = plugin_data.clazz(self, plugin_data.conf)
-            except Exception, err:
+            except Exception as err:
                 self.error('Could not load plugin %s' % plugin_data.name, exc_info=err)
                 self.screen.write('x')
             else:
@@ -859,7 +858,7 @@ class Parser(object):
                 console._plugins[plugin_name] = getattr(plugin_module, '%sPlugin' % plugin_name.title())(console)
                 version = getattr(plugin_module, '__version__', 'Unknown Version')
                 author = getattr(plugin_module, '__author__', 'Unknown Author')
-            except Exception, e:
+            except Exception as e:
                 console.screen.write('x')
                 if plugin_name in _mandatory_plugins:
                     # critical will stop B3 from running
@@ -890,7 +889,7 @@ class Parser(object):
             if remote_log_plugin and remote_log_plugin not in self._plugins:
                 _load_plugin(self, remote_log_plugin)
 
-        self.screen.write(' (%s)\n' % len(self._plugins.keys()))
+        self.screen.write(' (%s)\n' % len(list(self._plugins.keys())))
         self.screen.flush()
 
     def pluginImport(self, name, path=None):
@@ -901,26 +900,14 @@ class Parser(object):
         if path is not None:
             # import error is being handled in loadPlugins already
             self.info('Loading plugin from specified path: %s', path)
-            fp, pathname, description = imp.find_module(name, [path])
-            try:
-                return imp.load_module(name, fp, pathname, description)
-            finally:
-                if fp:
-                    fp.close()
-
-        fp = None
+            return b3.functions.load_module_from_paths(name, [path])
 
         try:
-            fp, pathname, description = imp.find_module(name, [os.path.join(b3.getB3Path(True), 'plugins')])
-            return imp.load_module(name, fp, pathname, description)
-        except ImportError, m:
+            return b3.functions.load_module_from_paths(name, [os.path.join(b3.getB3Path(True), 'plugins')])
+        except ImportError as m:
             self.verbose('%s is not a built-in plugin (%s)' % (name.title(), m))
             self.verbose('Trying external plugin directory : %s', self.config.get_external_plugins_dir())
-            fp, pathname, description = imp.find_module(name, [self.config.get_external_plugins_dir()])
-            return imp.load_module(name, fp, pathname, description)
-        finally:
-            if fp:
-                fp.close()
+            return b3.functions.load_module_from_paths(name, [self.config.get_external_plugins_dir()])
 
     def startPlugins(self):
         """
@@ -946,7 +933,7 @@ class Parser(object):
             try:
                 self.bot('Starting plugin #%s : %s' % (plugin_num, plugin_name))
                 start_plugin(self, plugin_name)
-            except Exception, err:
+            except Exception as err:
                 self.error("Could not start plugin %s" % plugin_name, exc_info=err)
                 self.screen.write('x')
             else:
@@ -986,7 +973,7 @@ class Parser(object):
         except KeyError:
             try:
                 msg = self._messages[msg] = self.config.getTextTemplate('messages', msg)
-            except Exception, err:
+            except Exception as err:
                 self.warning("Falling back on default message for '%s': %s" % (msg, err))
                 msg = vars2printf(self._messages_default.get(msg, '')).strip()
 
@@ -1012,11 +999,11 @@ class Parser(object):
                     variables[obj] = obj
             else:
                 for attr in vars(obj):
-                    pattern = re.compile('[\W_]+')
+                    pattern = re.compile(r'[\W_]+')
                     cleanattr = pattern.sub('', attr)  # trim any underscore or any non alphanumeric character
                     variables[cleanattr] = getattr(obj, attr)
 
-        for key, obj in kwargs.iteritems():
+        for key, obj in kwargs.items():
             #self.debug('Type of kwarg %s: %s' % (key, type(obj).__name__))
             if obj is None:
                 continue
@@ -1027,7 +1014,7 @@ class Parser(object):
                 #self.debug('Classname of object %s: %s' % (key, obj.__class__.__name__))
             else:
                 for attr in vars(obj):
-                    pattern = re.compile('[\W_]+')
+                    pattern = re.compile(r'[\W_]+')
                     cleanattr = pattern.sub('', attr)  # trim any underscore or any non alphanumeric character
                     currkey = ''.join([key, cleanattr])
                     variables[currkey] = getattr(obj, attr)
@@ -1052,7 +1039,7 @@ class Parser(object):
         <data> can be either a group keyword or a group level.
         Raises KeyError if group is not found.
         """
-        if type(data) is int or isinstance(data, basestring) and data.isdigit():
+        if type(data) is int or isinstance(data, str) and data.isdigit():
             g = Group(level=data)
         else:
             g = Group(keyword=data)
@@ -1167,7 +1154,7 @@ class Parser(object):
                                 self.parseLine(line)
                             except SystemExit:
                                 raise
-                            except Exception, msg:
+                            except Exception as msg:
                                 self.error('Could not parse line %s: %s', msg, extract_tb(sys.exc_info()[2]))
                             
                             time.sleep(self.delay2)
@@ -1222,7 +1209,7 @@ class Parser(object):
                 time.sleep(0.001)  # wait a bit so event doesnt get jumbled
                 self.queue.put((self.time(), self.time() + expire, event), True, 2)
                 return True
-            except Queue.Full:
+            except queue.Full:
                 self.error('**** Event queue was full (%s)', self.queue.qsize())
                 return False
 
@@ -1250,7 +1237,7 @@ class Parser(object):
                         break
 
                     self.verbose('Parsing event: %s: %s', event_name, hfunc.__class__.__name__)
-                    timer_plugin_begin = time.clock()
+                    timer_plugin_begin = time.perf_counter()
                     try:
                         hfunc.parseEvent(event)
                         time.sleep(0.001)
@@ -1258,13 +1245,13 @@ class Parser(object):
                         # plugin called for event hault, do not continue processing
                         self.bot('Event %s vetoed by %s', event_name, str(hfunc))
                         nomore = True
-                    except SystemExit, e:
+                    except SystemExit as e:
                         self.exitcode = e.code
-                    except Exception, msg:
+                    except Exception as msg:
                         self.error('Handler %s could not handle event %s: %s: %s %s', hfunc.__class__.__name__,
                                    event_name, msg.__class__.__name__, msg, extract_tb(sys.exc_info()[2]))
                     finally:
-                        elapsed = time.clock() - timer_plugin_begin
+                        elapsed = time.perf_counter() - timer_plugin_begin
                         self._eventsStats.add_event_handled(hfunc.__class__.__name__, event_name, elapsed * 1000)
                     
         self.bot('Shutting down event handler')
@@ -1335,7 +1322,7 @@ class Parser(object):
             if self.working and self.exiting.acquire():
                 self.bot('Shutting down...')
                 self.working = False
-                for k, plugin in self._plugins.items():
+                for k, plugin in list(self._plugins.items()):
                     plugin.parseEvent(b3.events.Event(self.getEventID('EVT_STOP'), ''))
                 if self._cron:
                     self.bot('Stopping cron')
@@ -1343,7 +1330,7 @@ class Parser(object):
                 if self.storage:
                     self.bot('Shutting down database connection')
                     self.storage.shutdown()
-        except Exception, e:
+        except Exception as e:
             self.error(e)
 
     def finalize(self):
@@ -1362,7 +1349,7 @@ class Parser(object):
                 self.bot('Found PID file : %s : attempt to remove it' % pidpath)
                 try:
                     os.unlink(pidpath)
-                except Exception, e:
+                except Exception as e:
                     self.error('Could not remove PID file (%s) : %s' % (pidpath, e))
                 else:
                     self.bot('PID file removed (%s)' % pidpath)
@@ -1528,7 +1515,7 @@ class Parser(object):
                 from b3.tools.documentationBuilder import DocBuilder
                 docbuilder = DocBuilder(self)
                 docbuilder.save()
-            except Exception, err:
+            except Exception as err:
                 self.error("Failed to generate user documentation")
                 self.exception(err)
         else:
@@ -1663,7 +1650,7 @@ class Parser(object):
         Called if b3.admin.penalizeClient() does not know a given penalty type. 
         Overwrite this to add customized penalties for your game like 'slap', 'nuke', 
         'mute', 'kill' or anything you want.
-        /!\ This method must return True if the penalty was inflicted.
+        /!\\ This method must return True if the penalty was inflicted.
         """
         pass
 

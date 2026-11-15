@@ -34,9 +34,11 @@ import zipfile
 import setuptools
 import platform
 
-from distutils import dir_util, log
+import logging
 from setuptools.command.egg_info import egg_info as orig_egg_info
 from time import strftime
+
+log = logging.getLogger(__name__)
 
 
 def getPlatform():
@@ -109,10 +111,10 @@ class CleanCommand(setuptools.Command):
 
     def run(self):
         if os.path.isdir(BUILD_DIR):
-            dir_util.remove_tree(BUILD_DIR, verbose=1)
+            shutil.rmtree(BUILD_DIR)
         _egg_info_dir = os.path.join(PROJECT_DIR, 'b3.egg-info')
         if os.path.isdir(_egg_info_dir):
-            dir_util.remove_tree(_egg_info_dir, verbose=1)
+            shutil.rmtree(_egg_info_dir)
 
 
 class my_egg_info(orig_egg_info):
@@ -229,7 +231,7 @@ else:
                                 'sql', 'txt', 'md', 'cfg', 'ini', 'txt', 'xml', 'tpl'):
                             with open(path, mode='rb') as f:
                                 data = f.read()
-                            new_data = re.sub("\r?\n", "\r\n", data)
+                            new_data = re.sub(b"\r?\n", b"\r\n", data)
                             if new_data != data:
                                 with open(path, mode='wb') as f:
                                     f.write(new_data)
@@ -293,7 +295,7 @@ else:
                             '/dB3_BUILD_PATH=' + self.build_exe,
                         ]
                         subprocess.call(cmd)
-                    except Exception, e:
+                    except Exception as e:
                         log.error('could not build %s: %s' % (script_file, e))
 
     cmdclass['build_exe'] = my_build_exe
@@ -349,15 +351,19 @@ setup(
         'License :: OSI Approved :: GNU General Public License (GPL)',
         'Natural Language :: English',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3 :: Only',
         'Topic :: System :: Logging',
         'Topic :: Utilities'
     ],
+    python_requires='>=3.9',
     install_requires=[
-        'pymysql>=0.6.6,<2',
-        'python-dateutil>=2.4.1,<3',
-        'feedparser>=4.1,<6',
-        'requests>=2.6.0'
+        'pymysql>=1.0',
+        'python-dateutil>=2.8',
+        'feedparser>=6.0',
+        'requests>=2.25',
+        # asyncore was removed from the standard library in Python 3.12
+        'pyasyncore>=1.0; python_version >= "3.12"',
     ],
     packages=setuptools.find_packages(),
     package_data={'': [

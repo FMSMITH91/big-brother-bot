@@ -22,10 +22,10 @@
 #                                                                     #
 # ################################################################### #
 
-from mock import Mock, call, patch
+from unittest.mock import Mock, call, patch
 from mockito import when, verify
 import sys
-import unittest2 as unittest
+import unittest
 from b3 import TEAM_BLUE, TEAM_RED, TEAM_UNKNOWN, TEAM_SPEC
 from b3.clients import Client
 from b3.config import XmlConfigParser
@@ -33,7 +33,7 @@ from b3.fake import FakeClient
 from b3.parsers.csgo import CsgoParser
 
 
-WAS_FROSTBITE_LOADED = 'b3.parsers.frostbite' in sys.modules.keys() or 'b3.parsers.frostbite2' in sys.modules.keys()
+WAS_FROSTBITE_LOADED = 'b3.parsers.frostbite' in list(sys.modules.keys()) or 'b3.parsers.frostbite2' in list(sys.modules.keys())
 
 
 STATUS_RESPONSE = '''\
@@ -70,7 +70,7 @@ def client_equal(client_a, client_b):
 #    for p in ('cid', 'guid', 'name', 'ip', 'ping'):
 #        if client_a.get(p, None) != client_b.get(p, None):
 #            return False
-    return all(map(lambda x: getattr(client_a, x, None) == getattr(client_b, x, None), ('cid', 'guid', 'name', 'ip', 'ping')))
+    return all([getattr(client_a, x, None) == getattr(client_b, x, None) for x in ('cid', 'guid', 'name', 'ip', 'ping')])
 #    return True
 
 
@@ -126,7 +126,7 @@ class CsgoTestCase(unittest.TestCase):
         """
         assert that self.evt_queue contains at least one event for the given type that has the given characteristics.
         """
-        assert isinstance(event_type, basestring)
+        assert isinstance(event_type, str)
         expected_event = self.parser.getEvent(event_type, data, client, target)
 
         if not len(self.evt_queue):
@@ -148,13 +148,13 @@ class CsgoTestCase(unittest.TestCase):
                         and (client_equal(expected_event.target, evt.target) or target == WHATEVER):
                     return
 
-            self.fail("expecting event %s. Got instead: %s" % (expected_event, map(str, self.evt_queue)))
+            self.fail("expecting event %s. Got instead: %s" % (expected_event, list(map(str, self.evt_queue))))
 
     def assert_has_not_event(self, event_type, data=None, client=None, target=None):
         """
         assert that self.evt_queue does not contain at least one event for the given type that has the given characteristics.
         """
-        assert isinstance(event_type, basestring)
+        assert isinstance(event_type, str)
         unexpected_event = self.parser.getEvent(event_type, data, client, target)
 
         if not len(self.evt_queue):
@@ -168,7 +168,7 @@ class CsgoTestCase(unittest.TestCase):
                     and (target is None or client_equal(target, evt.target))
                 )
             if any(map(event_match, self.evt_queue)):
-                self.fail("not expecting event %s" % (filter(event_match, self.evt_queue)))
+                self.fail("not expecting event %s" % (list(filter(event_match, self.evt_queue))))
 
 
     def output_write(self, *args, **kwargs):
@@ -350,7 +350,7 @@ class Test_gamelog_parsing(CsgoTestCase):
         self.assertEqual('courgette', client_from_storage.name)
         self.assertEqual("STEAM_1:0:1111111", client_from_storage.guid)
         self.assertEqual("11.222.111.222", client_from_storage.ip)
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
 
 
     def test_player_connected__unicode(self):
@@ -363,7 +363,7 @@ class Test_gamelog_parsing(CsgoTestCase):
         client = self.parser.clients.getByCID("2")
         self.assertIsNotNone(client)
         self.assertFalse(client.hide)
-        self.assertEqual(u"Spoon««", client.name)
+        self.assertEqual("Spoon««", client.name)
         self.assertEqual("STEAM_1:0:1111111", client.guid)
         self.assertEqual("11.222.111.222", client.ip)
         # THEN events are fired
@@ -373,10 +373,10 @@ class Test_gamelog_parsing(CsgoTestCase):
         clients_from_storage = self.parser.storage.getClientsMatching({'%name%': 'Spoon'})
         self.assertEqual(1, len(clients_from_storage))
         client_from_storage = clients_from_storage[0]
-        self.assertEqual(u"Spoon««", client_from_storage.name)
+        self.assertEqual("Spoon««", client_from_storage.name)
         self.assertEqual("STEAM_1:0:1111111", client_from_storage.guid)
         self.assertEqual("11.222.111.222", client_from_storage.ip)
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
 
 
     def test_bot_connected(self):
@@ -398,7 +398,7 @@ class Test_gamelog_parsing(CsgoTestCase):
         # THEN no client object is saved to database
         clients_from_storage = self.parser.storage.getClientsMatching({'%name%': 'Moe'})
         self.assertListEqual([], clients_from_storage)
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
 
 
     def test_kicked_by_console(self):
@@ -1165,7 +1165,7 @@ L 09/10/2012 - 15:21:28: rcon from "109.70.148.17:3552": command "status"'''.dec
         self.assertEqual(14, len(rv))
         assert_client(rv, "12", "nooky treac", "STEAM_1:1:00000807", "505", "111.111.181.248")
         assert_client(rv, "4", "karta218", "STEAM_1:0:00000003", "548", "111.111.114.142")
-        assert_client(rv, "30", u"骨 xX Assassine Xx 骨 ;)", "STEAM_1:0:00000823", "111", "194.208.143.16")
+        assert_client(rv, "30", "骨 xX Assassine Xx 骨 ;)", "STEAM_1:0:00000823", "111", "194.208.143.16")
         self.assertIn("6", rv)
         self.assertIn("7", rv)
         self.assertIn("10", rv)
@@ -1173,8 +1173,8 @@ L 09/10/2012 - 15:21:28: rcon from "109.70.148.17:3552": command "status"'''.dec
         self.assertIn("27", rv)
         self.assertIn("15", rv)
         self.assertIn("28", rv)
-        assert_client(rv, "25", u"кровососуший", "STEAM_1:1:00000018", "91", "111.111.237.162")
-        assert_client(rv, "23", u"MṢ Xilver", "STEAM_1:0:00000813", "131", "111.111.215.27")
+        assert_client(rv, "25", "кровососуший", "STEAM_1:1:00000018", "91", "111.111.237.162")
+        assert_client(rv, "23", "MṢ Xilver", "STEAM_1:0:00000813", "131", "111.111.215.27")
         self.assertIn("26", rv)
 
 
@@ -1233,7 +1233,7 @@ class Test_getClientOrCreate(CsgoTestCase):
     def test_new_client_with_cid_guid_name_team(self):
         # GIVEN
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(cid="2", guid="AAAAAAAAAAAA000000000000000", name="theName", team="CT")
         # THEN
@@ -1244,13 +1244,13 @@ class Test_getClientOrCreate(CsgoTestCase):
         self.assertEqual(TEAM_RED, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(3, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 3}, self.parser.storage.getCounts())
+        self.assertEqual(3, self.parser.storage.getCounts()['clients'])
 
 
     def test_new_client_with_cid_guid_name(self):
         # GIVEN
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 2}, self.parser.storage.getCounts())
+        self.assertEqual(2, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(cid="2", guid="AAAAAAAAAAAA000000000000000", name="theName")
         # THEN
@@ -1261,14 +1261,14 @@ class Test_getClientOrCreate(CsgoTestCase):
         self.assertEqual(TEAM_UNKNOWN, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(3, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 3}, self.parser.storage.getCounts())
+        self.assertEqual(3, self.parser.storage.getCounts()['clients'])
 
 
     def test_connected_client_by_cid(self):
         # GIVEN
         self.parser.clients.newClient(cid="2", guid="AAAAAAAAAAAA000000000000000", name="theName", team=TEAM_BLUE)
         self.assertEqual(3, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 3}, self.parser.storage.getCounts())
+        self.assertEqual(3, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(cid="2", guid=None, name=None)
         # THEN
@@ -1279,14 +1279,14 @@ class Test_getClientOrCreate(CsgoTestCase):
         self.assertEqual(TEAM_BLUE, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(3, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 3}, self.parser.storage.getCounts())
+        self.assertEqual(3, self.parser.storage.getCounts()['clients'])
 
 
     def test_connected_client_by_cid_different_name(self):
         # GIVEN
         self.parser.clients.newClient(cid="2", guid="AAAAAAAAAAAA000000000000000", name="theName", team=TEAM_BLUE)
         self.assertEqual(3, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 3}, self.parser.storage.getCounts())
+        self.assertEqual(3, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(cid="2", guid=None, name="newName")
         # THEN
@@ -1297,7 +1297,7 @@ class Test_getClientOrCreate(CsgoTestCase):
         self.assertEqual(TEAM_BLUE, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(3, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 3}, self.parser.storage.getCounts())
+        self.assertEqual(3, self.parser.storage.getCounts()['clients'])
 
 
     def test_known_client_by_cid(self):
@@ -1305,7 +1305,7 @@ class Test_getClientOrCreate(CsgoTestCase):
         known_client = Client(console=self.parser, guid="AAAAAAAAAAAA000000000000000", name="theName")
         known_client.save()
         self.assertEqual(2, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 3}, self.parser.storage.getCounts())
+        self.assertEqual(3, self.parser.storage.getCounts()['clients'])
         # WHEN
         client = self.parser.getClientOrCreate(cid="2", guid="AAAAAAAAAAAA000000000000000", name="newName", team="CT")
         # THEN
@@ -1317,7 +1317,7 @@ class Test_getClientOrCreate(CsgoTestCase):
         self.assertEqual(TEAM_RED, client.team)
         self.assertTrue(client.authed)
         self.assertEqual(3, len(self.parser.clients))
-        self.assertDictContainsSubset({'clients': 3}, self.parser.storage.getCounts())
+        self.assertEqual(3, self.parser.storage.getCounts()['clients'])
 
 
     def test_changing_team(self):
@@ -1350,12 +1350,12 @@ class Test_getClientOrCreate(CsgoTestCase):
         # GIVEN one connected player : courgette
         client = self.parser.getClient("194")
         self.assertEqual('courgette', client.name)
-        self.assertListEqual(['courgette'], map(lambda x: x.name, self.parser.clients.getList()))
+        self.assertListEqual(['courgette'], [x.name for x in self.parser.clients.getList()])
         # WHEN he disconnects
         self.parser.parseLine("""L 07/19/2013 - 17:18:44: "courgette<194><STEAM_1:0:1111111><CT>" disconnected (reason "Disconnect by user.")""")
         self.parser.parseLine("""L 07/19/2013 - 17:18:44: "courgette<194><STEAM_1:0:1111111><CT>" switched from team <TERRORIST> to <Unassigned>""")
         # THEN no more player is in the list of connected clients
-        self.assertListEqual([], map(lambda x: x.name, self.parser.clients.getList()))
+        self.assertListEqual([], [x.name for x in self.parser.clients.getList()])
 
 
 class Test_functional(CsgoTestCase):

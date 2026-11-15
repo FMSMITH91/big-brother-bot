@@ -18,20 +18,26 @@ or as ranges written 'LOWIP-HIGHIP'."""
 
 class NBError(Exception):
 	"""Raised for all netblock errors."""
+
+	@property
+	def message(self):
+		# Python 2 BaseException.message compatibility
+		return self.args[0] if len(self.args) == 1 else ''
+
 	pass
 class BadCIDRError(NBError):
 	"""Raised for a badly formed CIDR; subclass of NBError."""
 	pass
 
 # mask off 32 bits.
-B32M = 0xffffffffL
+B32M = 0xffffffff
 def m32(n):
 	"""Mask a number to 32 bits."""
 	return n & B32M
 
 def lenmask(len):
 	"""Return the mask for a given network length."""
-	return m32(-(1L<<(32-len)))
+	return m32(-(1<<(32-len)))
 
 def cidrrange(addr, length):
 	"""Given an IP address and a network size, return the low and
@@ -54,13 +60,13 @@ def strtoip(ipstr, min = 4):
 	"""Convert an IP address in string form to numeric form (an unsigned
 	32-bit integer in host byte order). min is the number of octets that
 	the IP address string must have."""
-	res = 0L
+	res = 0
 	n = ipstr.split('.')
 	ln = len(n)
 	if ln > 4 or ln < min:
 		raise NBError("Invalid number of IP octets")
 	for i in n:
-		res = res << 8L
+		res = res << 8
 		try:
 			ot = int(i)
 		except ValueError:
@@ -69,7 +75,7 @@ def strtoip(ipstr, min = 4):
 			raise NBError("invalid IP octet")
 		res = res + ot
 	# Now fix up for omitted trailing octets.
-	res = res << (8L * (4-ln))
+	res = res << (8 * (4-ln))
 	return res
 def convip(s):
 	"""Returns the start and end range of a single IP address, ie
@@ -153,7 +159,7 @@ def cidrtostr(ip, len):
 def fmaxlen(ip):
 	# Range excludes the high, so use 0,33 so we go 0 .. 32.
 	for i in range(0, 33):
-		if ip & (1L<<i):
+		if ip & (1<<i):
 			return 32-i
 	return 0
 # For internal use, we append the results to a list.
@@ -245,7 +251,7 @@ class IPRanges(ranges.Ranges):
 		"""Our argument (the first argument to 'in') is taken as
 		a string, not an IPRanges object. Use .subset() if you want
 		to know if one IPRanges is a subset of another."""
-		if isinstance(val, (int, long, float)):
+		if isinstance(val, (int, float)):
 			return ranges.Ranges.__contains__(self, val)
 		else:
 			return ranges.Ranges.__contains__(self, strtoip(val))

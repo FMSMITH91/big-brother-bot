@@ -27,13 +27,11 @@ import b3.config
 import json
 import os
 import re
-import string
 import sys
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
-from distutils import version
+import functools
 from time import sleep
-from types import StringType
 
 ## url from where we can get the latest B3 version number
 URL_B3_LATEST_VERSION = 'http://master.bigbrotherbot.net/version.json'
@@ -44,7 +42,15 @@ UPDATE_CHANNEL_BETA = 'beta'
 UPDATE_CHANNEL_DEV = 'dev'
 
 
-class B3version(version.StrictVersion):
+def _cmp(a, b):
+    """
+    Python 3 replacement for the removed cmp() builtin.
+    """
+    return (a > b) - (a < b)
+
+
+@functools.total_ordering
+class B3version(object):
     """
     Version numbering for BigBrotherBot.
     Compared to version.StrictVersion this class allows version numbers such as :
@@ -77,6 +83,31 @@ class B3version(version.StrictVersion):
 $''', re.VERBOSE)
     prerelease_order = {'dev': 0, 'a': 1, 'b': 2}
 
+    def __init__(self, vstring=None):
+        if vstring:
+            self.parse(vstring)
+
+    def __str__(self):
+        if self.version[2] == 0:
+            vstring = '.'.join(map(str, self.version[0:2]))
+        else:
+            vstring = '.'.join(map(str, self.version))
+        if self.prerelease:
+            vstring = vstring + self.prerelease[0] + str(self.prerelease[1])
+        return vstring
+
+    def __repr__(self):
+        return "%s ('%s')" % (self.__class__.__name__, str(self))
+
+    def __eq__(self, other):
+        return self._cmp(other) == 0
+
+    def __lt__(self, other):
+        return self._cmp(other) < 0
+
+    def __hash__(self):
+        return hash((self.version, self.prerelease, self.build_num))
+
     def parse (self, vstring):
         """
         Parse the version number from a string.
@@ -91,32 +122,32 @@ $''', re.VERBOSE)
 
         patch = match.group('patch')
         if patch:
-            self.version = tuple(map(string.atoi, [major, minor, patch]))
+            self.version = tuple(map(int, [major, minor, patch]))
         else:
-            self.version = tuple(map(string.atoi, [major, minor]) + [0])
+            self.version = tuple(list(map(int, [major, minor])) + [0])
 
         prerelease = match.group('tag')
         prerelease_num = match.group('tag_num')
         if prerelease:
-            self.prerelease = (prerelease, string.atoi(prerelease_num if prerelease_num else '0'))
+            self.prerelease = (prerelease, int(prerelease_num if prerelease_num else '0'))
         else:
             self.prerelease = None
 
         daily_num = match.group('build_num')
         if daily_num:
-            self.build_num = string.atoi(daily_num if daily_num else '0')
+            self.build_num = int(daily_num if daily_num else '0')
         else:
             self.build_num = None
 
-    def __cmp__ (self, other):
+    def _cmp(self, other):
         """
         Compare current object with another one.
         :param other: The other object
         """
-        if isinstance(other, StringType):
+        if isinstance(other, str):
             other = B3version(other)
 
-        compare = cmp(self.version, other.version)
+        compare = _cmp(self.version, other.version)
         if compare != 0:
             return compare
 
@@ -140,7 +171,7 @@ $''', re.VERBOSE)
         elif not self.prerelease and other.prerelease:
             return 1
         elif self.prerelease and other.prerelease:
-            return cmp((self.prerelease_order[self.prerelease[0]], self.prerelease[1]),
+            return _cmp((self.prerelease_order[self.prerelease[0]], self.prerelease[1]),
                        (self.prerelease_order[other.prerelease[0]], other.prerelease[1]))
 
     def __cmp_build(self, other):
@@ -155,7 +186,7 @@ $''', re.VERBOSE)
         elif not self.build_num and other.build_num:
             return 1
         elif self.build_num and other.build_num:
-            return cmp(self.build_num, other.build_num)
+            return _cmp(self.build_num, other.build_num)
 
 
 def getDefaultChannel(currentVersion):
@@ -202,30 +233,30 @@ def checkUpdate(currentVersion, channel=None, singleLine=True, showErrormsg=Fals
     errormessage = None
     
     try:
-        json_data = urllib2.urlopen(URL_B3_LATEST_VERSION, timeout=timeout).read()
+        json_data = urllib.request.urlopen(URL_B3_LATEST_VERSION, timeout=timeout).read()
         version_info = json.loads(json_data)
-    except IOError, e:
+    except IOError as e:
         if hasattr(e, 'reason'):
             errormessage = '%s' % e.reason
         elif hasattr(e, 'code'):
             errormessage = 'error code: %s' % e.code
         else:
             errormessage = '%s' % e
-    except Exception, e:
+    except Exception as e:
         errormessage = repr(e)
     else:
         latestVersion = None
         try:
             channels = version_info['B3']['channels']
-        except KeyError, err:
+        except KeyError as err:
             errormessage = repr(err) + '. %s' % version_info
         else:
             if channel not in channels:
-                errormessage = "unknown channel '%s': expecting (%s)"  % (channel, ', '.join(channels.keys()))
+                errormessage = "unknown channel '%s': expecting (%s)"  % (channel, ', '.join(list(channels.keys())))
             else:
                 try:
                     latestVersion = channels[channel]['latest-version']
-                except KeyError, err:
+                except KeyError as err:
                     errormessage = repr(err) + '. %s' % version_info
 
         if not errormessage:
@@ -242,7 +273,7 @@ def checkUpdate(currentVersion, channel=None, singleLine=True, showErrormsg=Fals
                     message = 'update available (v%s : %s)' % (latestVersion, latestUrl)
                 else:
                     message = """
-                 _\|/_
+                 _\\|/_
                  (o o)    {version:^21}
          +----oOO---OOo-----------------------+
          |                                    |
@@ -286,7 +317,7 @@ class DBUpdate(object):
                 for e in ('ini', 'cfg', 'xml'):
                     path = b3.getAbsolutePath(p % e, True)
                     if os.path.isfile(path):
-                        print "Using configuration file: %s" % path
+                        print("Using configuration file: %s" % path)
                         config = path
                         sleep(3)
                         break
@@ -307,8 +338,8 @@ class DBUpdate(object):
         Run the DB update
         """
         clearscreen()
-        print """
-                        _\|/_
+        print("""
+                        _\\|/_
                         (o o)    {:>32}
                 +----oOO---OOo----------------------------------+
                 |                                               |
@@ -316,9 +347,9 @@ class DBUpdate(object):
                 |                                               |
                 +-----------------------------------------------+
 
-        """.format('B3 : %s' % b3.__version__)
+        """.format('B3 : %s' % b3.__version__))
 
-        raw_input("press any key to start the update...")
+        input("press any key to start the update...")
 
         def _update_database(storage, update_version):
             """
@@ -330,11 +361,11 @@ class DBUpdate(object):
                 sql = b3.getAbsolutePath('@b3/sql/%s/b3-update-%s.sql' % (storage.protocol, update_version))
                 if os.path.isfile(sql):
                     try:
-                        print '>>> updating database to version %s' % update_version
+                        print('>>> updating database to version %s' % update_version)
                         sleep(.5)
                         storage.queryFromFile(sql)
-                    except Exception, err:
-                        print 'WARNING: could not update database properly: %s' % err
+                    except Exception as err:
+                        print('WARNING: could not update database properly: %s' % err)
                         sleep(3)
 
         dsn = self.config.get('b3', 'database')

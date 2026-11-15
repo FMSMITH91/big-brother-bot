@@ -45,7 +45,15 @@ MAX_MESSAGE_LENGTH=4+4+4096+1 # command (4), id (4), string (4096), string2 (1)
 # extra packet that may never come if the previous packet was this large.
 PROBABLY_SPLIT_IF_LARGER_THAN = MAX_MESSAGE_LENGTH - 400
 
+# encoding used on the wire for RCON command and response strings
+ENCODING = 'UTF-8'
+
 class SourceRconError(Exception):
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     pass
 
 class SourceRcon(object):
@@ -75,27 +83,33 @@ class SourceRcon(object):
         self.tcp.connect((self.host, self.port))
 
     def send(self, cmd, message):
-        """Send command and message to the server. Should only be used internally."""
+        """Send command and message to the server. Should only be used internally.
+           message can be a str (encoded as UTF-8) or bytes."""
+        if message is None:
+            message = b''
+        elif isinstance(message, str):
+            message = message.encode(ENCODING)
         if len(message) > MAX_COMMAND_LENGTH:
             raise SourceRconError('RCON message too large to send')
 
         self.reqid += 1
-        data = struct.pack('<l', self.reqid) + struct.pack('<l', cmd) + message + '\x00\x00'
+        data = struct.pack('<l', self.reqid) + struct.pack('<l', cmd) + message + b'\x00\x00'
         self.tcp.send(struct.pack('<l', len(data)) + data)
 
     def receive(self):
-        """Receive a reply from the server. Should only be used internally."""
+        """Receive a reply from the server. Should only be used internally.
+           Return True on successful authentication, or the response as a str (decoded from UTF-8)."""
         packetsize = False
         requestid = False
         response = False
-        message = ''
-        message2 = ''
+        message = b''
+        message2 = b''
 
         # response may be split into multiple packets, we don't know how many
         # so we loop until we decide to finish
         while 1:
             # read the size of this packet
-            buf = ''
+            buf = b''
 
             while len(buf) < 4:
                 try:
@@ -118,7 +132,7 @@ class SourceRcon(object):
                 raise SourceRconError('RCON packet claims to have illegal size: %d bytes' % (packetsize,))
 
             # read the whole packet
-            buf = ''
+            buf = b''
 
             while len(buf) < packetsize:
                 try:
@@ -155,9 +169,9 @@ class SourceRcon(object):
 
             # extract the two strings using index magic
             str1 = buf[8:]
-            pos1 = str1.index('\x00')
+            pos1 = str1.index(b'\x00')
             str2 = str1[pos1+1:]
-            pos2 = str2.index('\x00')
+            pos2 = str2.index(b'\x00')
             crap = str2[pos2+1:]
 
             if crap:
@@ -178,9 +192,9 @@ class SourceRcon(object):
             raise SourceRconError('Timed out while waiting for reply')
 
         elif message2:
-            raise SourceRconError('Invalid response message: %s' % (repr(message2),))
+            raise SourceRconError('Invalid response message: %s' % (repr(message2.decode(ENCODING, 'replace')),))
 
-        return message
+        return message.decode(ENCODING, 'replace')
 
     def rcon(self, command):
         """Send RCON command to the server. Connect and auth if necessary,
@@ -189,8 +203,8 @@ class SourceRcon(object):
         if '\n' in command:
             commands = command.split('\n')
             def f(x): y = x.strip(); return len(y) and not y.startswith("//")
-            commands = filter(f, commands)
-            results = map(self.rcon, commands)
+            commands = list(filter(f, commands))
+            results = list(map(self.rcon, commands))
             return "".join(results)
 
         # send a single command. connect and auth if necessary.

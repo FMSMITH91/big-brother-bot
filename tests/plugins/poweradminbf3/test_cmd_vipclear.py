@@ -43,7 +43,7 @@ vipclear: 20
 
 
     def test_nominal(self):
-        when(self.console).write(('reservedSlotsList.clear',)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.clear',)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vipclear")
@@ -51,7 +51,7 @@ vipclear: 20
         self.assertEqual('VIP list is now empty', self.moderator.message_history[0])
 
     def test_frostbite_error(self):
-        when(self.console).write(('reservedSlotsList.clear',)).thenRaise(CommandFailedError(['f00']))
+        when(self.console, strict=False).write(('reservedSlotsList.clear',)).thenRaise(CommandFailedError(['f00']))
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vipclear")

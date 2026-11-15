@@ -514,20 +514,20 @@ class Packet(object):
     def __init__(self):
         self.raw_packet = None
         self.msgType = None
-        self.data = ""
+        self.data = b""
         self.dataLength = 0
         self.playerId = None
         self.message = None
 
     def encode(self):
-        s = ""
+        s = b""
         s += pack('>H', self.msgType)
         s += pack('>i', len(self.data))
         s += self.data
         return s
         
     def addGUID(self, playerId):
-        self.data += pack('>Q', long(playerId))
+        self.data += pack('>Q', int(playerId))
     
     def addString(self, s):
         encodedData = s.encode('utf-8')
@@ -552,7 +552,7 @@ class Packet(object):
         length = self.getInt()
         data = self.data[0:length]
         self.data = self.data[length:]
-        return data.decode('utf-8')
+        return data.decode('utf-8', 'replace')
 
     def __repr__(self):
         if self.raw_packet is not None:
@@ -590,7 +590,7 @@ class Client(asyncore.dispatcher_with_send):
         self._packetListener = packetListener
         self.isAuthed = False
         self.keepalive = True
-        self.readBuffer = ""
+        self.readBuffer = b""
         self.console.info("Starting RCON for game server %s:%s" % (host, port))
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect((self._host, self._port))
@@ -603,7 +603,7 @@ class Client(asyncore.dispatcher_with_send):
         self.console.info("RCON authenticating...")
         password = self._password
         password += challenge
-        sha1_pass_bytes = sha1(password).hexdigest().upper()
+        sha1_pass_bytes = sha1(password.encode('utf-8')).hexdigest().upper()
         packet = Packet()
         packet.msgType = MessageType.PASSWORD
         packet.addString(sha1_pass_bytes)
@@ -612,7 +612,7 @@ class Client(asyncore.dispatcher_with_send):
     def handle_close(self):
         self.close()
         self.isAuthed = False
-        self.readBuffer = ""
+        self.readBuffer = b""
         if self.keepalive:
             self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
             self.connect((self._host, self._port))
@@ -628,12 +628,12 @@ class Client(asyncore.dispatcher_with_send):
                 try:
                     self._packetListener(packet)
                 except Exception as e:
-                    self.error("Failed to handle game server %r" % packet, exc_info=e)
+                    self.console.error("Failed to handle game server %r" % packet, exc_info=e)
                 self.readBuffer = self.readBuffer[packetSize:]
        
     def sendPacket(self, packet):
         try:
             self.console.verbose2("RCON< %r" % packet)
             self.send(packet.encode())
-        except socket.error, e:
+        except socket.error as e:
             self.console.error(repr(e))

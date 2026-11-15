@@ -31,11 +31,11 @@ import time
 import threading
 
 from b3 import functions
-from ConfigParser import NoOptionError
+from configparser import NoOptionError
 
 try:
     import paramiko
-except ImportError, ee:
+except ImportError as ee:
     paramiko = None # just to remove a warning
     log = b3.output.getInstance()
     log.critical("Missing module paramiko. The paramiko module is required to connect with SFTP. "
@@ -123,7 +123,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
         except NoOptionError:
             self.warning('could not find settings/timeout in config file, '
                          'using default: %s' % self._connectionTimeout)
-        except ValueError, e:
+        except ValueError as e:
             self._connectionTimeout = SftpytailPlugin.default_connection_timeout
             self.error('could not load settings/timeout config value: %s' % e)
             self.debug('using default value (%s) for settings/timeout' % self._connectionTimeout)
@@ -136,7 +136,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
         except NoOptionError:
             self.warning('could not find settings/maxGapBytes in config file, '
                          'using default: %s' % self._maxGap)
-        except ValueError, e:
+        except ValueError as e:
             self._maxGap = SftpytailPlugin.default_maxGap
             self.error('could not load settings/maxGapBytes config value: %s' % e)
             self.debug('using default value (%s) for settings/maxGapBytes' % self._maxGap)
@@ -148,7 +148,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
             self.debug('loaded settings/known_hosts_file: %s' % self.known_hosts_file)
         except (NoOptionError, KeyError):
             pass
-        except ValueError, e:
+        except ValueError as e:
             self.known_hosts_file = None
             self.error('could not load settings/known_host config value: %s' % e)
             self.debug('known_host_file set to: %r' % self.known_hosts_file)
@@ -160,7 +160,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
             self.debug('loaded settings/private_key_file: %s' % self.private_key_file)
         except (NoOptionError, KeyError):
             pass
-        except ValueError, e:
+        except ValueError as e:
             self.private_key_file = None
             self.error('could not load settings/private_key_file config value: %s' % e)
             self.debug('private_key_file set to: %r' % self.private_key_file )
@@ -192,9 +192,9 @@ class SftpytailPlugin(b3.plugin.Plugin):
         transport = sftp = None
         rfile = None
         self.file = open(self.lgame_log, 'ab')
-        self.file.write('\r\n')
-        self.file.write('B3 has been restarted\r\n')
-        self.file.write('\r\n')
+        self.file.write(b'\r\n')
+        self.file.write(b'B3 has been restarted\r\n')
+        self.file.write(b'\r\n')
         while self.console.working:
             try:
                 if not sftp:
@@ -205,7 +205,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
                     #self.verbose("Getting remote file size for %s" % self.sftpconfig['path'])
                     remotesize = sftp.stat(self.sftpconfig['path']).st_size
                     #self.verbose("Remote file size is %s" % remoteSize)
-                except IOError, err:
+                except IOError as err:
                     self.critical(err)
                     raise err
                 if self._remoteFileOffset is None:
@@ -223,7 +223,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
                     #           self._remoteFileOffset, remoteSize - self._remoteFileOffset))
                     if not rfile:
                         self.debug('opening remote game log file %s for reading' % self.sftpconfig['path'])
-                        rfile = sftp.open(self.sftpconfig['path'], 'r')
+                        rfile = sftp.open(self.sftpconfig['path'], 'rb')
                     rfile.seek(self._remoteFileOffset)
                     self.debug('reading remote game log file from offset %s' % self._remoteFileOffset)
                     handle_download(rfile.read())
@@ -234,7 +234,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
                     if self.console._paused:
                         self.console.unpause()
                         self.debug('Unpausing')
-            except paramiko.SSHException, err:
+            except paramiko.SSHException as err:
                 self.warning(str(err))
                 self._nbConsecutiveConnFailure += 1
                 self.verbose('lost connection to server: pausing until updated properly')
@@ -244,13 +244,13 @@ class SftpytailPlugin(b3.plugin.Plugin):
                 if self._logAppend:
                     try:
                         self.file = open(self.lgame_log, 'ab')
-                        self.file.write('\r\n')
-                        self.file.write('B3 has restarted writing the log file\r\n')
-                        self.file.write('\r\n')
+                        self.file.write(b'\r\n')
+                        self.file.write(b'B3 has restarted writing the log file\r\n')
+                        self.file.write(b'\r\n')
                     except IOError:
-                        self.file = open(self.lgame_log, 'w')
+                        self.file = open(self.lgame_log, 'wb')
                 else:
-                    self.file = open(self.lgame_log, 'w')
+                    self.file = open(self.lgame_log, 'wb')
                 self.file.close()
                 self.file = open(self.lgame_log, 'ab')
                 try:
@@ -299,7 +299,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
         hostkey = None
         host_keys = self.get_host_keys()
         if hostname in host_keys:
-            hostkeytype = host_keys[hostname].keys()[0]
+            hostkeytype = list(host_keys[hostname].keys())[0]
             hostkey = host_keys[hostname][hostkeytype]
             self.info('using host key of type %s' % hostkeytype)
 
@@ -339,7 +339,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
         host_keys = {}
         try:
             host_keys = paramiko.util.load_host_keys(host_keys_file)
-        except Exception, err:
+        except Exception as err:
             self.warning("cannot read host keys file: %r. " % host_keys_file, exc_info=err)
         return host_keys
 
@@ -348,10 +348,25 @@ class SftpytailPlugin(b3.plugin.Plugin):
             with open(self.private_key_file, "r") as f:
                 key_head = f.readline()
             if 'DSA' in key_head:
-                key_type = paramiko.DSSKey
+                # DSS keys support was dropped in recent paramiko versions
+                key_types = [getattr(paramiko, 'DSSKey', None)]
             elif 'RSA' in key_head:
-                key_type = paramiko.RSAKey
+                key_types = [paramiko.RSAKey]
+            elif 'EC' in key_head:
+                key_types = [getattr(paramiko, 'ECDSAKey', None)]
+            elif 'OPENSSH' in key_head:
+                # new OpenSSH private key format: the key type is not part of the header
+                key_types = [getattr(paramiko, name, None) for name in ('Ed25519Key', 'ECDSAKey', 'RSAKey', 'DSSKey')]
             else:
+                key_types = []
+            key_types = [x for x in key_types if x is not None]
+            if not key_types:
                 raise ValueError("can't identify private key type")
-            with open(self.private_key_file, "r") as f:
-                return key_type.from_private_key(f, password=password)
+            last_error = None
+            for key_type in key_types:
+                try:
+                    with open(self.private_key_file, "r") as f:
+                        return key_type.from_private_key(f, password=password)
+                except paramiko.SSHException as err:
+                    last_error = err
+            raise last_error

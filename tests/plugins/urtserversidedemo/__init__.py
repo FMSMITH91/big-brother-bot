@@ -18,8 +18,8 @@
 import unittest
 import logging
 
-from mock import Mock
-from mockito.mockito import when
+from unittest.mock import Mock
+from mockito import when, any as any_
 from b3.config import XmlConfigParser, CfgConfigParser
 from b3.parsers.iourt41 import Iourt41Parser
 from b3.plugins.admin import AdminPlugin
@@ -29,7 +29,7 @@ from b3.plugins.urtserversidedemo import UrtserversidedemoPlugin
 
 
 def write(*args, **kwargs):
-    print "WRITE: %s" % args[0]
+    print("WRITE: %s" % args[0])
     return ""
 
 class Iourt41_TestCase_mixin(unittest.TestCase):
@@ -69,6 +69,8 @@ class Iourt41TestCase(Iourt41_TestCase_mixin):
         self.adminPlugin.onStartup()
 
         # make sure the admin plugin obtained by other plugins is our admin plugin
+        # (other plugins are reported as not loaded: recent mockito versions raise on unstubbed arguments)
+        when(self.console).getPlugin(any_()).thenReturn(None)
         when(self.console).getPlugin('admin').thenReturn(self.adminPlugin)
 
     def tearDown(self):

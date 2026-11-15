@@ -23,7 +23,7 @@
 # ################################################################### #
 
 from unittest import TestCase
-from mock import patch
+from unittest.mock import patch
 
 
 class BanlistTestCase(TestCase):
@@ -37,8 +37,10 @@ class BanlistTestCase(TestCase):
 
         self.patcher_isfile = patch("os.path.isfile")
         self.patcher_isfile.start()
+        # make sure os.path.isfile is restored even if setUp fails later (tearDown is not called in that case)
+        self.addCleanup(patch.stopall)
 
-        self.patcher_open = patch("__builtin__.open")
+        self.patcher_open = patch("b3.plugins.banlist.open", create=True)
         self.mock_open = self.patcher_open.start()
         manager = self.mock_open.return_value.__enter__.return_value
         manager.read.side_effect = lambda: self.file_content
@@ -50,8 +52,6 @@ class BanlistTestCase(TestCase):
 
 
     def tearDown(self):
-        self.patcher_isfile.stop()
-        self.patcher_open.stop()
-        self.patcher_getModifiedTime.stop()
-        self.patcher_getHumanModifiedTime.stop()
+        # patchers are stopped by the cleanup registered in setUp
+        pass
 

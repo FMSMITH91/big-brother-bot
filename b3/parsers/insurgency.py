@@ -24,8 +24,7 @@
 
 import re
 import time
-import new
-
+import types
 from b3 import TEAM_UNKNOWN
 from b3 import TEAM_BLUE
 from b3 import TEAM_RED
@@ -75,7 +74,7 @@ RE_HL_LOG_LINE = r'''^L [01]\d/[0-3]\d/\d+ - [0-2]\d:[0-5]\d:[0-5]\d:\s*(?P<data
 
 # Regular expression able to extract properties from HalfLife game engine log line as described at
 # https://developer.valvesoftware.com/wiki/HL_Log_Standard#Notes
-RE_HL_LOG_PROPERTY = re.compile('''\((?P<key>[^\s\(\)]+)(?P<data>| "(?P<value>[^"]*)")\)''')
+RE_HL_LOG_PROPERTY = re.compile('''\\((?P<key>[^\\s\\(\\)]+)(?P<data>| "(?P<value>[^"]*)")\\)''')
 
 # Regular expression to parse cvar queries responses
 RE_CVAR = re.compile(r'''^"(?P<cvar>\S+?)" = "(?P<value>.*?)" \( def. "(?P<default>.*?)".*$''', re.MULTILINE)
@@ -105,6 +104,8 @@ class InsurgencyParser(Parser):
     The Insurgency B3 parser class
     """
     gameName = "insurgency"
+    # Source engine game logs are UTF-8 encoded (can be overridden with the 'server/encoding' config option)
+    encoding = 'UTF-8'
     privateMsg = True
     OutputClass = Rcon
     PunkBuster = None
@@ -179,9 +180,9 @@ class InsurgencyParser(Parser):
                 client.message('do you mean : %s ?' % ', '.join(suggestions))
 
         adminPlugin = self.getPlugin('admin')
-        adminPlugin.parse_map_parameters = new.instancemethod(parse_map_parameters, adminPlugin)
+        adminPlugin.parse_map_parameters = types.MethodType(parse_map_parameters, adminPlugin)
         command = adminPlugin._commands['map']
-        command.func = new.instancemethod(new_cmd_map, adminPlugin)
+        command.func = types.MethodType(new_cmd_map, adminPlugin)
         command.help = new_cmd_map.__doc__.strip()
 
     def startup(self):
@@ -258,7 +259,7 @@ class InsurgencyParser(Parser):
         # L 08/26/2012 - 05:29:47: server cvars end
         # L 02/07/2015 - 15:15:24: Log file started (file "logs\\L023_081_154_166_23274_201502071515_001.log") (game "C:\\servers\\insurgency") (version "5885")
         # L 02/07/2015 - 15:15:22: Log file closed
-        print "ignored"
+        print("ignored")
         pass
 
     @ger.gameEvent(r'^"(?P<a_name>.+)<(?P<a_cid>\d+)><(?P<a_guid>.+)><(?P<a_team>.*)>" killed "(?P<v_name>.+)<(?P<v_cid>\d+)><(?P<v_guid>.+)><(?P<v_team>.*)>" with "(?P<weapon>\S*)"(?P<properties>.*)$',
@@ -612,7 +613,7 @@ class InsurgencyParser(Parser):
         """
         plist = self.getPlayerList()
 
-        for cid, c in plist.iteritems():
+        for cid, c in plist.items():
             client = self.clients.getByCID(cid)
             if client:
                 if client.guid == c.guid:
@@ -629,11 +630,11 @@ class InsurgencyParser(Parser):
         if self.clients:
             client_cid_list = []
 
-            for cl in plist.values():
+            for cl in list(plist.values()):
                 client_cid_list.append(cl.cid)
 
             #Use clients.items so we get all clients, including bots
-            client_list = self.clients.items()
+            client_list = list(self.clients.items())
             for cid, client in client_list:
                 self.verbose2('Client in Client list %s' % client.name)
                 if client.cid not in client_cid_list:
@@ -697,7 +698,7 @@ class InsurgencyParser(Parser):
         :param silent: Whether or not to announce this kick
         """
         self.debug('kick reason: [%s]' % reason)
-        if isinstance(client, basestring):
+        if isinstance(client, str):
             clients = self.clients.getByMagic(client)
             if len(clients) != 1:
                 return
@@ -731,7 +732,7 @@ class InsurgencyParser(Parser):
             return
 
         self.debug('BAN : client: %s, reason: %s', client, reason)
-        if isinstance(client, basestring):
+        if isinstance(client, str):
             clients = self.clients.getByMagic(client)
             if len(clients) != 1:
                 return
@@ -803,7 +804,7 @@ class InsurgencyParser(Parser):
             return
 
         self.debug('TEMPBAN : client: %s - duration: %s - reason: %s', client, duration, reason)
-        if isinstance(client, basestring):
+        if isinstance(client, str):
             clients = self.clients.getByMagic(client)
             if len(clients) != 1:
                 return
@@ -847,7 +848,7 @@ class InsurgencyParser(Parser):
         map_rotation = []
         self.map_cycles = {}
         self.map_cycle_no = 0
-        f = open(mapcyclefile, 'r')
+        f = open(mapcyclefile, 'r', encoding=self.encoding or 'UTF-8', errors='replace')
         for line in f:
             if len(line):
                 map_rotation.append(line)
@@ -870,7 +871,7 @@ class InsurgencyParser(Parser):
         Return a list of suggested map names in cases it fails to recognize the map that was provided.
         """
         map_name = self.getMapsSoundingLike(map_name)
-        if not isinstance(map_name, basestring):
+        if not isinstance(map_name, str):
             return map_name
         else:
             self.saybig('Changing map to: %s - %s' % (map_name, gamemode_name))
@@ -892,7 +893,7 @@ class InsurgencyParser(Parser):
         """
         clients = self.queryServerInfo()
         pings = {}
-        for cid, client in clients.iteritems():
+        for cid, client in clients.items():
             pings[cid] = client.ping
         return pings
 
@@ -908,7 +909,7 @@ class InsurgencyParser(Parser):
         Called if b3.admin.penalizeClient() does not know a given penalty type.
         Overwrite this to add customized penalties for your game like 'slap', 'nuke',
         'mute', 'kill' or anything you want.
-        /!\ This method must return True if the penalty was inflicted.
+        /!\\ This method must return True if the penalty was inflicted.
         """
         pass
         # TODO
@@ -936,9 +937,11 @@ class InsurgencyParser(Parser):
         """
         if line is None:
             return
+        if isinstance(line, bytes):
+            line = line.decode('UTF-8', 'replace')
         if line.startswith("mp\x08 \x08\x08 \x08"):
             line = line[8:]
-        text = line.decode('UTF-8', 'replace')
+        text = line
         data = None
 
         m = re.match(RE_HL_LOG_LINE, text)
@@ -950,7 +953,7 @@ class InsurgencyParser(Parser):
         if data is not None:
             hfunc, param_dict = ger.getHandler(data)
             if hfunc:
-                self.verbose2("calling %s%r" % (hfunc.func_name, param_dict))
+                self.verbose2("calling %s%r" % (hfunc.__name__, param_dict))
                 event = hfunc(self, **param_dict)
                 if event:
                     self.queueEvent(event)

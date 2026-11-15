@@ -21,7 +21,7 @@ Usage:
 
 # Packaging B3
 
-To be able to build B3 distribution packages you need to have installed Python 2.7 32bit on your system.
+To be able to build B3 distribution packages you need to have installed Python 3.9+ on your system.
 You can check your python version by starting the python interpreter in a terminal window (or command 
 prompt on win32 platform). Also you need to make sure to have `python` in your PATH environment variable.  
 You also need to have installed [GIT](http://git-scm.com/) on your system and make sure that the `git` command
@@ -40,7 +40,6 @@ Open a terminal window (or command prompt if on win32 platform) and type the fol
 
 ## Windows
 
-Install [Microsofts Visual C++ Compiler for Python2.7](http://www.microsoft.com/en-us/download/details.aspx?id=44266).  
 Install [InnoSetup](http://www.jrsoftware.org/isinfo.php).  
 Install [psycopg2](http://www.stickpeople.com/projects/python/win-psycopg/).  
 Install [pycripto](http://www.voidspace.org.uk/python/modules.shtml#pycrypto).  

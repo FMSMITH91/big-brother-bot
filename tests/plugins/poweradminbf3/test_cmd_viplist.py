@@ -22,7 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
-from mock import call, Mock
+from unittest.mock import call, Mock
 from mockito import when
 from b3.config import CfgConfigParser
 from b3.plugins.poweradminbf3 import Poweradminbf3Plugin
@@ -50,7 +50,7 @@ viplist: 20
 
 class Test_cmd_viplist(Cmd_viplist_TestCase):
     def test_empty_vip_list(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!viplist")
@@ -59,9 +59,9 @@ class Test_cmd_viplist(Cmd_viplist_TestCase):
 
 
     def test_4_vips(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'name2'])
-        when(self.console).write(('reservedSlotsList.list', 4)).thenReturn(['name4'])
-        when(self.console).write(('reservedSlotsList.list', 5)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'name2'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 4)).thenReturn(['name4'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 5)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!viplist")
@@ -70,8 +70,8 @@ class Test_cmd_viplist(Cmd_viplist_TestCase):
 
 
     def test_4_vips_one_is_connected(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'Joe'])
-        when(self.console).write(('reservedSlotsList.list', 4)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'Joe'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 4)).thenReturn([])
         self.joe.connects("Joe")
         self.moderator.connects("moderator")
         self.moderator.message_history = []
@@ -84,8 +84,8 @@ class Test_cmd_viplist(Cmd_viplist_TestCase):
     def test_500_vips(self):
         list = ['Joe']
         list.extend(['name%s' % x for x in range(1,500)])
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(list)
-        when(self.console).write(('reservedSlotsList.list', 500)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(list)
+        when(self.console, strict=False).write(('reservedSlotsList.list', 500)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!viplist")
@@ -96,8 +96,8 @@ class Test_cmd_viplist(Cmd_viplist_TestCase):
     def test_500_vips_3_are_connected(self):
         list = ['joe', 'moderator', 'simon']
         list.extend(['name%s' % x for x in range(1,20)])
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(list)
-        when(self.console).write(('reservedSlotsList.list', 22)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(list)
+        when(self.console, strict=False).write(('reservedSlotsList.list', 22)).thenReturn([])
         self.joe.connects("joe")
         self.simon.connects("simon")
         self.reg.connects("reg")
@@ -111,7 +111,7 @@ class Test_cmd_viplist(Cmd_viplist_TestCase):
 
 class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
     def test_empty_vip_list(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!viplist")
@@ -120,9 +120,9 @@ class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
 
 
     def test_4_vips_matching_filter(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'name2'])
-        when(self.console).write(('reservedSlotsList.list', 4)).thenReturn(['name4'])
-        when(self.console).write(('reservedSlotsList.list', 5)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'name2'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 4)).thenReturn(['name4'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 5)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!viplist name")
@@ -131,9 +131,9 @@ class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
 
 
     def test_4_vips_only_one_matching_filter(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'foo', 'name3', 'name2'])
-        when(self.console).write(('reservedSlotsList.list', 4)).thenReturn(['name4'])
-        when(self.console).write(('reservedSlotsList.list', 5)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'foo', 'name3', 'name2'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 4)).thenReturn(['name4'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 5)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!viplist fo")
@@ -142,8 +142,8 @@ class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
 
 
     def test_4_vips_one_is_connected_not_matching(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'Joe'])
-        when(self.console).write(('reservedSlotsList.list', 4)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'Joe'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 4)).thenReturn([])
         self.joe.connects("Joe")
         self.moderator.connects("moderator")
         self.moderator.message_history = []
@@ -153,8 +153,8 @@ class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
 
 
     def test_4_vips_one_is_connected_matching(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'Joe'])
-        when(self.console).write(('reservedSlotsList.list', 4)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'Joe'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 4)).thenReturn([])
         self.joe.connects("Joe")
         self.moderator.connects("moderator")
         self.moderator.message_history = []
@@ -166,8 +166,8 @@ class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
     def test_lots_of_vips_non_matching(self):
         list = ['Joe']
         list.extend(['name%s' % x for x in range(1,50)])
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(list)
-        when(self.console).write(('reservedSlotsList.list', 50)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(list)
+        when(self.console, strict=False).write(('reservedSlotsList.list', 50)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!viplist foo")
@@ -178,8 +178,8 @@ class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
         list = ['Joe']
         list.extend(['name%s' % x for x in range(1,25)])
         list.extend(['foo%s' % x for x in range(25,50)])
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(list)
-        when(self.console).write(('reservedSlotsList.list', 50)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(list)
+        when(self.console, strict=False).write(('reservedSlotsList.list', 50)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!viplist foo")
@@ -191,8 +191,8 @@ class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
         list = ['joe', 'moderator', 'simon']
         list.extend(['name%s' % x for x in range(3,12)])
         list.extend(['foo%s' % x for x in range(12,25)])
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(list)
-        when(self.console).write(('reservedSlotsList.list', 25)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(list)
+        when(self.console, strict=False).write(('reservedSlotsList.list', 25)).thenReturn([])
         self.joe.connects("joe")
         self.simon.connects("simon")
         self.reg.connects("reg")
@@ -208,8 +208,8 @@ class Test_cmd_viplist_filtered(Cmd_viplist_TestCase):
     def test_only_connected_are_matching(self):
         list = ['joe', 'moderator', 'simon']
         list.extend(['name%s' % x for x in range(3,15)])
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(list)
-        when(self.console).write(('reservedSlotsList.list', 15)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(list)
+        when(self.console, strict=False).write(('reservedSlotsList.list', 15)).thenReturn([])
         self.joe.connects("joe")
         self.simon.connects("simon")
         self.reg.connects("reg")

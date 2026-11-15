@@ -22,10 +22,11 @@
 #                                                                     #
 # ################################################################### #
 
+import ast
 import re
 from textwrap import dedent
-import unittest2 as unittest
-from mock import Mock, DEFAULT, patch, call
+import unittest
+from unittest.mock import Mock, DEFAULT, patch, call
 from mockito import when, verify
 import b3
 from b3.clients import Client, Clients
@@ -179,7 +180,7 @@ class Test_bfh_events(BFHTestCase):
 
         event = self.parser.queueEvent.call_args[0][0]
         self.assertEqual("Say", self.parser.getEventName(event.type))
-        self.assertEquals('test all', event.data)
+        self.assertEqual('test all', event.data)
         self.assertEqual(self.joe, event.client)
 
     def test_player_onChat_event_team(self):
@@ -190,7 +191,7 @@ class Test_bfh_events(BFHTestCase):
 
         event = self.parser.queueEvent.call_args[0][0]
         self.assertEqual("Team Say", self.parser.getEventName(event.type))
-        self.assertEquals('test team', event.data)
+        self.assertEqual('test team', event.data)
         self.assertEqual(self.joe, event.client)
 
     def test_player_onChat_event_squad(self):
@@ -201,7 +202,7 @@ class Test_bfh_events(BFHTestCase):
 
         event = self.parser.queueEvent.call_args[0][0]
         self.assertEqual("Squad Say", self.parser.getEventName(event.type))
-        self.assertEquals('test squad', event.data)
+        self.assertEqual('test squad', event.data)
         self.assertEqual(self.joe, event.client)
 
     def test_server_onLevelLoaded(self):
@@ -216,7 +217,7 @@ class Test_bfh_events(BFHTestCase):
         # THEN
         event = self.parser.queueEvent.call_args[0][0]
         self.assertEqual('Game Warmup', self.parser.getEventName(event.type))
-        self.assertEquals('MP_Glades', event.data)
+        self.assertEqual('MP_Glades', event.data)
         self.assertListEqual([], warning_mock.mock_calls)
 
 
@@ -236,13 +237,21 @@ class Test_punkbuster_events(BFHTestCase):
     def assert_pb_misc_evt(self, msg):
         assert str(self.pb(msg)).startswith('Event<EVT_PUNKBUSTER_MISC>')
 
+    def assert_pb_evt(self, expected, event):
+        # compare the event key and its data rather than the event repr: dict ordering
+        # differs between Python 2 and Python 3
+        m = re.match(r"^(Event<\w+>)\((.*)\)$", expected, re.DOTALL)
+        self.assertIsNotNone(m, expected)
+        self.assertEqual(m.group(1), str(event).split('(', 1)[0])
+        self.assertEqual(ast.literal_eval('(%s)' % m.group(2)), (event.data, event.client, event.target))
+
     def test_PB_SV_BanList(self):
         self.assert_pb_misc_evt(
             'PunkBuster Server: 1   b59ffffffffffffffffffffffffffc7d {13/15} "Cucurbitaceae" "87.45.14.2:3659" retest" ""')
         self.assert_pb_misc_evt(
             'PunkBuster Server: 1   b59ffffffffffffffffffffffffffc7d {0/1440} "Cucurbitaceae" "87.45.14.2:3659" mlkjsqfd" ""')
 
-        self.assertEquals(
+        self.assertEqual(
             '''Event<EVT_PUNKBUSTER_UNKNOWN>(['PunkBuster Server: 1   (UnBanned) b59ffffffffffffffffffffffffffc7d {15/15} "Cucurbitaceae" "87.45.14.2:3659" retest" ""'], None, None)''',
             str(self.pb(
                 'PunkBuster Server: 1   (UnBanned) b59ffffffffffffffffffffffffffc7d {15/15} "Cucurbitaceae" "87.45.14.2:3659" retest" ""')))
@@ -253,16 +262,16 @@ class Test_punkbuster_events(BFHTestCase):
     def test_PB_UCON_message(self):
         result = self.pb(
             'PunkBuster Server: PB UCON "ggc_85.214.107.154"@85.214.107.154:14516 [admin.say "GGC-Stream.com - Welcome Cucurbitaceae with the GUID 31077c7d to our server." all]\n')
-        self.assertEqual(
+        self.assert_pb_evt(
             'Event<EVT_PUNKBUSTER_UCON>({\'ip\': \'85.214.107.154\', \'cmd\': \'admin.say "GGC-Stream.com - Welcome Cucurbitaceae with the GUID 31077c7d to our server." all\', \'from\': \'ggc_85.214.107.154\', \'port\': \'14516\'}, None, None)',
-            str(result))
+            result)
 
     def test_PB_Screenshot_received_message(self):
         result = self.pb(
             'PunkBuster Server: Screenshot C:\\games\\bf3\\173_199_73_213_25200\\862147\\bf3\\pb\\svss\\pb000709.png successfully received (MD5=4576546546546546546546546543E1E1) from 19 Jaffar [da876546546546546546546546547673(-) 111.22.33.111:3659]\n')
-        self.assertEqual(
+        self.assert_pb_evt(
             r"Event<EVT_PUNKBUSTER_SCREENSHOT_RECEIVED>({'slot': '19', 'name': 'Jaffar', 'ip': '111.22.33.111', 'pbid': 'da876546546546546546546546547673', 'imgpath': 'C:\\games\\bf3\\173_199_73_213_25200\\862147\\bf3\\pb\\svss\\pb000709.png', 'port': '3659', 'md5': '4576546546546546546546546543E1E1'}, None, None)",
-            str(result))
+            result)
 
     def test_PB_SV_PList(self):
         self.assert_pb_misc_evt(
@@ -283,10 +292,10 @@ class Test_punkbuster_events(BFHTestCase):
         self.assert_pb_misc_evt("PunkBuster Server: 0 Ban Records Updated in d:\\localuser\\g119142\\pb\\pbbans.dat")
 
     def test_misc(self):
-        self.assertEqual(
+        self.assert_pb_evt(
             "Event<EVT_PUNKBUSTER_LOST_PLAYER>({'slot': '1', 'ip': 'x.x.x.x', 'port': '3659', 'name': 'joe', 'pbuid': '0837c128293d42aaaaaaaaaaaaaaaaa'}, None, None)",
-            str(self.pb(
-                "PunkBuster Server: Lost Connection (slot #1) x.x.x.x:3659 0837c128293d42aaaaaaaaaaaaaaaaa(-) joe")))
+            self.pb(
+                "PunkBuster Server: Lost Connection (slot #1) x.x.x.x:3659 0837c128293d42aaaaaaaaaaaaaaaaa(-) joe"))
 
         self.assert_pb_misc_evt("PunkBuster Server: Invalid Player Specified: None")
         self.assert_pb_misc_evt("PunkBuster Server: Matched: Cucurbitaceae (slot #1)")
@@ -390,7 +399,7 @@ class Test_bfh_maps(BFHTestCase):
 
     def test_each_gamemode_is_valid(self):
         game_modes_found = set()
-        map(game_modes_found.update, GAME_MODES_BY_MAP_ID.values())
+        list(map(game_modes_found.update, list(GAME_MODES_BY_MAP_ID.values())))
         self.assertSetEqual(set(GAME_MODES_NAMES.keys()), game_modes_found)
         for game_mode in game_modes_found:
             self.assertIn(game_mode, GAME_MODES_NAMES)
@@ -423,11 +432,29 @@ class Test_bfh_maps(BFHTestCase):
         # foo
         self.assertEqual('f00', self.parser.getHardName('f00'))
 
+    def assertMapSuggestions(self, input_value, candidates=None, n=3):
+        # getStuffSoundingLike() returns suggestions in no particular order (it dedupes through a set),
+        # so only check that we got n distinct suggestions taken from the expected candidates
+        if candidates is None:
+            candidates = [self.parser.getEasyName(m).lower() for m in self.parser.getSupportedMapIds()]
+        result = self.parser.getMapsSoundingLike(input_value)
+        self.assertIsInstance(result, list, input_value)
+        self.assertEqual(n, len(set(result)), input_value)
+        self.assertLessEqual(set(result), set(candidates), input_value)
+
+    def assertGamemodeSuggestions(self, map_id, input_gamemode, candidates=None, n=3):
+        if candidates is None:
+            candidates = [self.parser.getGameMode(x) for x in self.parser.getSupportedGameModesByMapId(map_id)]
+        result = self.parser.getGamemodeSoundingLike(map_id, input_gamemode)
+        self.assertIsInstance(result, list, input_gamemode)
+        self.assertEqual(n, len(set(result)), input_gamemode)
+        self.assertLessEqual(set(result), set(candidates), input_gamemode)
+
     def test_getMapsSoundingLike(self):
         def assertSoundsLike(expected_id, input_value):
             self.assertEqual(expected_id, self.parser.getMapsSoundingLike(input_value), input_value)
 
-        assertSoundsLike(['downtown', 'derailed', 'hollywood heights'], '')
+        self.assertMapSuggestions('')
         assertSoundsLike('mp_bank', 'Bank Job')
         assertSoundsLike('mp_bank', 'bankjob')
         assertSoundsLike('mp_bank', 'bancjob')
@@ -463,7 +490,7 @@ class Test_bfh_maps(BFHTestCase):
             self.assertListEqual(expected_list, self.parser.getGamemodeSoundingLike(map_id, input_gamemode),
                                  "%s:%r" % (map_id, input_gamemode))
 
-        assertSoundsLikeList(['Conquest Large', 'Rescue', 'Heist'],   'mp_bank', '')
+        self.assertGamemodeSuggestions('mp_bank', '')
 
         assertSoundsLike('TurfWarLarge0',   'mp_bank', 'TurfWarLarge0')
         assertSoundsLike('TurfWarSmall0',   'mp_bank', 'TurfWarSmall0')
@@ -542,8 +569,8 @@ class Test_bfh_maps(BFHTestCase):
         assertSoundsLike('Hostage0',        'mp_glades', 'Hostage0')
         assertSoundsLike('TeamDeathMatch0', 'mp_glades', 'TeamDeathMatch0')
 
-        assertSoundsLikeList(['Conquest Small', 'Heist', 'Team Deathmatch'],   'mp_growhouse', '')
-        assertSoundsLikeList(['Conquest Small', 'Heist', 'Blood Money'],   'mp_growhouse', 'TurfWarLarge0')
+        self.assertGamemodeSuggestions('mp_growhouse', '')
+        self.assertGamemodeSuggestions('mp_growhouse', 'TurfWarLarge0')
         assertSoundsLike('TurfWarSmall0',   'mp_growhouse', 'TurfWarSmall0')
         assertSoundsLike('Heist0',          'mp_growhouse', 'Heist0')
         assertSoundsLike('Bloodmoney0',     'mp_growhouse', 'Bloodmoney0')

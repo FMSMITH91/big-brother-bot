@@ -30,15 +30,14 @@ import b3.cron
 import b3.events
 import b3.plugin
 import sys
-import urllib
-import urllib2
+import urllib.request, urllib.parse, urllib.error
 import socket
 import os
 import random
 
 from b3 import functions
 from b3.functions import getModule
-from ConfigParser import NoOptionError
+from configparser import NoOptionError
 from time import strftime
 
 
@@ -163,7 +162,7 @@ class PublistPlugin(b3.plugin.Plugin):
                 p_module = getModule(pl.__module__)
                 p_version = getattr(p_module, '__version__', 'unknown')
                 plugins.append("%s/%s" % (pname, p_version))
-            except Exception, e:
+            except Exception as e:
                 self.warning("could not get version for plugin named '%s'" % pname, exc_info=e)
           
         try:
@@ -199,7 +198,7 @@ class PublistPlugin(b3.plugin.Plugin):
                 cvar_banner_url = self.console.getCvar('bannerUrl')
                 if cvar_banner_url is not None:
                     info.update({'bannerUrl': cvar_banner_url.value})
-            except Exception, e:
+            except Exception as e:
                 self.debug(e)
         
         self.debug(info)
@@ -223,14 +222,15 @@ class PublistPlugin(b3.plugin.Plugin):
         if info is None:
             info = {}
         try:
-            request = urllib2.Request('%s?%s' % (url, urllib.urlencode(info)))
+            request = urllib.request.Request('%s?%s' % (url, urllib.parse.urlencode(info)))
             request.add_header('User-Agent', "B3 Publist plugin/%s" % __version__)
-            opener = urllib2.build_opener()
+            opener = urllib.request.build_opener()
             replybody = opener.open(request).read()
             if len(replybody) > 0:
-                self.debug("master replied: %s" % replybody)
-        except IOError, e:
-            if hasattr(e, 'reason'):
+                self.debug("master replied: %s" % replybody.decode('utf-8', 'replace'))
+        except IOError as e:
+            # check the HTTP status code first: on Python 3 HTTPError also exposes a 'reason' attribute
+            if getattr(e, 'code', None) is None and hasattr(e, 'reason'):
                 self.error('unable to reach B3 masterserver: maybe the service is down or internet was unavailable')
                 self.debug(e.reason)
             elif hasattr(e, 'code'):
@@ -245,4 +245,4 @@ class PublistPlugin(b3.plugin.Plugin):
                     self.debug(e)
         except Exception:
             self.warning('unable to reach B3 masterserver: unknown error')
-            print sys.exc_info()
+            print(sys.exc_info())

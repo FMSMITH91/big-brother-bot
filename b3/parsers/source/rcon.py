@@ -22,7 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
-from Queue import Queue
+from queue import Queue
 from socket import timeout
 from threading import Event
 from threading import Lock
@@ -45,7 +45,7 @@ legacy_receive = SourceRcon.receive
 
 def receive_wrapper(self):
     rv = legacy_receive(self)
-    if isinstance(rv, basestring) and rv.strip().endswith(": Bad Password"):
+    if isinstance(rv, str) and rv.strip().endswith(": Bad Password"):
         raise SourceRconError('Bad RCON password (patched SourceRcon)')
     else:
         return rv
@@ -78,7 +78,7 @@ class Rcon(object):
 
         try:
             self.server.connect()
-        except timeout, err:
+        except timeout as err:
             self.console.error("RCON: timeout error while trying to connect to game server at %s:%s. "
                                "Make sure the rcon_ip and port are correct and that the game server is "
                                "running" % (self.host, self.port))
@@ -102,9 +102,9 @@ class Rcon(object):
         with Rcon.lock:
             try:
                 self.console.info("RCON SEND: %s" % cmd)
-                raw_data = self.server.rcon(self.encode_data(cmd))
-                if raw_data:
-                    data = raw_data.decode('UTF-8', 'replace')
+                # SourceRcon takes care of encoding the command and decoding the response (UTF-8)
+                data = self.server.rcon(self.encode_data(cmd))
+                if data:
                     self.console.info("RCON RECEIVED: %s" % data)
                     return data
             except timeout:
@@ -135,7 +135,7 @@ class Rcon(object):
     ####################################################################################################################
 
     def _writelines(self):
-        while not self.stop_event.isSet():
+        while not self.stop_event.is_set():
             lines = self.queue.get(True)
             for cmd in lines:
                 if not cmd:
@@ -172,14 +172,11 @@ class Rcon(object):
 
     def encode_data(self, data):
         """
-        Encode data.
+        Make sure the given data is a str (SourceRcon encodes it as UTF-8 right before sending it on the wire).
         """
-        if not data:
-            return data
-        if type(data) is unicode:
-            return data.encode('UTF-8')
-        else:
-            return data
+        if isinstance(data, (bytes, bytearray)):
+            return bytes(data).decode('UTF-8', 'replace')
+        return data
 
 ########################################################################################################################
 ## EXAMPLE PROGRAM                                                                                                     #

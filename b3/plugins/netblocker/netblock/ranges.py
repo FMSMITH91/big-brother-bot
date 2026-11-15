@@ -3,16 +3,23 @@
 """Sets of (ranges of) integer numbers.
 
 This module exports the Ranges class and the BadRange exception."""
+from functools import reduce
 
 # This is necessary to get 'yield' under Python 2.2.
 # Since we still have Red Hat 7.3 machines (at least for a bit longer...)
-from __future__ import generators
+
 
 __all__ = ['BadRange', 'Ranges']
 
 class BadRange(Exception):
 	"""Raised if there is some problem with ranges.
 	(Yes, this is non-specific.)"""
+
+	@property
+	def message(self):
+		# Python 2 BaseException.message compatibility
+		return self.args[0] if len(self.args) == 1 else ''
+
 	pass
 
 class Ranges:
@@ -214,7 +221,7 @@ class Ranges:
 	def __eq__(self, other):
 		if len(other._l) != len(self._l):
 			return 0
-		for i in xrange(0, len(self._l)):
+		for i in range(0, len(self._l)):
 			if self._l[i] != other._l[i]:
 				return 0
 		return 1
@@ -285,16 +292,8 @@ class Ranges:
 		use Ranges.len() instead of len(Ranges)."""
 		return int(self.len())
 
-	def __nonzero__(self):
+	def __bool__(self):
 		return len(self._l) > 0
-
-	def __cmp__(self, other):
-		"""Any comparison between Ranges other than for inequality or
-		equality has undefined results."""
-		if self.__eq__(other):
-			return 0
-		# invalid to use except as ==, so I don't CARE.
-		return 1
 
 	# This works because as far as a lot of things are concerned,
 	# __iter__ is merely a normal function (that is expected to

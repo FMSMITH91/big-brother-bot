@@ -33,14 +33,19 @@ from socket import SOCK_STREAM
 from threading import Thread
 from threading import Event
 from threading import Lock
-from Queue import Queue
-from Queue import Empty
+from queue import Queue
+from queue import Empty
 
 __author__ = 'Thomas LEVEIL'
 __version__ = '1.3'
 
 
 class RavagedServerError(Exception):
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     pass
 
 
@@ -115,7 +120,7 @@ class RavagedServer(Thread):
                 raise RavagedServerBlacklisted(response)
         except RavagedServerCommandTimeout:
             pass
-        response = self.command("PASS=" + sha1(self.password).hexdigest().upper())
+        response = self.command("PASS=" + sha1(self.password.encode('UTF-8')).hexdigest().upper())
         if response.startswith('Login success as '):
             self.log.info(response)
             # test we can send commands
@@ -305,7 +310,7 @@ class RavagedDispatcher(asyncore.dispatcher_with_send):
     def __init__(self, host, port, packet_queue=None):
         asyncore.dispatcher_with_send.__init__(self)
         self.log = logging.getLogger("RavagedDispatcher")
-        self._buffer_in = ''
+        self._buffer_in = b''
         self.packet_queue = packet_queue if packet_queue else Queue()
         self.log.info("connecting")
         self.create_socket(AF_INET, SOCK_STREAM)
@@ -322,7 +327,7 @@ class RavagedDispatcher(asyncore.dispatcher_with_send):
         Send a command to the server.
         """
         self.log.debug("send_command : %s " % repr(command))
-        self.send(unicode(command + "\n").encode('UTF-8'))
+        self.send((command + "\n").encode('UTF-8'))
 
     def get_packet_queue(self):
         return self.packet_queue
@@ -352,7 +357,7 @@ class RavagedDispatcher(asyncore.dispatcher_with_send):
         self._buffer_in += data
         self.log.debug('read %s char from server' % len(data))
         # cook meaningful packets
-        map(self.handle_packet, self.full_packets())
+        list(map(self.handle_packet, self.full_packets()))
 
     def handle_packet(self, packet):
         """
@@ -378,7 +383,7 @@ class RavagedDispatcher(asyncore.dispatcher_with_send):
         while len(self._buffer_in) >= MIN_MESSAGE_LENGTH:
             # read the size of this packet
             # 1st byte should be '('
-            start_header_index = self._buffer_in.find('(')
+            start_header_index = self._buffer_in.find(b'(')
             if start_header_index == -1:
                 return
 
@@ -386,7 +391,7 @@ class RavagedDispatcher(asyncore.dispatcher_with_send):
             self._buffer_in = self._buffer_in[start_header_index:]
 
             # packet header ends with ')'
-            end_header_index = self._buffer_in.find(')')
+            end_header_index = self._buffer_in.find(b')')
             if end_header_index == -1:
                 # we don't have a full header yet
                 return
@@ -402,8 +407,7 @@ class RavagedDispatcher(asyncore.dispatcher_with_send):
             packet_data = self._buffer_in[start_data_index:end_data_index]
             self._buffer_in = self._buffer_in[end_data_index:]
 
-            unicode_data = packet_data.decode('UTF-8')
-            yield unicode_data
+            yield packet_data.decode('UTF-8', 'replace')
 
 ########################################################################################################################
 # EXAMPLE PROGRAM                                                                                                      #

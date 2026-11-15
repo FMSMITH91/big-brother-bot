@@ -22,7 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
-from mock import call, Mock
+from unittest.mock import call, Mock
 from mockito import when
 from b3.config import CfgConfigParser
 from b3.plugins.poweradminbf3 import Poweradminbf3Plugin
@@ -51,7 +51,7 @@ vips: mod
 
 
     def test_empty_vip_list(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vips")
@@ -60,9 +60,9 @@ vips: mod
 
 
     def test_4_vips(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'name2'])
-        when(self.console).write(('reservedSlotsList.list', 4)).thenReturn(['name4'])
-        when(self.console).write(('reservedSlotsList.list', 5)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'name2'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 4)).thenReturn(['name4'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 5)).thenReturn([])
         self.moderator.connects("moderator")
         self.moderator.message_history = []
         self.moderator.says("!vips")
@@ -71,8 +71,8 @@ vips: mod
 
 
     def test_4_vips_one_is_connected(self):
-        when(self.console).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'Joe'])
-        when(self.console).write(('reservedSlotsList.list', 4)).thenReturn([])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 0)).thenReturn(['name1', 'name2', 'name3', 'Joe'])
+        when(self.console, strict=False).write(('reservedSlotsList.list', 4)).thenReturn([])
         self.joe.connects("Joe")
         self.moderator.connects("moderator")
         self.moderator.message_history = []

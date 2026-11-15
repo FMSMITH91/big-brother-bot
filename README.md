@@ -51,6 +51,28 @@ Game servers supported:
 - Soldier of Fortune 2
 - World of Padman
 
+## Requirements & installation (Python 3)
+
+This fork runs on **Python 3.9 or newer** (Python 2 is no longer supported).
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+# optional: PostgreSQL storage and the SFTP log plugin
+.venv/bin/pip install -r optional-requirements.txt
+.venv/bin/python b3_run.py -c /path/to/b3.ini
+```
+
+Run the test suite with:
+
+```bash
+.venv/bin/pip install -r test-requirements.txt
+.venv/bin/python -m pytest tests
+```
+
+Note on encodings: game log files are read, and RCON traffic is encoded, using the `encoding` option of the `[server]`
+section of `b3.ini` (default `latin-1`; the Counter-Strike: GO and Insurgency parsers default to `utf-8`).
+
 ## Links to our online presence
 
 * [Master server](http://master.bigbrotherbot.net/)

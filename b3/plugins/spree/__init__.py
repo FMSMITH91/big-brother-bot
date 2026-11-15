@@ -114,6 +114,9 @@ class SpreePlugin(b3.plugin.Plugin):
     def init_spreemessage_list(self):
         # get the spree messages from the config
         # split the start and end spree messages and save it in the dictionary
+        # use per-instance dicts: the class-level defaults are shared by every plugin instance
+        self._killingspree_messages_dict = {}
+        self._loosingspree_messages_dict = {}
         for kills, message in self.config.items('killingspree_messages'):
             if '#' in message:
                 start_message, stop_message = message.split('#')

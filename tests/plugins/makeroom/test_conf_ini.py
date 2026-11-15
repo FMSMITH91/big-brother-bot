@@ -37,8 +37,8 @@ def test_default_conf(console):
     assert 15 == plugin._retain_free_duration
     # [automation]
     assert False is plugin._automation_enabled
-    assert 32 is plugin._total_slots
-    assert 1 is plugin._min_free_slots
+    assert 32 == plugin._total_slots
+    assert 1 == plugin._min_free_slots
     # [messages]
     assert plugin.config.get('messages', 'kick_message') == 'kicking $clientname to free a slot'
     assert plugin.config.get('messages', 'kick_reason') == 'to make room for a server member'
@@ -198,7 +198,7 @@ def test_retain_free_duration_junk(console):
         [global_settings]
         retain_free_duration: f00
         """))
-    assert 0 is plugin._retain_free_duration
+    assert 0 == plugin._retain_free_duration
 
 
 def test_retain_free_duration_negative(console):
@@ -206,7 +206,7 @@ def test_retain_free_duration_negative(console):
         [global_settings]
         retain_free_duration: -5
         """))
-    assert 0 is plugin._retain_free_duration
+    assert 0 == plugin._retain_free_duration
 
 
 def test_retain_free_duration_zero(console):
@@ -214,7 +214,7 @@ def test_retain_free_duration_zero(console):
         [global_settings]
         retain_free_duration: 0
         """))
-    assert 0 is plugin._retain_free_duration
+    assert 0 == plugin._retain_free_duration
 
 
 def test_retain_free_duration_too_high(console):

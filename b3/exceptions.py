@@ -23,13 +23,19 @@
 # ################################################################### #
 
 
-import ConfigParser
+import configparser
 
 
 class ConfigFileNotFound(Exception):
     """
     Raised whenever the configuration file can't be found.
     """
+
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     def __init__(self, message):
         Exception.__init__(self, message)
         
@@ -41,6 +47,12 @@ class ConfigFileNotValid(Exception):
     """
     Raised whenever we are parsing an invalid configuration file.
     """
+
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     def __init__(self, message):
         Exception.__init__(self, message)
         
@@ -52,6 +64,12 @@ class MissingRequirement(Exception):
     """
     Raised whenever we can't initialize a functionality because some modules are missing.
     """
+
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     def __init__(self, message, throwable=None):
         Exception.__init__(self, message)
         self.throwable = throwable
@@ -66,6 +84,12 @@ class ProgrammingError(Exception):
     """
     Raised whenever a programming error is detected.
     """
+
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     def __init__(self, message):
         Exception.__init__(self, message)
 
@@ -77,6 +101,12 @@ class DatabaseError(Exception):
     """
     Raised whenever there are inconsistences with the database schema.
     """
+
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     def __init__(self, message):
         Exception.__init__(self, message)
 
@@ -88,6 +118,12 @@ class UpdateError(Exception):
     """
     Raised whenever we fail in updating B3 sources.
     """
+
+    @property
+    def message(self):
+        # Python 2 BaseException.message compatibility
+        return self.args[0] if len(self.args) == 1 else ''
+
     def __init__(self, message, throwable=None):
         Exception.__init__(self, message)
         self.throwable = throwable
@@ -98,5 +134,5 @@ class UpdateError(Exception):
         return repr(self.message)
 
 
-NoOptionError = ConfigParser.NoOptionError
-NoSectionError = ConfigParser.NoSectionError
+NoOptionError = configparser.NoOptionError
+NoSectionError = configparser.NoSectionError

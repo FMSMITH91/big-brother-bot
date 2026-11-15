@@ -81,7 +81,7 @@ class BanlistContent(object):
         Returns the ban data for the provided index.
         :param index: The index of the ban data
         """
-        if index >= self.numOfBans:
+        if index >= len(self):
             raise IndexError
         tmp = self.bansData[index*5:(index+1)*5]
         return {
