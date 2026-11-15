@@ -98,7 +98,10 @@ class Bf3TestCase(unittest.TestCase):
             self.superadmin = FakeClient(self.console, name="God", exactName="God", guid="f4qfer654r", groupBits=128, team=TEAM_UNKNOWN, teamId=0, squad=0)
 
     def tearDown(self):
+        # stop this test's scheduler: otherwise every console created so far keeps its cron thread and their
+        # Clients.sync jobs (every 5 minutes) all fire into whatever test is running at that time
+        self.console.cron.stop()
         self.console.working = False
         self.console.wait_for_threads()
-        sys.stdout.write("\tactive threads count : %s " % threading.activeCount())
+        sys.stdout.write("\tactive threads count : %s " % threading.active_count())
 #        sys.stderr.write("%s\n" % threading.enumerate())
