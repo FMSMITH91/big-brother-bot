@@ -25,6 +25,7 @@
 from b3.clients import Client
 from b3.clients import Alias
 from b3.clients import IpAlias
+from b3.clients import ClientBan
 from b3.clients import Penalty
 from b3.clients import Group
 from unittest.mock import Mock
@@ -280,7 +281,7 @@ class StorageAPITest(object):
         self.assertIsNotNone(id1)
         p1 = self.storage.getClientPenalty(Penalty(id=id1, type='foo'))
         self.assertIsInstance(p1, Penalty)
-        self.assertIs(type(p1), Penalty)
+        self.assertIs(type(p1), ClientBan)
         self.assertEqual('', p1.keyword)
 
     # def test_setClientPenalty_no_db(self):
