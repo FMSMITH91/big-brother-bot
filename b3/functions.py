@@ -71,7 +71,6 @@ def hide_url_password(url):
     e.g. ftp://user:secret@host/path -> ftp://user:******@host/path
     :param url: The URL to sanitize
     """
-    import urllib.parse
     try:
         parts = urllib.parse.urlsplit(url)
     except ValueError:

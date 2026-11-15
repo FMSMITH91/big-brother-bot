@@ -181,7 +181,7 @@ class RavagedParser(Parser):
         pass
 
     @ger.gameEvent(r'''^Server say_team "(?P<text>.*)" to team "(?P<team>.*)"$''')
-    def on_server_say(self, text, team):
+    def on_server_say_team(self, text, team):
         # Server say_team "f00" to team "1"
         pass
 
