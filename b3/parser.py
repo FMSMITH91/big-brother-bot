@@ -325,7 +325,8 @@ class Parser(object):
             game_log = self.config.get('server', 'game_log')
             if game_log[0:6] == 'ftp://' or game_log[0:7] == 'sftp://' or game_log[0:7] == 'http://':
                 self.remoteLog = True
-                self.bot('Working in remote-log mode: %s', game_log)
+                # the URL may embed ftp/sftp/http credentials: never write the password to the log
+                self.bot('Working in remote-log mode: %s', b3.functions.hide_url_password(game_log))
                 
                 if self.config.has_option('server', 'local_game_log'):
                     f = self.config.getpath('server', 'local_game_log')

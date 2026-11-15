@@ -244,3 +244,17 @@ class Test_topologicalSort(unittest.TestCase):
                     ('myplugin5', {'myplugin1', 'myplugin3', 'myplugin4'})]
         sorted_list = [x for x in functions.topological_sort(dep_list)]
         self.assertListEqual(sorted_list, ['myplugin3', 'myplugin1', 'myplugin2', 'myplugin4', 'myplugin5'])
+
+
+class Test_hide_url_password(unittest.TestCase):
+
+    def test_password_is_masked(self):
+        self.assertEqual('ftp://user:******@example.com:21/games_mp.log',
+                         functions.hide_url_password('ftp://user:s3cr3t@example.com:21/games_mp.log'))
+        self.assertEqual('sftp://b3:******@host/path/to/log',
+                         functions.hide_url_password('sftp://b3:p%40ss@host/path/to/log'))
+
+    def test_url_without_password_is_unchanged(self):
+        self.assertEqual('http://example.com/games_mp.log', functions.hide_url_password('http://example.com/games_mp.log'))
+        self.assertEqual('ftp://user@example.com/log', functions.hide_url_password('ftp://user@example.com/log'))
+        self.assertEqual('/local/games_mp.log', functions.hide_url_password('/local/games_mp.log'))

@@ -189,6 +189,29 @@ class Test_game_events_parsing(EventParsingTestCase):
         self.assertEqual("111.222.200.50", client_from_db.ip)
 
 
+class Test_event_routing(EventParsingTestCase):
+
+    def test_unhandled_player_message_is_not_a_kick(self):
+        # str.find() returns -1 (truthy) when not found: every unhandled 'Player #' line used to go to OnBattleyeKick
+        with patch.object(self.parser, 'OnBattleyeKick') as kick_mock, \
+                patch.object(self.parser, 'OnUnknownEvent') as unknown_mock:
+            self.parser.routeBattleyeEvent('Player #8 Max something unexpected')
+        self.assertFalse(kick_mock.called)
+        self.assertTrue(unknown_mock.called)
+
+    def test_battleye_kick(self):
+        with patch.object(self.parser, 'OnBattleyeKick') as kick_mock:
+            self.parser.routeBattleyeEvent('Player #8 Max has been kicked by BattlEye: Client not responding')
+        kick_mock.assert_called_once_with('8 Max has been kicked by BattlEye: Client not responding')
+
+    def test_be_guid(self):
+        with patch.object(self.parser, 'OnBEGUID') as beguid_mock, \
+                patch.object(self.parser, 'OnBattleyeKick') as kick_mock:
+            self.parser.routeBattleyeEvent('Player #8 Max - BE GUID: 73c5e50a7860475f0000000000000000')
+        beguid_mock.assert_called_once_with('8 Max - BE GUID: 73c5e50a7860475f0000000000000000')
+        self.assertFalse(kick_mock.called)
+
+
 class test_sync(EventParsingTestCase):
 
     def test_new_client_with_unverified_guid(self):

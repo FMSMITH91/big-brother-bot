@@ -33,8 +33,10 @@ import urllib.request, urllib.error, urllib.parse
 import functools
 from time import sleep
 
-## url from where we can get the latest B3 version number
-URL_B3_LATEST_VERSION = 'http://master.bigbrotherbot.net/version.json'
+## GitHub repository whose releases are checked for updates (the old master.bigbrotherbot.net
+## version.json endpoint no longer exists)
+B3_GITHUB_REPOSITORY = 'FMSMITH91/big-brother-bot'
+URL_B3_LATEST_VERSION = 'https://api.github.com/repos/%s/releases?per_page=50' % B3_GITHUB_REPOSITORY
 
 ## supported update channels
 UPDATE_CHANNEL_STABLE = 'stable'
@@ -219,6 +221,39 @@ $''', re.VERBOSE)
         return UPDATE_CHANNEL_BETA
 
 
+def _channels_from_github_releases(releases):
+    """
+    Turn the GitHub releases API response into the {'B3': {'channels': {...}}} structure the old
+    version.json used: the stable channel offers final releases only, beta also offers alpha/beta
+    pre-releases, and dev offers everything. Drafts and tags that are not B3 version numbers are ignored.
+    """
+    order = {UPDATE_CHANNEL_STABLE: 0, UPDATE_CHANNEL_BETA: 1, UPDATE_CHANNEL_DEV: 2}
+    channels = {}
+    for release in releases:
+        if release.get('draft'):
+            continue
+        tag = (release.get('tag_name') or '').strip()
+        if tag[:1] in ('v', 'V'):
+            tag = tag[1:]
+        try:
+            version = B3version(tag)
+        except ValueError:
+            continue
+        if version.prerelease and version.prerelease[0] == 'dev':
+            kind = UPDATE_CHANNEL_DEV
+        elif version.prerelease or version.build_num or release.get('prerelease'):
+            kind = UPDATE_CHANNEL_BETA
+        else:
+            kind = UPDATE_CHANNEL_STABLE
+        for name, level in order.items():
+            if order[kind] > level:
+                continue  # e.g. a beta is not offered on the stable channel
+            current = channels.get(name)
+            if current is None or B3version(current['latest-version']) < version:
+                channels[name] = {'latest-version': tag, 'url': release.get('html_url')}
+    return {'B3': {'channels': channels}}
+
+
 def checkUpdate(currentVersion, channel=None, singleLine=True, showErrormsg=False, timeout=4):
     """
     Check if an update of B3 is available.
@@ -233,8 +268,12 @@ def checkUpdate(currentVersion, channel=None, singleLine=True, showErrormsg=Fals
     errormessage = None
     
     try:
-        json_data = urllib.request.urlopen(URL_B3_LATEST_VERSION, timeout=timeout).read()
-        version_info = json.loads(json_data)
+        request = urllib.request.Request(URL_B3_LATEST_VERSION, headers={'Accept': 'application/vnd.github+json',
+                                                                         'User-Agent': 'b3-update-check'})
+        json_data = urllib.request.urlopen(request, timeout=timeout).read()
+        if isinstance(json_data, bytes):
+            json_data = json_data.decode('utf-8')
+        version_info = _channels_from_github_releases(json.loads(json_data))
     except IOError as e:
         if hasattr(e, 'reason'):
             errormessage = '%s' % e.reason
@@ -246,24 +285,21 @@ def checkUpdate(currentVersion, channel=None, singleLine=True, showErrormsg=Fals
         errormessage = repr(e)
     else:
         latestVersion = None
-        try:
-            channels = version_info['B3']['channels']
-        except KeyError as err:
-            errormessage = repr(err) + '. %s' % version_info
+        channels = version_info['B3']['channels']
+        if channel not in (UPDATE_CHANNEL_STABLE, UPDATE_CHANNEL_BETA, UPDATE_CHANNEL_DEV):
+            errormessage = "unknown channel '%s': expecting (%s)" % (
+                channel, ', '.join((UPDATE_CHANNEL_STABLE, UPDATE_CHANNEL_BETA, UPDATE_CHANNEL_DEV)))
+        elif channel not in channels:
+            # no release published for this channel (yet): nothing to update to
+            return None
         else:
-            if channel not in channels:
-                errormessage = "unknown channel '%s': expecting (%s)"  % (channel, ', '.join(list(channels.keys())))
-            else:
-                try:
-                    latestVersion = channels[channel]['latest-version']
-                except KeyError as err:
-                    errormessage = repr(err) + '. %s' % version_info
+            latestVersion = channels[channel]['latest-version']
 
         if not errormessage:
             try:
                 latestUrl = version_info['B3']['channels'][channel]['url']
             except KeyError:
-                latestUrl = "www.bigbrotherbot.net"
+                latestUrl = "https://github.com/%s/releases" % B3_GITHUB_REPOSITORY
 
             not singleLine and sys.stdout.write('latest B3 %s version is %s\n' % (channel, latestVersion))
             _lver = B3version(latestVersion)

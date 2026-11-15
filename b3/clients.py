@@ -1630,6 +1630,10 @@ class Clients(dict):
         Synchronize the clients list.
         """
         mlist = self.console.sync()
+        if mlist is None:
+            # some parsers return None when the server could not be queried: keep the current list rather than
+            # crashing (and rather than dropping every connected client)
+            return
         # remove existing clients
         self.clear()
         # add list of matching clients

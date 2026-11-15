@@ -25,6 +25,7 @@
 import b3
 import sys
 
+from b3.querybuilder import QueryBuilder
 from b3.storage.common import DatabaseStorage
 from time import time
 from traceback import extract_tb
@@ -247,6 +248,8 @@ class MysqlStorage(DatabaseStorage):
         :raise AttributeError: if the given dsnDict is missing required information.
         """
         super(MysqlStorage, self).__init__(dsn, dsnDict, console)
+        # MySQL treats backslashes in string literals as escape characters (unless NO_BACKSLASH_ESCAPES is set)
+        QueryBuilder.backslash_escapes = True
         # check for valid MySQL host
         if not self.dsnDict['host']:
             raise AttributeError("invalid MySQL host in %(protocol)s://%(user)s:******@%(host)s:%(port)s%(path)s" % self.dsnDict)

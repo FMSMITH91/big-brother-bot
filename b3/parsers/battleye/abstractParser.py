@@ -374,10 +374,13 @@ class AbstractParser(b3.parser.Parser):
             elif message.endswith(' connected'):
                 func = self.OnPlayerConnected
                 eventData = message[8:len(message)-10]
+            elif message.find(' - BE GUID') != -1:
+                func = self.OnBEGUID
+                eventData = message[8:]
             elif message.endswith('(unverified)'):
                 func = self.OnUnverifiedGUID
                 eventData = message[8:len(message)-13]
-            elif message.find(' has been kicked by BattlEye: '):
+            elif message.find(' has been kicked by BattlEye: ') != -1:
                 func = self.OnBattleyeKick
                 eventData = message[8:]
             else:
@@ -587,6 +590,30 @@ class AbstractParser(b3.parser.Parser):
         ip = ip.partition(':')[0]
         cid, sep, name = data.partition(' ')
         self.getClient(cid=cid, name=name, ip=ip) # fires EVT_CLIENT_CONNECTED
+
+    def OnBEGUID(self, data):
+        """
+        # Player #6 Bravo17 - BE GUID: 80a5885ebe2420bab5e1581234567890
+        Players GUID has been found but not verified, no action to take.
+        (from 82ndab-Bravo17's fork, commit 1b21529)
+        """
+        if not self._useunverifiedguid:
+            return
+        cid, sep, data = data.partition(' ')
+        name, sep, guid = data.rpartition(' - BE GUID: ')
+        name = name.strip()
+        self.debug('CID: %s, Name %s, Guid %s' % (cid, name, guid))
+
+        client = self.getClient(name=name, cid=cid, guid=guid)
+        if client:
+            # update client data
+            client.guid = guid
+            client.name = name
+            client.cid = cid
+            # make sure client is now authenticated as we know its guid
+            client.auth()
+        else:
+            self.warning("Could not create client")
 
     def OnUnverifiedGUID(self, data):
         """

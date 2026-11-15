@@ -109,3 +109,11 @@ class TestClients(B3TestCase):
 
         # verify that an proper event was fired
         Event_mock.assert_called_once_with(b3.events.EVT_CLIENT_DISCONNECT, 1, joe, None)
+
+    def test_sync_with_none_keeps_clients(self):
+        # a parser whose sync() returns None (server could not be queried) must not crash Clients.sync()
+        # nor wipe the list of connected clients
+        with patch.object(self.console, 'sync', return_value=None):
+            self.clients.sync()
+        self.assertIsNotNone(self.clients.getByCID(1))
+        self.assertIsNotNone(self.clients.getByCID(2))

@@ -58,6 +58,12 @@ class Test_sqlite(B3TestCase, StorageAPITest):
              'data',
             ]), set(self.storage.getTables()))
 
+    def test_status(self):
+        # upstream issue #394: status() was inverted, so !lookup and !status reported a DOWN database
+        self.assertTrue(self.storage.status())
+        self.storage.shutdown()
+        self.assertFalse(self.storage.status())
+
 if __name__ == '__main__':
     unittest.main()
     

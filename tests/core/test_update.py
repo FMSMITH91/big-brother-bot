@@ -22,6 +22,8 @@
 #                                                                     #
 # ################################################################### #
 
+import io
+import json
 import time
 from b3 import update
 import urllib.request, urllib.error, urllib.parse
@@ -137,31 +139,19 @@ class TestGetDefaultChannel(unittest.TestCase):
 
 
 class TestCheckUpdateUrl(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.original_url = update.URL_B3_LATEST_VERSION
 
-    def setUp(self):
-        self._time_start = 0
-        self._time_start = time.time()
+    def test_url_is_github_releases_api(self):
+        self.assertTrue(update.URL_B3_LATEST_VERSION.startswith('https://api.github.com/repos/'))
+        self.assertIn('/releases', update.URL_B3_LATEST_VERSION)
 
-    def tearDown(self):
-        # make sure to restore update url between tests
-        update.URL_B3_LATEST_VERSION = self.__class__.original_url
-        ms = ((time.time() - self._time_start)*1000)
-        self.assertTrue(ms < 10000, "Test exceeded timeout : %s ms" % ms)
+    def test_network_error(self):
+        with patch.object(urllib.request, 'urlopen', side_effect=urllib.error.URLError('no network')):
+            self.assertEqual('no network', update.checkUpdate('1.2', showErrormsg=True))
+            self.assertIsNone(update.checkUpdate('1.2'))
 
-    def test_official_url(self):
-        result = update.checkUpdate('1.2', singleLine=False, showErrormsg=True)
-        self.assertIsNotNone(result)
-        self.assertNotIn('Could not check updates', result)
-
-    # @patch.object(urllib2, "urlopen")
-    # def test_not_existing_url(self, mocked_urlopen):
-    #     update.URL_B3_LATEST_VERSION = 'http://no.where.local/'
-    #     mocked_urlopen.side_effect = urllib2.URLError
-    #     result = update.checkUpdate('1.2', singleLine=True, showErrormsg=True)
-    #     self.assertIn('Could not check updates', result)
+    def test_no_release_published(self):
+        with patch.object(urllib.request, 'urlopen', return_value=io.BytesIO(b'[]')):
+            self.assertIsNone(update.checkUpdate('1.2', showErrormsg=True))
 
 
 class TestCheckUpdate (unittest.TestCase):
@@ -175,27 +165,16 @@ class TestCheckUpdate (unittest.TestCase):
             """
             will fake urllib2.urlopen
             """
-            import io
-            return io.StringIO("""
-                {
-                    "B3": {
-                        "channels": {
-                            "stable": {
-                                "url": "http://www.url.stable.fake",
-                                "latest-version": "1.4.3"
-                            },
-                            "beta": {
-                                "url": "http://www.url.beta.fake",
-                                "latest-version": "1.5.3b3"
-                            },
-                            "dev": {
-                                "url": "http://www.url.dev.fake",
-                                "latest-version": "1.6dev5.daily135"
-                            }
-                        }
-                    }
-                }
-            """)
+            # fake GitHub releases API response (newest first, as GitHub returns them)
+            return io.BytesIO(json.dumps([
+                {"tag_name": "v1.7-draft", "draft": True, "prerelease": False, "html_url": "http://draft.fake"},
+                {"tag_name": "1.6dev5.daily135", "draft": False, "prerelease": True,
+                 "html_url": "http://www.url.dev.fake"},
+                {"tag_name": "v1.5.3b3", "draft": False, "prerelease": True, "html_url": "http://www.url.beta.fake"},
+                {"tag_name": "v1.4.3", "draft": False, "prerelease": False, "html_url": "http://www.url.stable.fake"},
+                {"tag_name": "v1.4.2", "draft": False, "prerelease": False, "html_url": "http://old.fake"},
+                {"tag_name": "not-a-version", "draft": False, "prerelease": False, "html_url": "http://junk.fake"},
+            ]).encode('utf-8'))
         self.original_urlopen = urllib.request.urlopen
         urllib.request.urlopen = urlopen
 

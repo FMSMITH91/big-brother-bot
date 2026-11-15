@@ -25,6 +25,7 @@
 import b3
 import os
 
+from b3.querybuilder import QueryBuilder
 from b3.storage.common import DatabaseStorage
 
 
@@ -40,6 +41,7 @@ class SqliteStorage(DatabaseStorage):
         :param console: The console instance.
         """
         super(SqliteStorage, self).__init__(dsn, dsnDict, console)
+        QueryBuilder.backslash_escapes = False
 
     ####################################################################################################################
     #                                                                                                                  #
@@ -151,4 +153,4 @@ class SqliteStorage(DatabaseStorage):
         Check whether the connection with the storage layer is active or not.
         :return True if the connection is active, False otherwise.
         """
-        return self.db is None
+        return self.db is not None

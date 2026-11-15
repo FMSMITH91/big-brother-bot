@@ -27,6 +27,7 @@ import re
 import sys
 
 from b3.storage.cursor import Cursor as DBCursor
+from b3.querybuilder import QueryBuilder
 from b3.storage.common import DatabaseStorage
 from time import time
 from traceback import extract_tb
@@ -61,6 +62,7 @@ class PostgresqlStorage(DatabaseStorage):
         :param console: The console instance.
         """
         super(PostgresqlStorage, self).__init__(dsn, dsnDict, console)
+        QueryBuilder.backslash_escapes = False
         # check for valid PostgreSQL host
         if not self.dsnDict['host']:
             raise AttributeError("invalid PostgreSQL host in %(protocol)s://%(user)s:******@%(host)s:%(port)s%(path)s" % self.dsnDict)

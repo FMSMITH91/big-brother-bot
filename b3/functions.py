@@ -65,6 +65,23 @@ def load_module_from_paths(name, paths):
     return module
 
 
+def hide_url_password(url):
+    """
+    Return the given URL with the password (if any) replaced by asterisks, so it can be logged safely.
+    e.g. ftp://user:secret@host/path -> ftp://user:******@host/path
+    :param url: The URL to sanitize
+    """
+    import urllib.parse
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        return url
+    if parts.password is None:
+        return url
+    netloc = parts.netloc.replace(':%s@' % parts.password, ':******@', 1)
+    return urllib.parse.urlunsplit(parts._replace(netloc=netloc))
+
+
 def getModule(name):
     """
     Return a module given its name.

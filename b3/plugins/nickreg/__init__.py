@@ -29,6 +29,7 @@ import b3
 import b3.config
 import b3.cron
 import b3.functions
+from b3.querybuilder import escape_string
 import b3.plugin
 import os
 import _thread
@@ -145,7 +146,7 @@ class NickregPlugin(b3.plugin.Plugin):
         escaping single quotes and making it lowercase.
         :param name: the name to normalize
         """
-        return b3.functions.escape(self.console.stripColors(name).lower(), "'")
+        return escape_string(self.console.stripColors(name).lower())
 
     def warn_client_for_nick_steal(self, client):
         """
