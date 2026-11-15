@@ -500,13 +500,95 @@ def getStuffSoundingLike(stuff, expected_stuff):
     return list(dict.fromkeys(match))
 
 
-def hash_password(password):
-    """
-    Calculate the MD5 digest of a given string.
-    """
+# OWASP Password Storage Cheat Sheet: PBKDF2-HMAC-SHA256 with 600,000 iterations and a random salt per password
+LOGIN_HASH_SCHEME = 'pbkdf2_sha256'
+LOGIN_HASH_ITERATIONS = 600000
+# legacy unsalted MD5 hashes wrapped in PBKDF2 ("layering", OWASP), until the next login replaces them
+LAYERED_MD5_SCHEME = 'pbkdf2_sha256_md5'
+_LEGACY_MD5_RE = re.compile(r'^[0-9a-f]{32}$', re.I)
+
+
+def _pbkdf2(password, salt, iterations):
+    import hashlib
+    if isinstance(password, str):
+        password = password.encode('utf-8')
+    return hashlib.pbkdf2_hmac('sha256', password, bytes.fromhex(salt), iterations).hex()
+
+
+def _pbkdf2_hash(algorithm, password):
+    import os
+    salt = os.urandom(16).hex()
+    return '%s$%d$%s$%s' % (algorithm, LOGIN_HASH_ITERATIONS, salt, _pbkdf2(password, salt, LOGIN_HASH_ITERATIONS))
+
+
+def _md5_hex(password):
     if isinstance(password, str):
         password = password.encode('utf-8')
     return md5(password).hexdigest()
+
+
+def is_legacy_md5_hash(stored):
+    """
+    Tell whether a stored password hash is a legacy unsalted MD5 hex digest (as stored by older B3 versions).
+    """
+    return bool(stored) and bool(_LEGACY_MD5_RE.match(stored))
+
+
+def layer_legacy_md5_hash(stored):
+    """
+    Wrap a legacy unsalted MD5 hash in salted PBKDF2 without knowing the password (OWASP "layering"), so no
+    plain MD5 digest stays in the database. verify_password() accepts the result; the next successful login
+    replaces it with a direct hash_password() hash (see password_needs_rehash()).
+    """
+    return _pbkdf2_hash(LAYERED_MD5_SCHEME, stored.lower())
+
+
+def hash_password(password):
+    """
+    Return a salted hash of the given password, to be stored (e.g. in clients.password):
+    'pbkdf2_sha256$<iterations>$<salt>$<hash>' (118 characters). Use verify_password() to check a password
+    against it: the salt is random, so hashing the same password twice gives different results.
+    (B3 used to store unsalted MD5 hex digests; verify_password() still accepts those.)
+    """
+    return _pbkdf2_hash(LOGIN_HASH_SCHEME, password)
+
+
+def verify_password(password, stored):
+    """
+    Check a password against a stored hash: either a hash_password() result or a legacy unsalted MD5 hex digest.
+    :return: True if the password matches
+    """
+    import hmac
+    if not stored or password is None:
+        return False
+    algorithm = stored.split('$', 1)[0]
+    if algorithm in (LOGIN_HASH_SCHEME, LAYERED_MD5_SCHEME):
+        try:
+            _, iterations, salt, expected = stored.split('$')
+            secret = _md5_hex(password) if algorithm == LAYERED_MD5_SCHEME else password
+            actual = _pbkdf2(secret, salt, int(iterations))
+        except ValueError:
+            return False
+        return hmac.compare_digest(actual, expected)
+    if is_legacy_md5_hash(stored):
+        return hmac.compare_digest(_md5_hex(password), stored.lower())
+    return False
+
+
+def password_needs_rehash(stored):
+    """
+    Tell whether a stored password hash uses an outdated scheme (legacy MD5, layered MD5, or fewer PBKDF2
+    iterations than the current setting) and should be replaced with hash_password() the next time the password
+    is known.
+    """
+    if not stored:
+        return False
+    if not stored.startswith(LOGIN_HASH_SCHEME + '$'):
+        return True
+    try:
+        return int(stored.split('$')[1]) < LOGIN_HASH_ITERATIONS
+    except (IndexError, ValueError):
+        return True
 
 
 def hash_file(filepath):

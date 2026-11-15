@@ -199,6 +199,10 @@ class MysqlStorage(DatabaseStorage):
 
     _reconnectDelay = 60
     protocol = 'mysql'
+    _password_column_length_query = """SELECT CHARACTER_MAXIMUM_LENGTH AS len FROM information_schema.COLUMNS
+                                       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clients'
+                                       AND COLUMN_NAME = 'password'"""
+    _widen_password_column_query = "ALTER TABLE `clients` MODIFY `password` VARCHAR(%d) DEFAULT NULL"
 
     def __new__(cls, *args, **kwargs):
         """
@@ -333,6 +337,7 @@ class MysqlStorage(DatabaseStorage):
                                               "B3 to work. You can do so by importing the following SQL script into your "
                                               "database: %s. An attempt of creating tables automatically just failed: %s" %
                                               (b3.getAbsolutePath("@b3/sql/mysql/b3.sql"), e))
+                self.widen_password_column()
             except Exception as e:
                 self.console.error('Database connection failed: working in remote mode: %s - %s', e, extract_tb(sys.exc_info()[2]))
                 self.db = None

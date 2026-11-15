@@ -23,6 +23,7 @@
 # ################################################################### #
 
 from b3.fake import FakeClient
+from b3.functions import verify_password, layer_legacy_md5_hash
 from tests.plugins.login import LoginTestCase, F00_MD5
 
 
@@ -61,9 +62,11 @@ class Test_cmd_setpassword(LoginTestCase):
         self.joe.says("!setpassword f00")
         # THEN
         self.assertEqual(['Your new password has been saved'], self.joe.message_history)
-        self.assertEqual(F00_MD5, self.joe.password)
         joe_db = self.p._get_client_from_db(self.joe.id)
-        self.assertEqual(F00_MD5, joe_db.password)
+        for stored in (self.joe.password, joe_db.password):
+            # salted PBKDF2, not an unsalted MD5 digest
+            self.assertTrue(stored.startswith('pbkdf2_sha256$600000$'), stored)
+            self.assertTrue(verify_password('f00', stored))
 
     def test_change_someone_else(self):
         # GIVEN
@@ -79,9 +82,10 @@ class Test_cmd_setpassword(LoginTestCase):
         self.joe.says("!setpassword f00 jack")
         # THEN
         self.assertEqual(['New password for Jack saved'], self.joe.message_history)
-        self.assertEqual(F00_MD5, jack.password)
         jack_db = self.p._get_client_from_db(jack.id)
-        self.assertEqual(F00_MD5, jack_db.password)
+        for stored in (jack.password, jack_db.password):
+            self.assertTrue(stored.startswith('pbkdf2_sha256$600000$'), stored)
+            self.assertTrue(verify_password('f00', stored))
 
     def test_change_someone_else_not_found(self):
         # GIVEN
@@ -161,6 +165,40 @@ class Test_cmd_login(LoginTestCase):
         self.assertEqual(['You are successfully logged in'], self.jack.message_history)
         self.assertEqual(128, self.jack.groupBits)
         self.assertTrue(self.jack.isvar(self.p, 'loggedin'))
+
+    def test_login_upgrades_legacy_md5_hash(self):
+        # GIVEN jack's password stored by an older B3 version (unsalted MD5)
+        self.jack.connects("0")
+        # WHEN
+        self.jack.says("!login f00")
+        # THEN the login works and the hash is replaced with a salted PBKDF2 one
+        self.assertTrue(self.jack.isvar(self.p, 'loggedin'))
+        stored = self.p._get_client_from_db(self.jack.id).password
+        self.assertTrue(stored.startswith('pbkdf2_sha256$'), stored)
+        self.assertTrue(verify_password('f00', stored))
+
+    def test_login_with_layered_hash(self):
+        # GIVEN jack's MD5 hash wrapped in PBKDF2 at startup
+        self.jack.password = layer_legacy_md5_hash(F00_MD5)
+        self.jack.save()
+        self.jack.connects("0")
+        # WHEN
+        self.jack.says("!login f00")
+        # THEN
+        self.assertTrue(self.jack.isvar(self.p, 'loggedin'))
+        stored = self.p._get_client_from_db(self.jack.id).password
+        self.assertTrue(stored.startswith('pbkdf2_sha256$'), stored)
+
+    def test_startup_wraps_legacy_md5_hashes(self):
+        # GIVEN jack's unsalted MD5 hash in the database
+        self.assertEqual(F00_MD5, self.p._get_client_from_db(self.jack.id).password)
+        # WHEN the plugin starts
+        self.p.onStartup()
+        # THEN no plain MD5 digest is left, and the password still works
+        stored = self.p._get_client_from_db(self.jack.id).password
+        self.assertTrue(stored.startswith('pbkdf2_sha256_md5$'), stored)
+        self.assertTrue(verify_password('f00', stored))
+        self.assertFalse(verify_password('bar', stored))
 
     def test_high_level_spoofed_password_with_compromised_client_object(self):
         """

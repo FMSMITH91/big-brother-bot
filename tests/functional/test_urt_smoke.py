@@ -185,7 +185,16 @@ xlrstats: @b3/conf/plugin_xlrstats.ini
                 self.fail('B3 exited (code %s) while waiting for %s:\n%s' % (self.process.returncode, what,
                                                                              self.output()))
             time.sleep(0.2)
-        self.fail('timed out waiting for %s\n--- stdout ---\n%s' % (what, self.output()))
+        self.fail('timed out waiting for %s\n--- stdout ---\n%s\n--- rcon commands received ---\n%s\n'
+                  '--- end of b3.log ---\n%s' % (what, self.output(), '\n'.join(self.server.commands[-30:]),
+                                                 self.b3_log_tail()))
+
+    def b3_log_tail(self, lines=80):
+        try:
+            with open(self.b3_log, encoding='utf-8', errors='replace') as f:
+                return ''.join(f.readlines()[-lines:])
+        except OSError:
+            return '(no b3.log)'
 
     def log(self, *lines):
         with open(self.game_log, 'ab') as f:

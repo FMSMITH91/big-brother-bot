@@ -38,6 +38,10 @@ class PostgresqlStorage(DatabaseStorage):
     _reInsert = re.compile(r'''^INSERT''', re.IGNORECASE)
 
     protocol = 'postgresql'
+    _password_column_length_query = """SELECT character_maximum_length AS len FROM information_schema.columns
+                                       WHERE table_schema = current_schema() AND table_name = 'clients'
+                                       AND column_name = 'password'"""
+    _widen_password_column_query = "ALTER TABLE clients ALTER COLUMN password TYPE VARCHAR(%d)"
 
     def __new__(cls, *args, **kwargs):
         """
@@ -127,6 +131,7 @@ class PostgresqlStorage(DatabaseStorage):
                                               "B3 to work. You can do so by importing the following SQL script into your "
                                               "database: %s. An attempt of creating tables automatically just failed: %s" %
                                               (b3.getAbsolutePath("@b3/sql/postgresql/b3.sql"), e))
+                self.widen_password_column()
 
             except Exception as e:
                 self.console.error('Database connection failed: working in remote mode: %s - %s', e, extract_tb(sys.exc_info()[2]))

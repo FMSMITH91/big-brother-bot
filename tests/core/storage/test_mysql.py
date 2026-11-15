@@ -128,6 +128,19 @@ class Test_MySQL(B3TestCase, StorageAPITest):
             self.assertEqual(name, self.storage.getClient(Client(id=client_id)).name, sql_mode)
         QueryBuilder.backslash_escapes = True
 
+    def test_widen_password_column(self):
+        # GIVEN a clients.password column created by an older B3 version
+        self.storage.query('ALTER TABLE `clients` MODIFY `password` VARCHAR(32) DEFAULT NULL')
+        # WHEN B3 connects
+        self.storage.widen_password_column()
+        # THEN a salted password hash fits in it
+        from b3.clients import Client
+        from b3.functions import hash_password, verify_password
+        stored = hash_password('f00')
+        client_id = self.storage.setClient(Client(name='joe', guid='joeguid', password=stored))
+        self.assertTrue(verify_password('f00', self.storage.getClient(Client(id=client_id)).password))
+
+
 if __name__ == '__main__':
     unittest.main()
     

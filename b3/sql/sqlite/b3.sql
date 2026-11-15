@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `clients` (
   `greeting` VARCHAR(128) NOT NULL DEFAULT '',
   `time_add` INTEGER(11) NOT NULL DEFAULT '0',
   `time_edit` INTEGER(11) NOT NULL DEFAULT '0',
-  `password` VARCHAR(32) DEFAULT NULL,
+  `password` VARCHAR(255) DEFAULT NULL,
   `login` VARCHAR(16) DEFAULT NULL,
   CONSTRAINT `guid` UNIQUE (`guid`)
 );
