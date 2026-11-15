@@ -33,7 +33,7 @@ import argparse
 from . import pkg_handler
 import traceback
 
-from b3 import HOMEDIR, B3_CONFIG_GENERATOR
+from b3 import HOMEDIR, config_help
 from b3.functions import main_is_frozen, console_exit
 from b3.update import DBUpdate
 from time import sleep
@@ -140,8 +140,7 @@ def run(options):
             config = b3.getAbsolutePath(options.config, True)
             if not os.path.isfile(config):
                 printexit = True
-                console_exit('ERROR: configuration file not found (%s).\n'
-                             'Please visit %s to create one.' % (config, B3_CONFIG_GENERATOR))
+                console_exit('ERROR: configuration file not found (%s).\n%s' % (config, config_help()))
         else:
             config = None
             for p in ('b3.%s', 'conf/b3.%s', 'b3/conf/b3.%s',
@@ -157,8 +156,7 @@ def run(options):
 
             if not config:
                 printexit = True
-                console_exit('ERROR: could not find any valid configuration file.\n'
-                             'Please visit %s to create one.' % B3_CONFIG_GENERATOR)
+                console_exit('ERROR: could not find any valid configuration file.\n%s' % config_help())
 
         # LOADING MAIN CONFIGURATION
         main_config = b3.config.MainConfig(b3.config.load(config))
@@ -176,6 +174,7 @@ def run(options):
                 print("  >>> %s\n" % problem)
         else:
             print('CRITICAL: invalid configuration file specified!')
+        print('Edit %s to fix this, then start B3 again: the comments in the file explain each setting.' % config)
         raise SystemExit(1)
     except SystemExit as msg:
         if not printexit and main_is_frozen():
@@ -213,8 +212,7 @@ def main():
     if options.setup:
         # setup procedure is deprecated: show configuration file generator web tool url instead
         sys.stdout.write('\n')
-        console_exit("  *** NOTICE: the console setup procedure is deprecated!\n" \
-                     "  *** Please visit %s to generate a new B3 configuration file.\n" % B3_CONFIG_GENERATOR)
+        console_exit("  *** NOTICE: the console setup procedure is deprecated!\n%s\n" % config_help())
 
     if options.update:
         ## UPDATE => CONSOLE

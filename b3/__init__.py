@@ -56,7 +56,8 @@ B3_LICENSE = 'GNU General Public License v2'
 B3_FORUM = 'http://forum.bigbrotherbot.net/'
 B3_WEBSITE = 'http://www.bigbrotherbot.net'
 B3_WIKI = 'http://wiki.bigbrotherbot.net/'
-B3_CONFIG_GENERATOR = 'http://config.bigbrotherbot.net/'
+# the old web config generator (config.bigbrotherbot.net) is gone: point to the sample configuration instead
+B3_CONFIG_GENERATOR = 'https://github.com/FMSMITH91/big-brother-bot/blob/master/b3/conf/b3.distribution.ini'
 B3_DOCUMENTATION = 'http://doc.bigbrotherbot.net/'
 B3_DONATE = 'http://www.bigbrotherbot.net/donate'
 B3_XLRSTATS = 'http://www.xlrstats.com/'
@@ -107,6 +108,15 @@ def getHomePath():
 
 # APP HOME DIRECTORY
 HOMEDIR = getHomePath()
+
+
+def config_help():
+    """
+    Tell how to create a B3 configuration file (shown when none is found or it is not valid).
+    """
+    return 'To create one, copy the sample configuration file\n  %s\nto\n  %s\nand edit it: the comments in ' \
+           'the file explain each setting.' % (getAbsolutePath('@b3/conf/b3.distribution.ini'),
+                                                os.path.join(HOMEDIR, 'b3.ini'))
 
 
 def getB3Path(decode=False):

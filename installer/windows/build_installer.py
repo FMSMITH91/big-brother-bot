@@ -46,6 +46,12 @@ VERSION_RE = re.compile(r'^\d+\.\d+(?:\.\d+)?(?:(?:a|b|dev)\d*)?$')
 LAUNCHER = '@echo off\r\nrem Run BigBrotherBot (B3): b3.cmd --help lists the options\r\n' \
            '"%~dp0python\\python.exe" -m b3.run %*\r\n'
 
+# what the Start menu and desktop shortcuts run: keeps the window open when B3 stops, so the reason can be read
+# (a configuration error used to close the window at once). b3.cmd itself does not wait, for use in scripts.
+CONSOLE_LAUNCHER = '@echo off\r\ntitle BigBrotherBot (B3)\r\ncall "%~dp0b3.cmd" %*\r\necho.\r\n' \
+                   'echo B3 has stopped. Read the messages above, then press a key to close this window.\r\n' \
+                   'pause >nul\r\n'
+
 
 def log(msg):
     print('>>> %s' % msg, flush=True)
@@ -110,6 +116,8 @@ def stage(wheel, stage_dir, cache_dir):
 
     with open(os.path.join(stage_dir, 'b3.cmd'), 'w', newline='') as f:
         f.write(LAUNCHER)
+    with open(os.path.join(stage_dir, 'run-b3.cmd'), 'w', newline='') as f:
+        f.write(CONSOLE_LAUNCHER)
     shutil.copy(os.path.join(ASSETS, 'b3.ico'), stage_dir)
     shutil.copy(os.path.join(ASSETS, 'b3-plugins-icon.ico'), stage_dir)
     shutil.copy(os.path.join(ASSETS, 'gpl-2.0.txt'), os.path.join(stage_dir, 'license.txt'))

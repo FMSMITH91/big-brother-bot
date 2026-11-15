@@ -23,13 +23,16 @@ FIRST RUN
 2. Database: B3 stores players, admins, warnings and bans in a database.
    SQLite needs nothing installed (database: sqlite://C:/path/to/b3.db).
    MySQL/MariaDB and PostgreSQL are supported too.
-3. Start B3: Start menu > BigBrotherBot > Run B3 (or run b3.cmd).
+3. Start B3: Start menu > BigBrotherBot > Run B3 (or run b3.cmd). If B3 stops,
+   the window stays open with the reason: until b3.ini is filled in, B3 stops
+   at once with "invalid parser specified in b3::parser (changeme)".
    Type !iamgod in the game chat to become super admin (works once, on a
    fresh database).
 
 FOLDERS
 -------
-  b3.cmd       starts B3 (b3.cmd --help lists the options)
+  run-b3.cmd   starts B3 and keeps the window open when it stops (shortcuts)
+  b3.cmd       starts B3 (b3.cmd --help lists the options), for scripts
   conf\        sample configuration files for B3 and every plugin: copy the
                ones you need next to your b3.ini before editing them
   extplugins\  put third party plugins here
