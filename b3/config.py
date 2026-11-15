@@ -25,6 +25,7 @@
 __author__  = 'ThorN, Courgette, Fenix'
 __version__ = '1.7.9'
 
+import io
 import os
 import re
 import time
@@ -340,17 +341,36 @@ class CfgConfigParser(B3ConfigParserMixin, configparser.ConfigParser):
         """
         Load a configuration file.
         """
-        with open(filename, 'r', encoding='utf-8', errors='replace') as f:
-            self.readfp(f)
+        with open(filename, 'rb') as f:
+            raw = f.read()
+        fp = io.StringIO(self._decode(raw))
+        self.readfp(fp, filename)
+        fp.close()
         self.fileName = filename
         self.fileMtime = os.path.getmtime(self.fileName)
         return True
+
+    @staticmethod
+    def _decode(raw):
+        """
+        Decode the raw content of a configuration file.
+        Configuration files are expected to be UTF-8 encoded (an optional BOM is stripped), but files which worked
+        with the Python 2 version of B3 may be saved with a legacy 8-bit encoding: if the content is not valid UTF-8
+        fall back on cp1252 (superset of latin-1 for printable characters) and then on latin-1 (which never fails).
+        :param raw: The file content as bytes
+        :return: str
+        """
+        for encoding in ('utf-8-sig', 'cp1252'):
+            try:
+                return raw.decode(encoding)
+            except UnicodeDecodeError:
+                pass
+        return raw.decode('latin-1')
 
     def loadFromString(self, cfg_string):
         """
         Read the cfg config from a string.
         """
-        import io
         fp = io.StringIO(cfg_string)
         self.readfp(fp)
         fp.close()
@@ -444,7 +464,7 @@ class MainConfig(B3ConfigParserMixin):
                 'name': p.get('name'),
                 'conf': p.get('config'),
                 'path': p.get('path'),
-                'disabled':  x is not None and x not in MUST_HAVE_PLUGINS and x.lower() in ('yes', '1', 'on', 'true')
+                'disabled':  x is not None and (p.get('name') or '').lower() not in MUST_HAVE_PLUGINS and x.lower() in ('yes', '1', 'on', 'true')
             })
 
     def _init_plugins_from_cfg(self):

@@ -208,7 +208,7 @@ class WopParser(AbstractParser):
         player_id, info = info.split(' ', 1)
 
         if info[:1] != '\\':
-            info += '\\'
+            info = '\\' + info
 
         options = re.findall(r'\\([^\\]+)\\([^\\]+)', info)
 

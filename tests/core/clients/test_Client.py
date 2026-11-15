@@ -251,3 +251,50 @@ class Test_Client_events(B3TestCase):
         
 if __name__ == '__main__':
     unittest.main()
+
+class Test_Client_group_restriction(B3TestCase):
+    """
+    A temporary group restriction (login plugin) must never be persisted in the storage.
+    """
+
+    def setUp(self):
+        B3TestCase.setUp(self)
+        self.group_reg = self.console.storage.getGroup(Group(keyword="reg"))
+        self.group_admin = self.console.storage.getGroup(Group(keyword="admin"))
+        self.group_superadmin = self.console.storage.getGroup(Group(keyword="superadmin"))
+        self.client = Client(console=self.console, guid="joeguid", name="Joe", groupBits=self.group_superadmin.id)
+        self.client.save()
+
+    def stored_group_bits(self):
+        return self.console.storage.getClient(Client(id=self.client.id)).groupBits
+
+    def test_restricted_client_save_keeps_real_groups(self):
+        self.client.restrictGroups(self.group_reg.id)
+        self.assertEqual(self.group_reg.level, self.client.maxLevel)
+        self.assertEqual(self.group_superadmin.level, self.client.realMaxLevel)
+        self.client.save()
+        self.assertEqual(self.group_superadmin.id, self.stored_group_bits())
+        # the in-memory restriction is still in place after saving
+        self.assertEqual(self.group_reg.id, self.client.groupBits)
+        self.assertEqual(self.group_reg.level, self.client.maxLevel)
+
+    def test_lift_restriction(self):
+        self.client.restrictGroups(self.group_reg.id)
+        self.client.liftGroupRestriction()
+        self.assertFalse(self.client.groupsRestricted)
+        self.assertEqual(self.group_superadmin.id, self.client.groupBits)
+        self.assertEqual(self.group_superadmin.level, self.client.maxLevel)
+
+    def test_group_changes_apply_to_real_groups(self):
+        self.client.restrictGroups(self.group_reg.id)
+        self.client.setGroup(self.group_admin)
+        self.assertTrue(self.client.inGroup(self.group_admin))
+        self.assertEqual(self.group_reg.level, self.client.maxLevel)
+        self.client.save()
+        self.assertEqual(self.group_admin.id, self.stored_group_bits())
+        self.client.liftGroupRestriction()
+        self.assertEqual(self.group_admin.level, self.client.maxLevel)
+
+    def test_remGroup_not_in_group(self):
+        self.client.remGroup(self.group_admin)
+        self.assertEqual(self.group_superadmin.id, self.client.groupBits)

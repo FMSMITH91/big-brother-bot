@@ -22,6 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
+import threading
 import time
 import unittest
 from unittest.mock import sentinel, Mock
@@ -251,6 +252,95 @@ class Test_Cron(B3TestCase):
         self.assertEqual(1, len(self.cron._tabs))
         self.assertIn(crontab_id, self.cron._tabs)
         self.assertEqual(CronTab, type(self.cron._tabs[crontab_id]))
+
+
+class Test_Crontab_ranges(unittest.TestCase):
+    """
+    Day of month is 1-31 and month is 1-12 (as returned by time.gmtime), range upper bounds are inclusive.
+    """
+
+    @staticmethod
+    def gmtime(*args):
+        import calendar
+        return time.gmtime(calendar.timegm(args + (0,) * (6 - len(args))))
+
+    def test_last_day_and_month(self):
+        tab = CronTab(None, second=0, minute=0, hour=0, day='31', month='12')
+        self.assertEqual(31, tab.day)
+        self.assertEqual(12, tab.month)
+        self.assertTrue(tab.match(self.gmtime(2026, 12, 31)))
+        tab = CronTab(None, second=0, minute=0, hour=0, day=31, month=12)
+        self.assertTrue(tab.match(self.gmtime(2026, 12, 31)))
+
+    def test_day_and_month_zero_rejected(self):
+        self.assertRaises(ValueError, CronTab, None, day='0')
+        self.assertRaises(ValueError, CronTab, None, day=0)
+        self.assertRaises(ValueError, CronTab, None, month='0')
+        self.assertRaises(ValueError, CronTab, None, month='0-5')
+        self.assertRaises(ValueError, CronTab, None, day='32')
+        self.assertRaises(ValueError, CronTab, None, month='13')
+
+    def test_every_n_months_and_days(self):
+        self.assertEqual([1, 7], CronTab(None, month='*/6').month)
+        self.assertEqual([1, 4, 7, 10], CronTab(None, month='*/3').month)
+        self.assertEqual([1, 11, 21, 31], CronTab(None, day='*/10').day)
+        self.assertEqual(list(range(0, 60, 15)), CronTab(None, minute='*/15').minute)
+
+    def test_range_upper_bound(self):
+        self.assertRaises(ValueError, CronTab, None, minute='50-60')
+        self.assertRaises(ValueError, CronTab, None, hour='20-24')
+        self.assertEqual(list(range(50, 60)), CronTab(None, minute='50-59').minute)
+        self.assertEqual([28, 29, 30, 31], CronTab(None, day='28-31').day)
+        self.assertEqual([10, 11, 12], CronTab(None, month='10-12').month)
+
+
+class _FastEvent(threading.Event):
+    """
+    A stop event whose wait() returns immediately: makes the cron loop run without real time delays.
+    """
+    def wait(self, timeout=None):
+        return self.is_set()
+
+
+class Test_Cron_SystemExit(unittest.TestCase):
+    """
+    A SystemExit raised by a crontab (i.e: Parser.critical) used to silently kill the cron thread.
+    """
+
+    def setUp(self):
+        self.console = Mock()
+        self.cron = Cron(self.console)
+        self.cron._stopEvent = _FastEvent()
+        self.exit_runs = 0
+        self.counter_runs = 0
+
+    def counter(self):
+        self.counter_runs += 1
+        if self.counter_runs >= 3:
+            self.cron.stop()
+
+    def test_cron_survives_systemexit_while_b3_running(self):
+        def exiting():
+            self.exit_runs += 1
+            raise SystemExit(220)
+        self.cron.create(exiting, second='*')
+        self.cron.create(self.counter, second='*')
+        self.cron.run()  # must not propagate SystemExit
+        self.assertEqual(3, self.exit_runs)
+        self.assertEqual(3, self.counter_runs)
+        self.assertTrue(self.console.error.called)
+
+    def test_cron_ends_on_systemexit_during_shutdown(self):
+        def exiting():
+            # what Parser.critical does: shutdown() stops the cron, then SystemExit is raised
+            self.exit_runs += 1
+            self.cron.stop()
+            raise SystemExit(220)
+        self.cron.create(exiting, second='*')
+        self.cron.create(self.counter, second='*')
+        self.cron.run()  # must not propagate SystemExit
+        self.assertEqual(1, self.exit_runs)
+        self.assertEqual(0, self.counter_runs)
 
 
 if __name__ == '__main__':

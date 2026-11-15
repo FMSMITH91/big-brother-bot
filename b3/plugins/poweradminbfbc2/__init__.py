@@ -158,7 +158,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
             if client.cid in biggestteam:
                 self.debug('%s has contributed to unbalance the teams')
                 client.message('do not make teams unbalanced')
-                if client.teamId == '1':
+                if self._isTeam(client.teamId, 1):
                     newteam = '2'
                 else:
                     newteam = '1'
@@ -223,7 +223,7 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
             playerTeamTimes = {}
             clients = self.console.clients.getList()
             for c in clients:
-                if c.teamId == bigTeam:
+                if self._isTeam(c.teamId, bigTeam):
                     if not c.isvar(self, 'teamtime'):
                         self.debug('client has no variable teamtime')
                         c.setvar(self, 'teamtime', self.console.time())
@@ -240,6 +240,17 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
                     self.console.write(('admin.movePlayer', cid, smallTeam, 0, 'true'))
                 except FrostbiteCommandFailedError as err:
                     self.error(err)
+
+    @staticmethod
+    def _isTeam(teamId, team):
+        """
+        Tell whether the given teamId designates the given team number.
+        The parser stores teamId as an int, but be tolerant to str values too.
+        """
+        try:
+            return int(teamId) == int(team)
+        except (TypeError, ValueError):
+            return False
 
     def getTeams(self):
         """
@@ -544,10 +555,10 @@ class Poweradminbfbc2Plugin(b3.plugin.Plugin):
         else:
             sclient = self._adminPlugin.findClientPrompt(x[0], client)
             if sclient:
-                if sclient.teamId == '1':
+                if self._isTeam(sclient.teamId, 1):
                     newteam = '2'
                 else:
-                    newteam = '1' 
+                    newteam = '1'
                 try:
                     self.console.write(('admin.movePlayer', sclient.cid, newteam, 0, 'true'))
                     cmd.sayLoudOrPM(client, '%s forced to the other team' % sclient.cid)

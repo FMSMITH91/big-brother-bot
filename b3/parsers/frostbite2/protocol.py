@@ -129,16 +129,26 @@ def DecodePacket(data):
 
 
 clientSequenceNr = 0
+_clientSequenceLock = threading.Lock()
+
+
+def nextClientSequence():
+    """
+    Return the sequence number to use for the next client request (thread safe: commands are sent from several
+    threads and two requests sharing a sequence number would get each other's response).
+    """
+    global clientSequenceNr
+    with _clientSequenceLock:
+        sequence = clientSequenceNr
+        clientSequenceNr = (clientSequenceNr + 1) & 0x3fffffff
+    return sequence
 
 
 def EncodeClientRequest(words):
     """
     Encode a request packet.
     """
-    global clientSequenceNr
-    packet = EncodePacket(False, False, clientSequenceNr, words)
-    clientSequenceNr = (clientSequenceNr + 1) & 0x3fffffff
-    return packet
+    return EncodePacket(False, False, nextClientSequence(), words)
 
     
 def EncodeClientResponse(sequence, words):
@@ -249,7 +259,27 @@ class NetworkError(FrostbiteError):
     pass
 
 
-class FrostbiteDispatcher(asyncore.dispatcher_with_send):
+class ThreadSafeDispatcherWithSend(asyncore.dispatcher_with_send):
+    """
+    asyncore.dispatcher_with_send which can be written to from threads other than the one running the asyncore loop.
+    Without the lock, send() (caller thread: out_buffer = out_buffer + data) and initiate_send() (asyncore thread:
+    out_buffer = out_buffer[num_sent:]) can interleave and drop or duplicate outgoing data.
+    """
+
+    def __init__(self, sock=None, map=None):
+        self._send_lock = threading.RLock()
+        asyncore.dispatcher_with_send.__init__(self, sock, map)
+
+    def initiate_send(self):
+        with self._send_lock:
+            asyncore.dispatcher_with_send.initiate_send(self)
+
+    def send(self, data):
+        with self._send_lock:
+            asyncore.dispatcher_with_send.send(self, data)
+
+
+class FrostbiteDispatcher(ThreadSafeDispatcherWithSend):
 
     def __init__(self, host, port):
         """
@@ -257,7 +287,7 @@ class FrostbiteDispatcher(asyncore.dispatcher_with_send):
         :param host: The Frostbite2 server host
         :param port: The Frostbite2 server port
         """
-        asyncore.dispatcher_with_send.__init__(self)
+        ThreadSafeDispatcherWithSend.__init__(self)
         self._buffer_in = b''
         self.getLogger().info("connecting")
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -283,11 +313,14 @@ class FrostbiteDispatcher(asyncore.dispatcher_with_send):
         """
         self._frostbite_command_response_handler = func
         
-    def send_command(self, *command):
+    def send_command(self, *command, **kwargs):
         """
         Send a command to the Frosbite server and return the command
         id which can be used to find the matching reply later on.
+        :param before_send: optional function called with the command id before the request is sent (so that the
+                            caller can get ready for a response which could come in before this method returns)
         """
+        before_send = kwargs.get('before_send')
         self.getLogger().info("command : %s " % repr(command))
         if len(command) == 1 and type(command[0]) == tuple:
             words = command[0]
@@ -297,8 +330,11 @@ class FrostbiteDispatcher(asyncore.dispatcher_with_send):
         request = EncodeClientRequest(words)
         [sequence, words] = DecodePacket(request)[2:]
 
+        if before_send is not None:
+            before_send(sequence)
+
         self.getLogger().debug("sending command request #%i: %s " % (sequence, words))
-        asyncore.dispatcher_with_send.send(self, request)
+        self.send(request)
 
         return sequence
 
@@ -423,8 +459,19 @@ class FrostbiteServer(threading.Thread):
         if command is None:
             return None
 
-        command_id = self.frostbite_dispatcher.send_command(*command)
-        self.pending_commands[command_id] = None
+        registered_ids = []
+
+        def register_pending_command(command_id):
+            # must be done before the request is sent or a fast response would be dropped as unexpected
+            self.pending_commands[command_id] = None
+            registered_ids.append(command_id)
+
+        try:
+            command_id = self.frostbite_dispatcher.send_command(*command, before_send=register_pending_command)
+        except Exception:
+            for command_id in registered_ids:
+                self.pending_commands.pop(command_id, None)
+            raise
         self.getLogger().debug("command #%i sent. %s " % (command_id, repr(command)))
         
         response = self._wait_for_response(command_id)

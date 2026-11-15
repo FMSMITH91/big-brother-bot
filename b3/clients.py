@@ -25,6 +25,7 @@
 import b3
 import b3.events
 from . import functions
+from b3.querybuilder import escape_string
 import re
 import string
 import sys
@@ -98,6 +99,7 @@ class Client(object):
     _password = ''
     _pluginData = None
     _pbid = ''
+    _realGroupBits = None
     _team = b3.TEAM_UNKNOWN
     _tempLevel = None
     _timeAdd = 0
@@ -415,17 +417,68 @@ class Client(object):
 
     groupBits = property(_get_groupBits, _set_groupBits)
 
+    # Temporary, in-memory only, group restriction (used for instance by the login plugin to demote a privileged
+    # player until he logs in): while restricted, groupBits/maxLevel reflect the restricted groups, while the real
+    # groups are kept in _realGroupBits: these are the ones saved in the storage and changed by setGroup/addGroup/
+    # remGroup, so that the temporary demotion never gets persisted.
+
+    def restrictGroups(self, bits):
+        """
+        Temporarily (in memory only) replace the client groups with the given group bits.
+        :param bits: The group bits to use until liftGroupRestriction() is called
+        """
+        if self._realGroupBits is None:
+            self._realGroupBits = self._groupBits
+        self.groupBits = bits
+
+    def liftGroupRestriction(self):
+        """
+        Restore the client real groups after a call to restrictGroups().
+        """
+        if self._realGroupBits is not None:
+            bits = self._realGroupBits
+            self._realGroupBits = None
+            self.groupBits = bits
+
+    def _get_groupsRestricted(self):
+        return self._realGroupBits is not None
+
+    groupsRestricted = property(_get_groupsRestricted)
+
+    def _get_realGroupBits(self):
+        return self._groupBits if self._realGroupBits is None else self._realGroupBits
+
+    realGroupBits = property(_get_realGroupBits)
+
+    def _get_realMaxLevel(self):
+        if self._realGroupBits is None:
+            return self.maxLevel
+        level = 0
+        for g in self.console.storage.getGroups():
+            if g.id & self._realGroupBits and g.level > level:
+                level = g.level
+        return level
+
+    realMaxLevel = property(_get_realMaxLevel)
+
+    def _change_groups(self, bits):
+        if self._realGroupBits is None:
+            self.groupBits = bits
+        else:
+            # restricted client: change his real groups, keep the temporary restriction
+            self._realGroupBits = int(bits)
+
     def addGroup(self, group):
-        self.groupBits = self.groupBits | group.id
+        self._change_groups(self.realGroupBits | group.id)
 
     def setGroup(self, group):
-        self.groupBits = group.id
+        self._change_groups(group.id)
 
     def remGroup(self, group):
-        self.groupBits = self.groupBits ^ group.id
+        self._change_groups(self.realGroupBits & ~group.id)
 
     def inGroup(self, group):
-        return self.groupBits & group.id
+        return self.realGroupBits & group.id
 
     # -----------------------
 
@@ -865,7 +918,15 @@ class Client(object):
                 self.pbid = ''
             if console:
                 self.console.queueEvent(self.console.getEvent('EVT_CLIENT_UPDATE', data=self, client=self))
-            return self.console.storage.setClient(self)
+            if self._realGroupBits is None:
+                return self.console.storage.setClient(self)
+            # never persist a temporary group restriction: save the real groups
+            restricted_bits = self._groupBits
+            self._groupBits = self._realGroupBits
+            try:
+                return self.console.storage.setClient(self)
+            finally:
+                self._groupBits = restricted_bits
 
     def auth(self):
         """
@@ -1511,6 +1572,40 @@ class Clients(dict):
             value = value.replace('"', '\\"')
         return value
 
+    # escape character used in LIKE patterns: not special inside SQL string literals in MySQL, SQLite and PostgreSQL
+    LIKE_ESCAPE = '!'
+
+    @classmethod
+    def escape_like(cls, value):
+        """
+        Escape the LIKE wildcards (% and _) of the given value so that they are matched literally, when used
+        in a LIKE pattern with ESCAPE '!' (the result still needs to be escaped as an SQL string literal).
+        """
+        e = cls.LIKE_ESCAPE
+        return value.replace(e, e + e).replace('%', e + '%').replace('_', e + '_')
+
+    def _getStorageClientsLikeName(self, name):
+        """
+        Return a list of (at most 5) clients from the storage whose name contains the given string.
+        The name is matched literally (quotes, backslashes and LIKE wildcards included) on all storage types.
+        """
+        storage = self.console.storage
+        pattern = '%' + self.escape_like(name) + '%'
+        query = "SELECT * FROM clients WHERE name LIKE '" + escape_string(pattern) + "' ESCAPE '" + \
+                self.LIKE_ESCAPE + "' ORDER BY time_edit DESC LIMIT 5"
+        clients = []
+        cursor = storage.query(query)
+        try:
+            while not cursor.EOF:
+                client = Client()
+                for k, v in cursor.getRow().items():
+                    setattr(client, storage.getVar(k), v)
+                clients.append(client)
+                cursor.moveNext()
+        finally:
+            cursor.close()
+        return clients
+
     def lookupByName(self, name):
         """
         Return a lst of clients matching the given name.
@@ -1522,9 +1617,7 @@ class Clients(dict):
         if c and not c.hide:
             return [c]
 
-        name = self.escape_string(name)
-
-        sclient = self.console.storage.getClientsMatching({'%name%': name})
+        sclient = self._getStorageClientsLikeName(name)
 
         if not sclient:
             return []

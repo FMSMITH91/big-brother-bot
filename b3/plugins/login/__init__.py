@@ -26,7 +26,7 @@ import b3.events
 import b3.plugin
 
 from b3.functions import hash_password
-from b3.clients import Client
+from b3.clients import Client, Group
 from configparser import NoOptionError
 
 __author__ = 'Tim ter Laak'
@@ -88,11 +88,14 @@ class LoginPlugin(b3.plugin.Plugin):
             client.setvar(self, 'login_groupbits', client_from_db.groupBits)
 
             try:
-                # set new groupBits
-                g = self.console.storage.getGroup('reg')
-                client.groupBits = g.id
+                g = self.console.storage.getGroup(Group(keyword='reg'))
+                bits = g.id
             except Exception:
-                client.groupBits = 2
+                bits = 2
+
+            # temporarily (in memory only) demote the client until he logs in: the client real groups are
+            # still the ones being saved in the storage and used to check who may change his password
+            client.restrictGroups(bits)
 
             if not client_from_db.password:
                 m = 'You need a password to use all your privileges: ask the administrator to set a password for you'
@@ -137,7 +140,10 @@ class LoginPlugin(b3.plugin.Plugin):
             client_from_db = self._get_client_from_db(client.id)
             if digest == client_from_db.password:
                 client.setvar(self, 'loggedin', 1)
-                client.groupBits = client.var(self, 'login_groupbits').value
+                if client.groupsRestricted:
+                    client.liftGroupRestriction()
+                else:
+                    client.groupBits = client.var(self, 'login_groupbits').value
                 client.message('You are successfully logged in')
             else:
                 client.message('^1***Access denied***^7')
@@ -158,7 +164,9 @@ class LoginPlugin(b3.plugin.Plugin):
             sclient = self._adminPlugin.findClientPrompt(data[1], client)
             if not sclient:
                 return
-            if client.maxLevel <= sclient.maxLevel and client.maxLevel < 100:
+            # compare against the target real level: a privileged player who did not log in yet is only
+            # temporarily demoted and his password must not be changeable by lower level admins
+            if client.maxLevel <= sclient.realMaxLevel and client.maxLevel < 100:
                 client.message('You can only change passwords of yourself or lower level players')
                 return
         else:

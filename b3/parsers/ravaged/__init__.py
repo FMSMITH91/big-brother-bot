@@ -696,9 +696,16 @@ class RavagedParser(Parser):
                     self.setup_game_connection()
                 except RavagedServerError as err:
                     self.error("RavagedServerError %s"% err)
+                    # the setup may have failed after the connection was established (e.g. 'enableevents true'
+                    # failed): close it so the whole setup is retried instead of keeping a half-initialized
+                    # connection which never sends us any event
+                    self.close_game_connection()
+                    time.sleep(2)
                     continue
                 except IOError as err:
                     self.error("IOError: %s"% err)
+                    self.close_game_connection()
+                    time.sleep(2)
                     continue
                 except Exception as err:
                     self.error(err)

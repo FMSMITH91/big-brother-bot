@@ -258,3 +258,33 @@ class Test_hide_url_password(unittest.TestCase):
         self.assertEqual('http://example.com/games_mp.log', functions.hide_url_password('http://example.com/games_mp.log'))
         self.assertEqual('ftp://user@example.com/log', functions.hide_url_password('ftp://user@example.com/log'))
         self.assertEqual('/local/games_mp.log', functions.hide_url_password('/local/games_mp.log'))
+
+
+class Test_left_cut(unittest.TestCase):
+
+    def test_prefix_removed(self):
+        self.assertEqual('bar', functions.left_cut('foobar', 'foo'))
+        self.assertEqual(' comment', functions.left_cut('; comment', ';'))
+
+    def test_no_prefix(self):
+        self.assertEqual('foobar', functions.left_cut('foobar', 'bar'))
+
+
+class Test_split_extension(unittest.TestCase):
+
+    def test_with_extension(self):
+        self.assertEqual(('archive.tar', 'gz'), functions.split_extension('archive.tar.gz'))
+
+    def test_without_extension(self):
+        self.assertEqual(('README', None), functions.split_extension('README'))
+
+
+class Test_confirm(unittest.TestCase):
+
+    def test_does_not_contact_the_network(self):
+        from unittest.mock import Mock, patch
+        client = Mock(guid='ABCDEF0123456789', ip='1.2.3.4', name='Joe')
+        with patch('urllib.request.urlopen') as urlopen:
+            msg = functions.confirm(client)
+        self.assertFalse(urlopen.called)
+        self.assertEqual('The B3 developer confirmation service is no longer available', msg)

@@ -21,6 +21,7 @@
 
 import re
 import struct
+import threading
 
 def nreverse(sequence):
     """nreverse in Common Lisp. :)"""
@@ -118,6 +119,8 @@ class GeoIP(object):
         gi.db_file = db_file
         gi.flags = flags # TODO
         gi.fh = open(db_file, 'rb')
+        # the file handle is shared: seek + read must not be interleaved between threads
+        gi.lock = threading.Lock()
         gi.databaseType = GeoIP.__GEOIP_COUNTRY_EDITION # TODO
         gi.record_length = GeoIP.__STANDARD_RECORD_LENGTH # TODO
         gi.databaseSegments = GeoIP.__GEOIP_COUNTRY_BEGIN # TODO
@@ -130,6 +133,14 @@ class GeoIP(object):
 
     def __seek_country(self, ipnum):
         """Seek GeoIP data file to find country id."""
+        lock = getattr(self, 'lock', None)
+        if lock is None:
+            return self.__seek_country_unlocked(ipnum)
+        with lock:
+            return self.__seek_country_unlocked(ipnum)
+
+    def __seek_country_unlocked(self, ipnum):
+        """Seek GeoIP data file to find country id (the caller must hold self.lock)."""
         fh = self.fh
         record_length = self.record_length
         databaseSegments = self.databaseSegments

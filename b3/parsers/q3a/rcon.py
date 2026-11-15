@@ -73,7 +73,7 @@ class Rcon(object):
             if self.status_cache_expire_time > 5:
                 self.status_cache_expire_time = 5
         # set the cacche expire time to now, so the first status request will retrieve a status from the server
-        status_cache_expired = time.time()
+        self.status_cache_expired = time.time()
 
         self.console.bot('Rcon status cache expire time: [%s sec] Type: [%s]' % (self.status_cache_expire_time,
                                                                                  self.status_cache))

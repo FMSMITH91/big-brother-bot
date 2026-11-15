@@ -162,13 +162,15 @@ class AdvPlugin(b3.plugin.Plugin):
         except NoOptionError:
             pass
 
+        # start from the default value at each (re)load: _feedmaxitems is decremented below
+        feedmaxitems = AdvPlugin._feedmaxitems
         try:
-            self._feedmaxitems = self.config.getint('newsfeed', 'items')
+            feedmaxitems = self.config.getint('newsfeed', 'items')
         except (NoOptionError, ValueError):
             pass
 
         # reduce feedmaxitems 1 point, since we're starting at item 0, this makes counting easier...
-        self._feedmaxitems -= 1
+        self._feedmaxitems = feedmaxitems - 1
         self.verbose('self._feedmaxitems: %s' % self._feedmaxitems)
 
         try:
@@ -328,7 +330,12 @@ class AdvPlugin(b3.plugin.Plugin):
         """
         i = ad.split()
         if len(i) == 2 and isinstance(i, list):
-            i = i[1]
+            # '@feed N': display the Nth feed item
+            try:
+                i = int(i[1])
+            except ValueError:
+                self.debug('invalid feed item number: %r' % i[1])
+                return None
             self._feeditemnr = i
         else:
             if self._feeditemnr > self._feedmaxitems:

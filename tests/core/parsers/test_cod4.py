@@ -131,3 +131,16 @@ class Test_cod4ClientAuthMethod(Cod4TestCase):
         # THEN
         error_mock.assert_called_with('Auth self.console.storage.getClient(client) - Client<@0:joe_guid|:"Joe":None>',
                                    exc_info=ANY)
+
+
+class Test_kickbyfullname(Cod4TestCase):
+
+    def test_kickbyfullname(self):
+        # GIVEN
+        self.console.write = Mock(return_value='Joe^7 was kicked.\n')
+        admin = Mock()
+        # WHEN
+        self.console.kickbyfullname('Joe', 'spam', admin)
+        # THEN
+        self.console.write.assert_called_once_with('kick Joe')
+        admin.message.assert_called_once_with('^7Player kicked using full exact name')

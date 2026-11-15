@@ -226,9 +226,15 @@ class FtpytailPlugin(b3.plugin.Plugin):
                     try:
                         ftp = self.ftpconnect()
                     except Exception as e:
-                        self.error('could not connect with FTP server: %s' % e)
-                        self.console.working = False
-                        break
+                        # do not stop B3 on a (possibly transient) connection failure: go through the same
+                        # retry/backoff logic used when an established connection is lost
+                        self._nbConsecutiveConnFailure += 1
+                        self.error('could not connect with FTP server (attempt %s): %s' %
+                                   (self._nbConsecutiveConnFailure, e))
+                        if self.console._paused is False:
+                            self.console.pause()
+                        self._wait_before_reconnect()
+                        continue
                     else:
                         self._nbConsecutiveConnFailure = 0
                         remotesize = ftp.size(os.path.basename(self.url_path))
@@ -289,18 +295,14 @@ class FtpytailPlugin(b3.plugin.Plugin):
                 self.file = open(self.lgame_log, 'ab')
 
                 try:
-                    ftp.close()
-                    self.debug('FTP connection closed')
-                except IOError:
+                    if ftp is not None:
+                        ftp.close()
+                        self.debug('FTP connection closed')
+                except Exception:
                     pass
 
                 ftp = None
-                
-                if self._nbConsecutiveConnFailure <= self._maxConsecutiveConnFailure:
-                    time.sleep(self._short_delay)
-                else:
-                    self.debug('too many failures: sleeping %s sec' % self._long_delay)
-                    time.sleep(self._long_delay)
+                self._wait_before_reconnect()
             time.sleep(self._gamelog_read_delay)
 
         self.verbose("stopping Ftpytail update thread")
@@ -314,16 +316,35 @@ class FtpytailPlugin(b3.plugin.Plugin):
         except Exception:
             pass
     
+    def _wait_before_reconnect(self):
+        """
+        Sleep before trying to reconnect to the FTP server: wait for short_delay seconds until
+        max_consecutive_failures consecutive failures are met, then wait for long_delay seconds.
+        """
+        if self._nbConsecutiveConnFailure <= self._maxConsecutiveConnFailure:
+            time.sleep(self._short_delay)
+        else:
+            self.debug('too many failures: sleeping %s sec' % self._long_delay)
+            time.sleep(self._long_delay)
+
     def ftpconnect(self):
         self.verbose('connecting to %s:%s ...' % (self.ftpconfig["host"], self.ftpconfig["port"]))
         ftp = FTP()
         ftp.set_debuglevel(self._ftplib_debug_level)
-        ftp.connect(self.ftpconfig['host'], self.ftpconfig['port'], self._connectionTimeout)
-        ftp.login(self.ftpconfig['user'], self.ftpconfig['password'])
-        ftp.voidcmd('TYPE I')
-        d = os.path.dirname(self.url_path)
-        self.debug('trying to cwd to [%s]' % d)
-        ftp.cwd(d)
+        try:
+            ftp.connect(self.ftpconfig['host'], self.ftpconfig['port'], self._connectionTimeout)
+            ftp.login(self.ftpconfig['user'], self.ftpconfig['password'])
+            ftp.voidcmd('TYPE I')
+            d = os.path.dirname(self.url_path)
+            self.debug('trying to cwd to [%s]' % d)
+            ftp.cwd(d)
+        except Exception:
+            # do not leak the socket of a half-established connection
+            try:
+                ftp.close()
+            except Exception:
+                pass
+            raise
         self.console.clients.sync()
         return ftp
     

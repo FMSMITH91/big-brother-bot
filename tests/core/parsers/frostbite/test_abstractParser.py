@@ -37,12 +37,17 @@ from functools import reduce
 
 sleep_patcher = None
 def setUpModule():
+    # 'global' is required: without it the patcher was never stopped and time.sleep stayed mocked for every
+    # test run after this module (busy-looping background threads and growing the mock's call list without limit)
+    global sleep_patcher
     sleep_patcher = patch("time.sleep")
     sleep_patcher.start()
 
 def tearDownModule():
+    global sleep_patcher
     if sleep_patcher:
         sleep_patcher.stop()
+        sleep_patcher = None
 
 
 
@@ -361,3 +366,92 @@ class Map_related_TestCase(AbstractParser_TestCase):
         self.parser.getEasyName = Mock(side_effect=lambda x: x)
         self.parser.getGameMode = Mock(side_effect=lambda x: x)
 
+
+
+class Test_sync_when_player_list_query_fails(AbstractParser_TestCase):
+    """
+    The Frostbite rcon returns None after its retries: B3 must not consider the server empty and drop every client.
+    """
+
+    def setUp(self):
+        AbstractParser_TestCase.setUp(self)
+        self.conf = XmlConfigParser()
+        self.conf.loadFromString("<configuration/>")
+        self.parser = ConcretegameParser(self.conf)
+        self.joe = self.parser.clients.newClient('Joe', guid='EA_JOE', name='Joe')
+
+    def test_sync_returns_None(self):
+        with patch.object(self.parser, 'write', return_value=None):
+            self.assertIsNone(self.parser.sync())
+
+    def test_clients_sync_keeps_clients(self):
+        with patch.object(self.parser, 'write', return_value=None):
+            self.parser.clients.sync()
+        self.assertIs(self.joe, self.parser.clients.getByCID('Joe'))
+
+    def test_getPlayerList_still_returns_a_dict(self):
+        with patch.object(self.parser, 'write', return_value=None):
+            self.assertDictEqual({}, self.parser.getPlayerList())
+
+    def test_clients_sync_empty_server(self):
+        with patch.object(self.parser, 'write', return_value=['2', 'name', 'teamId', '0']):
+            self.parser.clients.sync()
+        self.assertIsNone(self.parser.clients.getByCID('Joe'))
+
+    def test_clients_sync_player_still_connected(self):
+        with patch.object(self.parser, 'write', return_value=['2', 'name', 'teamId', '1', 'Joe', '1']), \
+                patch.object(self.parser, 'getTeam', return_value=None):
+            self.parser.clients.sync()
+        self.assertIs(self.joe, self.parser.clients.getByCID('Joe'))
+
+
+class Test_run_when_connection_cannot_be_established(AbstractParser_TestCase):
+
+    def test_FrostbiteException_from_FrostbiteConnection_constructor(self):
+        from b3.parsers.frostbite.connection import FrostbiteNetworkException
+        self.conf = XmlConfigParser()
+        self.conf.loadFromString("<configuration/>")
+        self.parser = ConcretegameParser(self.conf)
+        self.parser._serverConnection = None
+        self.parser.output = Mock()
+        self.parser.screen = Mock()
+        self.parser.updateDocumentation = Mock()
+        self.parser.exitcode = None
+
+        def failing_connection(*args, **kwargs):
+            self.parser.working = False  # make run() exit after this attempt
+            raise FrostbiteNetworkException('cannot create FrostbiteConnection: connection refused')
+
+        with patch('b3.parsers.frostbite.abstractParser.FrostbiteConnection', side_effect=failing_connection), \
+                patch.object(self.parser.config, 'getpath', return_value='b3.log'):
+            self.parser.working = True
+            self.parser.run()  # must not raise AttributeError: 'NoneType' object has no attribute 'close'
+        self.assertIsNone(self.parser._serverConnection)
+
+
+class Test_client_sequence_numbers(unittest.TestCase):
+
+    def test_sequence_numbers_are_unique_across_threads(self):
+        import sys
+        import threading
+        from b3.parsers.frostbite import protocol
+        seen = []
+        lock = threading.Lock()
+
+        def worker():
+            local = []
+            for _ in range(5000):
+                packet = protocol.EncodeClientRequest(('admin.say', 'hello', 'all'))
+                local.append(protocol.DecodePacket(packet)[2])
+            with lock:
+                seen.extend(local)
+
+        old_interval = sys.getswitchinterval()
+        sys.setswitchinterval(1e-6)
+        try:
+            threads = [threading.Thread(target=worker) for _ in range(4)]
+            [t.start() for t in threads]
+            [t.join() for t in threads]
+        finally:
+            sys.setswitchinterval(old_interval)
+        self.assertEqual(len(seen), len(set(seen)))

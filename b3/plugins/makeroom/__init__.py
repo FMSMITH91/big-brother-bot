@@ -218,17 +218,27 @@ class MakeroomPlugin(Plugin):
         else:
             client.message("Makeroom automation is OFF")
 
+    def _message(self, client, msg):
+        """
+        Send a message to the given client, or log it when there is no client (automation).
+        """
+        if client:
+            client.message(msg)
+        else:
+            self.info(msg)
+
     def cmd_makeroom(self, data=None, client=None, cmd=None):
         """
         Free a slot
         """
+        # NOTE: client is None when called by the automation
         if self._retain_free_slot_info and time.time() <= self._retain_free_slot_info['until']:
-            client.message("There is already a makeroom request in progress. Try again later in %ss" %
-                           int(self._retain_free_slot_info['until'] - time.time()))
+            self._message(client, "There is already a makeroom request in progress. Try again later in %ss" %
+                          int(self._retain_free_slot_info['until'] - time.time()))
             return
 
         if not self._kick_in_progress.acquire(False):
-            client.message("There is already a makeroom request in progress. Try again later")
+            self._message(client, "There is already a makeroom request in progress. Try again later")
         else:
             if self._delay == 0:
                 self._free_a_slot(client)
@@ -255,8 +265,7 @@ class MakeroomPlugin(Plugin):
             clients = self.console.clients.getClientsByLevel(min=0, max=self._non_member_level)
             self.debug("players subject to kick : %r", ["%s(%s)" % (x, x.maxLevel) for x in clients])
             if len(clients) == 0:
-                if admin:
-                    admin.message('No non-member found to kick !')
+                self._message(admin, 'No non-member found to kick !')
             else:
                 # sort players by group and connection time
                 clients_by_group = sorted(clients, key=lambda _: _.maxLevel)
@@ -269,15 +278,16 @@ class MakeroomPlugin(Plugin):
                 client2kick = clients_by_time[0]
                 self._kick(client2kick, admin)
                 if self._retain_free_duration == 0:
-                    admin.message("%s was kicked to free a slot" % client2kick.name)
+                    self._message(admin, "%s was kicked to free a slot" % client2kick.name)
                 else:
                     self._retain_free_slot_info = {
                         'until': time.time() + self._retain_free_duration,
                         'max_taken_slots': self._count_players(),
                         'admin': admin
                     }
-                    admin.message("%s was kicked to free a slot. "
-                                  "A member has %ss to join the server" % (client2kick.name, self._retain_free_duration))
+                    self._message(admin, "%s was kicked to free a slot. "
+                                         "A member has %ss to join the server" % (client2kick.name,
+                                                                                   self._retain_free_duration))
         finally:
             self._kick_in_progress.release()
 

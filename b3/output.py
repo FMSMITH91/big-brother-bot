@@ -66,11 +66,15 @@ class OutputHandler(logging.Logger):
 
     def critical(self, msg, *args, **kwargs):
         """
-        Log 'msg % args' with severity 'CRITICAL' and exit.
+        Log 'msg % args' with severity 'CRITICAL'.
+        NOTE: this used to call sys.exit() itself, which prevented the caller (i.e: Parser.critical) from performing
+        a proper shutdown and, when called from a thread other than the main one, silently killed only that thread.
+        Stopping B3 is now responsibility of the caller (Parser.critical shuts down B3 and raises SystemExit).
         """
-        kwargs['exc_info'] = True
+        if 'exc_info' not in kwargs and sys.exc_info()[0] is not None:
+            # include the traceback of the exception being handled (if any)
+            kwargs['exc_info'] = True
         logging.Logger.critical(self, msg, *args, **kwargs)
-        sys.exit(220)
 
     def console(self, msg, *args, **kwargs):
         """

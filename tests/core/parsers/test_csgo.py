@@ -1409,3 +1409,127 @@ class Test_functional(CsgoTestCase):
         # THEN
         self.assert_has_event("EVT_CLIENT_SAY", "blah blah blah", player)
         self.assertEqual(TEAM_RED, player.team) # make sure we do not break existing correct team value
+
+
+class Test_rcon_injection_and_tempban_duration(CsgoTestCase):
+    """
+    Text coming from players (names, chat), config or RSS feeds is interpolated in rcon command lines: it must not be
+    able to end the current command (';', line breaks) or the current quoted argument ('"').
+    """
+
+    EVIL = 'hello"; rcon_password pwned; sm_rcon quit\nquit\r\x00exec evil.cfg'
+
+    def setUp(self):
+        self.conf = XmlConfigParser()
+        self.conf.loadFromString("""<configuration></configuration>""")
+        self.parser = CsgoParser(self.conf)
+        self.parser.output = Mock()
+        self.parser.output.write = Mock(wraps=self.output_write)
+        when(self.parser).is_sourcemod_installed().thenReturn(True)
+        self.parser.startup()
+        self.parser.msgPrefix = "[Pre]"
+        self.player = Client(console=self.parser, cid="2", name="courgette", guid="STEAM_1:0:1111111")
+
+    def written_commands(self, write_mock):
+        return [c[0][0] for c in write_mock.call_args_list]
+
+    def assert_safe(self, write_mock, expected_count=None):
+        commands = self.written_commands(write_mock)
+        self.assertTrue(commands)
+        if expected_count is not None:
+            self.assertEqual(expected_count, len(commands), commands)
+        for cmd in commands:
+            self.assertNotIn(';', cmd)
+            self.assertNotIn('\n', cmd)
+            self.assertNotIn('\r', cmd)
+            self.assertNotIn('\x00', cmd)
+            self.assertEqual(0, cmd.count('"') % 2, cmd)
+        return commands
+
+    def tearDown(self):
+        if hasattr(self, "parser"):
+            del self.parser.clients
+            self.parser.working = False
+
+    def test_say(self):
+        for sm_plugins in ({}, {"B3 Say": None}):
+            self.parser.sm_plugins = sm_plugins
+            with patch.object(self.parser.output, 'write') as write_mock:
+                self.parser.say(self.EVIL)
+            self.assert_safe(write_mock)
+
+    def test_saybig(self):
+        for sm_plugins in ({}, {"B3 Say": None}):
+            self.parser.sm_plugins = sm_plugins
+            with patch.object(self.parser.output, 'write') as write_mock:
+                self.parser.saybig(self.EVIL)
+            self.assert_safe(write_mock)
+
+    def test_message(self):
+        for sm_plugins in ({}, {"B3 Say": None}):
+            self.parser.sm_plugins = sm_plugins
+            with patch.object(self.parser.output, 'write') as write_mock:
+                self.parser.message(self.player, self.EVIL)
+            for cmd in self.assert_safe(write_mock):
+                # the message stays one single quoted argument
+                self.assertEqual(2, cmd.count('"'), cmd)
+                self.assertTrue(cmd.endswith('"'), cmd)
+
+    def test_kick_reason(self):
+        with patch.object(self.parser.output, 'write') as write_mock:
+            self.parser.do_kick(self.player, reason=self.EVIL)
+        self.assertTrue(self.assert_safe(write_mock, 1)[0].startswith('sm_kick #2 hello'))
+
+    def test_ban_reason(self):
+        with patch.object(self.parser.output, 'write') as write_mock:
+            self.parser.do_ban(self.player, reason=self.EVIL)
+        commands = self.assert_safe(write_mock)
+        self.assertTrue(commands[0].startswith('sm_addban 0 "STEAM_1:0:1111111" hello'), commands[0])
+
+    def test_tempban_reason(self):
+        with patch.object(self.parser.output, 'write') as write_mock:
+            self.parser.do_tempban(self.player, duration='45m', reason=self.EVIL)
+        commands = self.assert_safe(write_mock)
+        self.assertTrue(commands[0].startswith('sm_addban 45 "STEAM_1:0:1111111" hello'), commands[0])
+
+    def test_unban_by_ip(self):
+        self.player.ip = '1.2.3.4;quit'
+        with patch.object(self.parser.output, 'write') as write_mock:
+            self.parser.do_unban_by_ip(self.player)
+        self.assert_safe(write_mock, 1)
+
+    def test_tempban_less_than_a_minute_is_not_permanent(self):
+        # sm_addban 0 means a permanent ban
+        for duration in ('30s', '1s', 0.5, 0, '0'):
+            with patch.object(self.parser.output, 'write') as write_mock:
+                self.parser.do_tempban(self.player, duration=duration, reason='test')
+            commands = self.written_commands(write_mock)
+            self.assertEqual('sm_addban 1 "STEAM_1:0:1111111" test', commands[0], duration)
+            with patch.object(self.parser.output, 'write') as write_mock:
+                self.parser.do_tempban(self.player, duration=duration)
+            commands = self.written_commands(write_mock)
+            self.assertEqual('sm_addban 1 "STEAM_1:0:1111111"', commands[0], duration)
+
+    def test_tempban_through_parser_API(self):
+        with patch.object(self.parser.output, 'write') as write_mock:
+            self.parser.tempban(self.player, reason="test", duration="30s")
+        self.assertIn(call('sm_addban 1 "STEAM_1:0:1111111" test'), write_mock.call_args_list)
+
+    def test_getCvar_rejects_invalid_names(self):
+        with patch.object(self.parser.output, 'write') as write_mock:
+            self.assertIsNone(self.parser.getCvar('sv_cheats; quit'))
+        self.assertFalse(write_mock.called)
+
+
+class Test_sanitize_rcon_arg(unittest.TestCase):
+
+    def test_sanitize(self):
+        from b3.parsers.source.rcon import sanitize_rcon_arg
+        self.assertEqual("a:b'c d e f", sanitize_rcon_arg('a;b"c\nd\re\x00f'))
+        self.assertEqual('', sanitize_rcon_arg(None))
+        self.assertEqual('12', sanitize_rcon_arg(12))
+        self.assertEqual('étoilé àÄ', sanitize_rcon_arg('étoilé àÄ'))
+
+    def test_quote(self):
+        from b3.parsers.source.rcon import quote_rcon_arg
+        self.assertEqual('"x\': quit"', quote_rcon_arg('x"; quit'))

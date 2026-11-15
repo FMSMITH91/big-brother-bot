@@ -197,3 +197,64 @@ class Test_cmd_login(LoginTestCase):
         self.assertEqual(['You are successfully logged in'], self.jack.message_history)
         self.assertEqual(128, self.jack.groupBits)
         self.assertTrue(self.jack.isvar(self.p, 'loggedin'))
+
+
+class Test_not_logged_in_demotion(LoginTestCase):
+    """
+    The login plugin temporarily demotes privileged players until they log in: that demotion must neither be used
+    for permission checks nor be saved in the database.
+    """
+
+    def setUp(self):
+        LoginTestCase.setUp(self)
+        self.init_plugin()
+        # a superadmin who needs to log in and has a password saved in database
+        self.jack = FakeClient(self.console, name="Jack", guid="jackguid", groupBits=128, password=F00_MD5)
+        self.jack.save()
+
+    def test_lower_admin_cannot_change_not_logged_in_superadmin_password(self):
+        # GIVEN
+        self.jack.connects("0")
+        self.assertEqual(2, self.jack.groupBits)  # demoted while waiting for the password
+        mike = FakeClient(self.console, name="Mike", guid="mikeguid", groupBits=16)  # admin (level 40)
+        mike.connects("1")
+        # WHEN
+        mike.clearMessageHistory()
+        mike.says("!setpassword hacked jack")
+        # THEN
+        self.assertEqual(['You can only change passwords of yourself or lower level players'], mike.message_history)
+        self.assertEqual(F00_MD5, self.p._get_client_from_db(self.jack.id).password)
+
+    def test_demotion_is_not_saved(self):
+        # GIVEN
+        self.jack.connects("0")
+        self.assertEqual(2, self.jack.groupBits)  # demoted while waiting for the password
+        # WHEN
+        self.jack.save()
+        # THEN
+        self.assertEqual(128, self.p._get_client_from_db(self.jack.id).groupBits)
+        self.assertEqual(2, self.jack.groupBits)  # still demoted in memory
+
+    def test_superadmin_sets_password_of_not_logged_in_admin(self):
+        # GIVEN
+        self.jack.connects("0")
+        joe = FakeClient(self.console, name="Joe", guid="joeguid", groupBits=128)
+        joe.setvar(self.p, 'loggedin', 1)
+        joe.connects("1")
+        # WHEN
+        joe.says("!setpassword newpass jack")
+        # THEN the password changed but jack is still a superadmin in the database
+        jack_db = self.p._get_client_from_db(self.jack.id)
+        self.assertNotEqual(F00_MD5, jack_db.password)
+        self.assertEqual(128, jack_db.groupBits)
+
+    def test_login_restores_groups(self):
+        # GIVEN
+        self.jack.connects("0")
+        self.jack.save()
+        # WHEN
+        self.jack.says("!login f00")
+        # THEN
+        self.assertEqual(128, self.jack.groupBits)
+        self.assertEqual(100, self.jack.maxLevel)
+        self.assertEqual(128, self.p._get_client_from_db(self.jack.id).groupBits)

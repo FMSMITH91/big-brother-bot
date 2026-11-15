@@ -211,5 +211,42 @@ foo = %s
         log.setLevel(logging.DEBUG)
 
 
+class Test_CfgConfigParser_encoding(TestCase):
+    """
+    Config files are read as UTF-8, falling back on legacy 8-bit encodings (files which worked with Python 2 B3).
+    """
+
+    def load(self, data):
+        import os
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix='.ini')
+        with os.fdopen(fd, 'wb') as f:
+            f.write(data)
+        self.addCleanup(os.remove, path)
+        conf = CfgConfigParser()
+        conf.load(path)
+        return conf
+
+    def test_utf8(self):
+        conf = self.load('[messages]\nfoo: caf\u00e9 \u20ac\n'.encode('utf-8'))
+        self.assertEqual('caf\u00e9 \u20ac', conf.get('messages', 'foo'))
+
+    def test_utf8_with_bom(self):
+        conf = self.load('[messages]\nfoo: caf\u00e9\n'.encode('utf-8-sig'))
+        self.assertEqual('caf\u00e9', conf.get('messages', 'foo'))
+
+    def test_latin1(self):
+        conf = self.load('[messages]\nfoo: caf\u00e9 se\u00f1or\n'.encode('latin-1'))
+        self.assertEqual('caf\u00e9 se\u00f1or', conf.get('messages', 'foo'))
+
+    def test_cp1252(self):
+        conf = self.load('[messages]\nfoo: 5\u20ac \u2018hi\u2019\n'.encode('cp1252'))
+        self.assertEqual('5\u20ac \u2018hi\u2019', conf.get('messages', 'foo'))
+
+    def test_undefined_cp1252_bytes_fall_back_on_latin1(self):
+        conf = self.load(b'[messages]\nfoo: a\x81\xe9\n')
+        self.assertEqual('a\x81\u00e9', conf.get('messages', 'foo'))
+
+
 if __name__ == '__main__':
     unittest.main()

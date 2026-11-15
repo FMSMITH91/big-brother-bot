@@ -164,7 +164,6 @@ class QueryBuilder(object):
             if len(fields) == 1 and len(values) == 1:
                 sql.append(self.FieldClause(fields[0], values[0]))
             else:
-                print(fields)
                 for k, field in enumerate(fields):
                     v = values[k]
                     sql.append(self.FieldClause(field, v))
@@ -213,7 +212,7 @@ class QueryBuilder(object):
         if where:
             sql.append("WHERE %s" % self.WhereClause(where))
         if groupby:
-            sql.append("GROUP BY %s" % orderby)
+            sql.append("GROUP BY %s" % groupby)
         if having:
             sql.append("HAVING %s" % having)
         if orderby:

@@ -23,6 +23,7 @@
 # ################################################################### #
 
 import asyncore
+from b3.parsers.frostbite2.protocol import ThreadSafeDispatcherWithSend
 import re
 import socket
 import time
@@ -45,10 +46,10 @@ class FrontlineConnectionError(Exception):
     pass
 
 
-class Client(asyncore.dispatcher_with_send):
+class Client(ThreadSafeDispatcherWithSend):
 
     def __init__(self, console, host, port, username, password, keepalive=False):
-        asyncore.dispatcher_with_send.__init__(self)
+        ThreadSafeDispatcherWithSend.__init__(self)
         self.console = console
         self._host = host
         self._port = port

@@ -190,7 +190,7 @@ class FirstkillPlugin(b3.plugin.Plugin):
         [<on|off>] - activate / deactivate firstkill
         """
         if not data:
-            cmd.sayLoudOrPM(client, '^7Firstkill: %s' % '^2ON' if self._firstkill else '^1OFF')
+            cmd.sayLoudOrPM(client, '^7Firstkill: %s' % ('^2ON' if self._firstkill else '^1OFF'))
         else:
             data = data.lower()
             if data not in ('on', 'off'):
@@ -207,7 +207,7 @@ class FirstkillPlugin(b3.plugin.Plugin):
         [<on|off>] - activate / deactivate first teamkill
         """
         if not data:
-            cmd.sayLoudOrPM(client, '^7First Teamkill: %s' % '^2ON' if self._firsttk else '^1OFF')
+            cmd.sayLoudOrPM(client, '^7First Teamkill: %s' % ('^2ON' if self._firsttk else '^1OFF'))
         else:
             data = data.lower()
             if data not in ('on', 'off'):
@@ -224,7 +224,7 @@ class FirstkillPlugin(b3.plugin.Plugin):
         [<on|off>] - activate / deactivate first kill by headshot
         """
         if not data:
-            cmd.sayLoudOrPM(client, '^7First Kill by Headshot: %s' % '^2ON' if self._firsths else '^1OFF')
+            cmd.sayLoudOrPM(client, '^7First Kill by Headshot: %s' % ('^2ON' if self._firsths else '^1OFF'))
         else:
             data = data.lower()
             if data not in ('on', 'off'):

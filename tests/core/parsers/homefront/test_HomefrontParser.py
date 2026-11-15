@@ -132,3 +132,42 @@ class Test_HomefrontParser(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class Test_HomefrontParser_ban_command(unittest.TestCase):
+
+    def setUp(self):
+        from b3.parser import Parser
+        self.parser = Mock(spec=HomefrontParser)
+        self.parser._commands = HomefrontParser._commands
+        self.parser.getCommand = lambda cmd, **kwargs: Parser.getCommand(self.parser, cmd, **kwargs)
+        self.parser.stripColors = lambda text: text
+        self.parser.getMessage.return_value = ''
+        self.client = Mock(spec=b3.clients.Client)
+        self.client.guid = '12311111111111111'
+        self.client.cid = 'courgette'
+
+    def written_command(self):
+        self.assertEqual(1, self.parser.write.call_count)
+        return self.parser.write.call_args[0][0]
+
+    def test_ban_with_quotes_in_admin_name_and_reason(self):
+        admin = Mock(spec=b3.clients.Client)
+        admin.name = 'evil" "x'
+        HomefrontParser.ban(self.parser, self.client, reason='bye" "admin quit\\', admin=admin)
+        cmd = self.written_command()
+        # exactly 3 quoted arguments: playerid, admin, reason
+        self.assertEqual(6, cmd.count('"'), cmd)
+        self.assertEqual('admin kickban "12311111111111111" "evil\' \'x" "[B3] bye\' \'admin quit/"', cmd)
+
+    def test_ban_with_control_chars_in_reason(self):
+        admin = Mock(spec=b3.clients.Client)
+        admin.name = 'admin'
+        HomefrontParser.ban(self.parser, self.client, reason='a\nadmin kickban "x"\r', admin=admin)
+        cmd = self.written_command()
+        self.assertNotIn('\n', cmd)
+        self.assertNotIn('\r', cmd)
+        self.assertEqual(6, cmd.count('"'), cmd)
+
+    def test_ban_without_admin(self):
+        HomefrontParser.ban(self.parser, self.client, reason='test')
+        self.assertEqual('admin kickban "12311111111111111" "B3" "[B3] test"', self.written_command())

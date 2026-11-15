@@ -38,7 +38,7 @@ from b3.fake import FakeClient
 from b3.parsers.etpro import EtproParser
 from b3.parsers.q3a.abstractParser import AbstractParser
 from b3.plugins.admin import AdminPlugin
-from b3 import __file__ as b3_module__file__, TEAM_BLUE
+from b3 import __file__ as b3_module__file__, TEAM_BLUE, TEAM_RED
 
 
 log = logging.getLogger("test")
@@ -203,6 +203,22 @@ class Test_gamelog_parsing(EtproTestCase):
         self.parser.parseLine('21:58.44 say: <TA Crytiqal.Aero: !iamgod')
         # THEN
         self.assert_has_event("EVT_CLIENT_SAY", '!iamgod', player)
+
+    def test_parseUserInfo_without_leading_backslash(self):
+        data = self.parser.parseUserInfo('3 n\\Joe\\t\\2\\c\\1')
+        self.assertEqual('Joe', data['name'])
+        self.assertEqual(TEAM_BLUE, data['team'])
+        self.assertNotIn('Joe', data)
+
+    def test_client_userinfo_without_leading_backslash_updates_client(self):
+        # GIVEN
+        player = FakeClient(self.parser, name="Joe", guid="joe-guid", team=TEAM_RED)
+        player.connects("3")
+        # WHEN
+        self.parser.OnClientuserinfo('clientuserinfo', '3 n\\Jack\\t\\2\\c\\1')
+        # THEN
+        self.assertEqual('Jack', player.name)
+        self.assertEqual(TEAM_BLUE, player.team)
 
 
 class AdminTestCase(unittest.TestCase):

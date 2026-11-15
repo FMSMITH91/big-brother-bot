@@ -206,20 +206,26 @@ class AbstractParser(b3.parser.Parser):
                 try:
                     self.setup_frostbite_connection()
                 except CommandError as err:
-                    if err.message[0] == 'InvalidPasswordHash':
+                    if err.message and err.message[0] == 'InvalidPasswordHash':
                         self.error("Your rcon password is incorrect: "
                                    "check setting 'rcon_password' in your main config file")
                         self.exitcode = 220
                         break
                     else:
                         self.error(err)
+                        # the connection setup did not complete (login, events subscription, ...) but the TCP
+                        # connection may be up: close it so the setup is fully retried instead of staying with a
+                        # half-initialized connection which never sends us any event
+                        self.close_frostbite_connection()
                 except IOError as err:
                     self.error("IOError %s"% err)
+                    self.close_frostbite_connection()
                 except Exception as err:
                     self.error(err)
                     self.exitcode = 220
                     break
 
+            packet = None
             try:
                 added, expire, packet = self.frostbite_event_queue.get(timeout=5)
                 self.routeFrostbitePacket(packet)
@@ -234,11 +240,11 @@ class AbstractParser(b3.parser.Parser):
                 self.warning(e)
                 self.close_frostbite_connection()
             except Exception as e:
-                self.error("Unexpected error: please report this on the B3 forums")
-                self.error(e)
+                # a bug in an event handler must not cost us the connection to the game server (and all the
+                # events received meanwhile): log it and go on with the next event
+                self.error("Unexpected error while handling Frostbite event %r: please report this on the B3 forums"
+                           % (packet,))
                 self.error('%s: %s', e, traceback.extract_tb(sys.exc_info()[2]))
-                # unexpected exception, better close the frostbite connection
-                self.close_frostbite_connection()
 
         self.info("Stop listening for Frostbite2 events")
 
@@ -534,6 +540,9 @@ class AbstractParser(b3.parser.Parser):
         if len(data) < 2:
             return None
         spawner = self.getClient(data[0])
+        if spawner is None:
+            self.debug('could not get client for spawning player %r' % data[0])
+            return None
         spawner.team = self.getTeam(data[1])
 
         self._OnServerLevelstarted(action=None, data=None)

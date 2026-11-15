@@ -296,8 +296,9 @@ class FakeClient(b3.clients.Client):
         print("sending msg to %s: %s" % (self.name, cleanmsg))
 
     def warn(self, duration, warning, keyword=None, admin=None, data=''):
-        w = b3.clients.Client.warn(self, duration, warning, keyword=None, admin=None, data='')
+        w = b3.clients.Client.warn(self, duration, warning, keyword=keyword, admin=admin, data=data)
         print((">>>>%s gets a warning : %s" % (self, w)))
+        return w
 
     def connects(self, cid):
         print("\n%s connects to the game on slot #%s" % (self.name, cid))

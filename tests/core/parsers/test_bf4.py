@@ -40,7 +40,11 @@ from tests import logging_disabled
 
 
 sleep_patcher = None
+sleep_patcher = None
+
+
 def setUpModule():
+    global sleep_patcher
     sleep_patcher = patch("time.sleep")
     sleep_patcher.start()
 
@@ -1132,3 +1136,25 @@ class Test_config(BF4TestCase):
             [bf4]
             big_b3_private_responses: on
             big_msg_repeat: junk"""))
+
+class Test_gameServerVars(BF4TestCase):
+
+    def test_known_server_vars(self):
+        for name in ('unlockMode', 'roundPlayersReadyBypassTimer', 'roundPlayersReadyMinCount',
+                     'roundPlayersReadyPercent', 'ticketBleedRate', 'serverDescription'):
+            self.assertIn(name, Bf4Parser._gameServerVars)
+
+    def test_server_var_names_are_well_formed(self):
+        # adjacent string literals with a missing comma silently concatenate ('unlockModeticketBleedRate')
+        for name in Bf4Parser._gameServerVars:
+            self.assertRegex(name, r'^[a-zA-Z0-9]+$')
+        self.assertEqual(len(Bf4Parser._gameServerVars), len(set(Bf4Parser._gameServerVars)))
+
+    def test_getCvar_unlockMode(self):
+        conf = XmlConfigParser()
+        conf.loadFromString("<configuration/>")
+        parser = Bf4Parser(conf)
+        with patch.object(parser, 'write', return_value=['all']) as write_mock:
+            cvar = parser.getCvar('unlockMode')
+        write_mock.assert_called_once_with(('vars.unlockMode',))
+        self.assertEqual('all', cvar.getString())

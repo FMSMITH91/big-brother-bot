@@ -130,7 +130,7 @@ class NickregPlugin(b3.plugin.Plugin):
                     if last_nick_check_delta < self.interval + 1:
                         self.debug('not checking %s(@%s) for nickname stealing: '
                                    'last check run %ss ago', client.name, client.id, last_nick_check_delta)
-                    continue
+                        continue
                 # run the nickname check for this client
                 self.check_client_for_nick_steal(client)
 

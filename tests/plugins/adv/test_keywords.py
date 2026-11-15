@@ -89,3 +89,24 @@ class Test_keywords(AdvTestCase):
             with patch.object(self.console, "say") as say_mock:
                 self.p.adv()
                 say_mock.assert_has_calls([call('News: f00 bar item title')])
+    def test_feed_item_number(self):
+        # GIVEN
+        self.p._feed = "http://some.feed/rss"
+        items = "".join("<item><title>item %s</title><link>http://some.feed/%s</link></item>" % (n, n)
+                        for n in range(3))
+        content = RSS_FEED_CONTENT.replace(RSS_FEED_CONTENT[RSS_FEED_CONTENT.index('<item>'):
+                                                            RSS_FEED_CONTENT.index('</item>') + 7], items)
+        when(self.p._msg).getnext().thenReturn("@feed 2")
+        with patch.object(feedparser.api, '_open_resource', return_value=content.encode('utf-8')):
+            with patch.object(self.console, "say") as say_mock:
+                # WHEN
+                self.p.adv()
+                # THEN
+                say_mock.assert_has_calls([call('News: item 2')])
+        self.assertEqual(3, self.p._feeditemnr)
+
+    def test_feed_invalid_item_number(self):
+        self.p._feed = "http://some.feed/rss"
+        with patch('feedparser.parse', return_value={'bozo': 0, 'entries': []}) as parse_mock:
+            self.assertIsNone(self.p.get_feed("@feed foo"))
+        self.assertFalse(parse_mock.called)

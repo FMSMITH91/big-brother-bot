@@ -23,6 +23,7 @@
 import b3
 import os
 import logging
+import re
 
 from b3.cron import PluginCronTab
 from b3.plugin import Plugin
@@ -32,6 +33,44 @@ from logging.handlers import TimedRotatingFileHandler
 
 __version__ = '1.5'
 __author__ = 'Courgette, xlr8or, BlackMamba, OliverWieland'
+
+
+SECRET_MASK = '******'
+
+# chat messages invoking a command whose arguments contain a password (ie: '!login <password>')
+_RE_SECRET_COMMAND = re.compile(r'^(?P<command>\s*[^\w\s](?P<name>login|setpassword))(?P<args>\s.*)?$',
+                                re.IGNORECASE | re.DOTALL)
+
+
+def mask_command_data(command_name, data):
+    """
+    Mask the password found in the arguments of a command, so that it is not stored in the chat/command logs.
+    :param command_name: the command name (without prefix)
+    :param data: the command arguments
+    :return: the arguments with the password replaced by SECRET_MASK
+    """
+    if not data or not command_name:
+        return data
+    command_name = command_name.lower()
+    if command_name == 'login':
+        # the whole data is the password
+        return re.sub(r'^(\s*)\S.*$', lambda m: m.group(1) + SECRET_MASK, data, flags=re.DOTALL)
+    if command_name == 'setpassword':
+        # <password> [<client>]
+        return re.sub(r'^(\s*)\S+', lambda m: m.group(1) + SECRET_MASK, data, count=1)
+    return data
+
+
+def mask_secrets(msg):
+    """
+    Mask passwords found in a chat message invoking a command such as '!login <password>'.
+    """
+    if not msg or not isinstance(msg, str):
+        return msg
+    m = _RE_SECRET_COMMAND.match(msg)
+    if not m or not m.group('args'):
+        return msg
+    return m.group('command') + mask_command_data(m.group('name'), m.group('args'))
 
 
 class ChatloggerPlugin(Plugin):
@@ -375,7 +414,7 @@ class CmdData(AbstractData):
         self.admin_name = event.client.name
 
         self.command = event.data[0]
-        self.data = event.data[1]
+        self.data = mask_command_data(getattr(self.command, 'command', None), event.data[1])
         self.result = event.data[2]
         self.event = event
 
@@ -413,7 +452,7 @@ class ChatData(AbstractData):
         self.client_id = event.client.id
         self.client_name = event.client.name
         self.client_team = event.client.team
-        self.msg = event.data
+        self.msg = mask_secrets(event.data)
         self.target_id = None
         self.target_name = None
         self.target_team = None

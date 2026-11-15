@@ -22,6 +22,7 @@
 #                                                                     #
 # ################################################################### #
 
+from unittest.mock import patch
 from tests.plugins.adv import AdvTestCase
 
 
@@ -107,3 +108,27 @@ class Test_config(AdvTestCase):
             raise
         self.assertEqual('f00', self.p._rate)
         self.assertIsNone(self.p._cronTab)
+
+    def test_reload_does_not_decrement_feedmaxitems(self):
+        # GIVEN a config without newsfeed/items
+        self.init_plugin("""<configuration plugin="adv" />""")
+        self.assertEqual(4, self.p._feedmaxitems)
+        # WHEN the config is reloaded (!advload)
+        with patch('feedparser.parse', return_value={'bozo': 0, 'entries': []}):
+            self.p.onLoadConfig()
+            self.p.onLoadConfig()
+        # THEN
+        self.assertEqual(4, self.p._feedmaxitems)
+
+    def test_reload_with_feed_items(self):
+        self.init_plugin("""
+            <configuration plugin="adv">
+                <settings name="newsfeed">
+                    <set name="items">3</set>
+                </settings>
+            </configuration>
+        """)
+        self.assertEqual(2, self.p._feedmaxitems)
+        with patch('feedparser.parse', return_value={'bozo': 0, 'entries': []}):
+            self.p.onLoadConfig()
+        self.assertEqual(2, self.p._feedmaxitems)

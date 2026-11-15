@@ -115,7 +115,8 @@ class SchedulerPlugin(b3.plugin.Plugin):
         """
         Works with "*", "*/4", "5" or 9
         """
-        if hourcron.strip() == '*': 
+        hourcron = str(hourcron)
+        if hourcron.strip() == '*':
             return hourcron
         if '/' in hourcron:
             h,divider = hourcron.split('/')
@@ -181,7 +182,7 @@ class Task(object):
                 for arg in cmd.findall('arg'):
                     text += " %s" % arg.text
                 self.plugin.debug("frostbite : %s", text)
-                return len(frostbitecommands)
+            return len(frostbitecommands)
         else:
             ## classical Q3 rcon command
             rconcommands = self.config.findall("rcon")
@@ -385,7 +386,7 @@ class DaylyTask(CronTask):
 
         if not 'hour' in attrib:
             self.plugin.debug("default hour : 0. Provide a 'hour' attribute to override")
-            self.hour = 0
+            self.hour = '0'
         else:
             self.hour = attrib['hour']     
             

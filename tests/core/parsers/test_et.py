@@ -124,3 +124,40 @@ class Test_parser_API_implementation(EtTestCase):
         # THEN
         self.assertListEqual(self.console.write.mock_calls, [call('qsay B3: ^3[pm]^7 something'),
                                                              call('qsay something else')])
+
+class Test_startup_and_clients(EtTestCase):
+
+    CONNECTINFO = '1579:03ConnectInfo: 3: E24F9B2702B9E4A1223E905BF597FA92: ^w[^2AS^w]^2Lead: 3: 3: 24.153.180.106:2794'
+
+    def test_startup(self):
+        self.console.startup()
+        world = self.console.clients.getByCID('-1')
+        self.assertIsNotNone(world)
+        self.assertEqual('et:WORLD', world.guid)
+        self.assertIsNotNone(self.console.PunkBuster)
+
+    def test_connectinfo_creates_client(self):
+        self.console.parseLine(self.CONNECTINFO)
+        client = self.console.clients.getByCID('3')
+        self.assertIsNotNone(client)
+        self.assertEqual('et:E24F9B2702B9E4A1223E905BF597FA92', client.guid)
+        self.assertEqual('24.153.180.106', client.ip)
+        self.assertEqual('[AS]Lead', client.name)
+
+    def test_connectinfo_again_keeps_same_client(self):
+        self.console.parseLine(self.CONNECTINFO)
+        client = self.console.clients.getByCID('3')
+        with patch.object(self.console, 'queueEvent') as queueEvent:
+            self.console.parseLine(self.CONNECTINFO.replace('^2Lead', '^2Leader'))
+        self.assertIs(client, self.console.clients.getByCID('3'))
+        self.assertEqual('[AS]Leader', client.name)
+        join = [c[0][0] for c in queueEvent.call_args_list
+                if c[0][0].type == self.console.getEventID('EVT_CLIENT_JOIN')]
+        self.assertEqual(1, len(join))
+        self.assertIs(client, join[0].client)
+
+    def test_userinfo_changed_guid_updates_client(self):
+        self.console.parseLine(self.CONNECTINFO)
+        self.console.parseLine('1579:04ClientUserinfoChangedGUID: 3 E24F9B2702B9E4A1223E905BF597FA92 n\\^1Joe\\t\\2\\c\\1')
+        client = self.console.clients.getByCID('3')
+        self.assertEqual('Joe', client.name)

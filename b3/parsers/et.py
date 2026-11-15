@@ -97,8 +97,8 @@ class EtParser(AbstractParser):
         """
         Called after the parser is created before run().
         """
-        self.clients.new_client('-1', guid=self.gameName + ':WORLD', name='World', pbid='WORLD', hide=True)
-        self.PunkBuster = PunkBuster.PunkBuster(self)
+        self.clients.newClient('-1', guid=self.gameName + ':WORLD', name='World', pbid='WORLD', hide=True)
+        self.PunkBuster = PunkBuster(self)
         self._eventMap['warmup'] = self.getEventID('EVT_GAME_WARMUP')
         self._eventMap['restartgame'] = self.getEventID('EVT_GAME_ROUND_END')
 
@@ -113,36 +113,33 @@ class EtParser(AbstractParser):
     ####################################################################################################################
 
     def OnConnectinfo(self, action, data, match=None):
-        guid = match.group('pbid')
+        # clients are stored with a game-prefixed guid (see below): compare against the same form
+        guid = self.gameName + ':' + match.group('pbid')
         client = self.clients.getByCID(match.group('cid'))
         if client:
             if client.guid == guid:
                 # this is the same player
 
-                if client.exactName != match.group('name'):
-                    client.exactName = match.group('name')
-                    client.setName(self.stripColors(client.exactName))
+                if client.name != self.stripColors(match.group('name')):
+                    # the name setter strips the color codes and keeps the colored name in exactName
+                    client.name = match.group('name')
                 return self.getEvent('EVT_CLIENT_JOIN', client=client)
             else:
                 # disconnect the existing client
                 self.verbose('disconnect the existing client %s %s => %s %s', match.group('cid'), guid, client.cid, client)
                 client.disconnect()
 
-        client = self.clients.newBaseClient()
-        client.cid  = match.group('cid')
-        client.pbid = client.guid = self.gameName + ':' + guid
-        client.ip = match.group('ip')
-
-        client.exactName = match.group('name')
-        client.name = self.stripColors(client.exactName)
-        self.clients.update(client)
+        self.clients.newClient(match.group('cid'), guid=guid, pbid=guid, ip=match.group('ip'),
+                               name=match.group('name'), state=b3.STATE_ALIVE)
 
     def OnClientuserinfochangedguid(self, action, data, match=None):
         client = self.clients.getByCID(match.group('cid'))
         cid, pbid, data = data.split(' ', 2)
         bclient = self.parseUserInfo(cid + ' ' + data)
-        if bclient:
-            self.clients.update(bclient, client)
+        if bclient and client:
+            # update the existing client
+            for k, v in bclient.items():
+                setattr(client, k, v)
 
     def OnGib(self, action, data, match=None):
         victim = self.clients.getByCID(match.group('cid'))

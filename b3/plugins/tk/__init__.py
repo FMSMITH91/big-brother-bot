@@ -431,14 +431,13 @@ class TkPlugin(b3.plugin.Plugin):
         client.setvar(self, 'checkBan', False)
         tkinfo = self.getClientTkInfo(client)
         if tkinfo.points >= self._maxPoints:
-            self.forgiveAll(client.cid)
+            # count the victims before forgiveAll() clears the attacked list
             mult = len(tkinfo.attacked)
             if mult < 1:
                 mult = 1
 
             duration = self.getMultipliers(client)[2] * mult
-            for cid, a in list(tkinfo.attacked.items()):
-                self.forgive(cid, client, True)
+            self.forgiveAll(client.cid)
 
             client.tempban(self.getMessage('ban'), 'tk', duration)
 
@@ -483,8 +482,10 @@ class TkPlugin(b3.plugin.Plugin):
         return m, s
     
     def getMultipliers(self, client):
+        # pick the multipliers of the highest configured level not above the client level
+        # (levels must be scanned in ascending order: the config may list them in any order)
         level = ()
-        for lev, mult in self._levels.items():
+        for lev, mult in sorted(self._levels.items(), key=lambda x: int(x[0])):
             if lev <= client.maxLevel:
                 level = mult
 

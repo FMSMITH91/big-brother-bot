@@ -129,3 +129,47 @@ class Test_commands(LocationTestCase):
         self.bill.says("!isp mike")
         # THEN
         self.assertListEqual(['Mike is using Fastweb as isp'], self.bill.message_history)
+    def test_cmd_locate_before_geolocation(self):
+        # GIVEN the geolocation plugin did not set the location attribute yet
+        self.mike.connects('1')
+        self.bill.connects('2')
+        del self.bill.location
+        self.assertFalse(hasattr(self.bill, 'location'))
+        # WHEN
+        self.mike.clearMessageHistory()
+        self.mike.says("!locate bill")
+        # THEN
+        self.assertListEqual(['Could not locate Bill'], self.mike.message_history)
+
+    def test_cmd_distance_before_geolocation(self):
+        # GIVEN
+        self.mike.connects('1')
+        self.bill.connects('2')
+        del self.bill.location
+        # WHEN
+        self.mike.clearMessageHistory()
+        self.mike.says("!distance bill")
+        # THEN
+        self.assertListEqual(['Could not compute distance with Bill'], self.mike.message_history)
+
+    def test_cmd_distance_before_own_geolocation(self):
+        # GIVEN
+        self.mike.connects('1')
+        self.bill.connects('2')
+        del self.mike.location
+        # WHEN
+        self.mike.clearMessageHistory()
+        self.mike.says("!distance bill")
+        # THEN
+        self.assertListEqual(['Could not compute distance with Bill'], self.mike.message_history)
+
+    def test_cmd_isp_before_geolocation(self):
+        # GIVEN
+        self.mike.connects('1')
+        self.bill.connects('2')
+        del self.mike.location
+        # WHEN
+        self.bill.clearMessageHistory()
+        self.bill.says("!isp mike")
+        # THEN
+        self.assertListEqual(['Could not determine Mike isp'], self.bill.message_history)

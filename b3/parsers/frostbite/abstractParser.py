@@ -184,7 +184,12 @@ class AbstractParser(b3.parser.Parser):
                 except FrostbiteException as e:
                     self.debug(e)
                     self._nbConsecutiveConnFailure += 1
-                    self._serverConnection.close()
+                    if self._serverConnection is not None:
+                        # None when FrostbiteConnection() itself failed (server unreachable, bad password...)
+                        try:
+                            self._serverConnection.close()
+                        except Exception as err:
+                            self.debug('error while closing the Frostbite connection: %r' % err)
                     if self._nbConsecutiveConnFailure <= 20:
                         self.debug('sleeping 0.5 sec...')
                         time.sleep(0.5)
@@ -866,8 +871,12 @@ class AbstractParser(b3.parser.Parser):
         This is mainly useful for games where clients are identified by the slot number they
         occupy. On map change, a player A on slot 1 can leave making room for player B who
         connects on slot 1.
+        Return None (so that the current client list is kept) if the server could not be queried.
         """
-        plist = self.getPlayerList()
+        plist = self._queryPlayerList()
+        if plist is None:
+            self.warning('Skipping clients synchronization: could not retrieve the player list from the server')
+            return None
         mlist = {}
         for cid, c in plist.items():
             client = self.clients.getByCID(cid)
@@ -907,9 +916,17 @@ class AbstractParser(b3.parser.Parser):
         Return a dict which keys are cid and values a dict of player properties
         as returned by admin.listPlayers. Does not return client objects.
         """
+        players = self._queryPlayerList()
+        return players if players is not None else {}
+
+    def _queryPlayerList(self):
+        """
+        Same as getPlayerList() but return None when the server could not be queried (the rcon gives up and
+        returns None after its retries) so that a failed query is not mistaken for an empty server.
+        """
         data = self.write(('admin.listPlayers', 'all'))
         if not data:
-            return {}
+            return None
         players = {}
         pib = PlayerInfoBlock(data)
         for p in pib:

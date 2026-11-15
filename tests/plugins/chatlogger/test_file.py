@@ -142,3 +142,19 @@ class Test_chatlogfile(ChatloggerTestCase):
         # THEN
         self.assertEqual(1, self.count_chatlog_lines())
         self.assert_log_line(self.get_all_chatlog_lines_from_logfile()[0], "@1 [★joe★] to PM:\thi ✪")
+
+    def test_login_password_is_masked(self):
+        # WHEN
+        self.joe.says("!login s3cr3t")
+        self.joe.says2team("@login s3cr3t")
+        self.joe.sendsPM("!login my s3cr3t", self.simon)
+        self.joe.says("!setpassword s3cr3t simon")
+        # THEN
+        lines = self.get_all_chatlog_lines_from_logfile()
+        self.assertEqual(4, len(lines))
+        self.assert_log_line(lines[0], "@1 [Joe] to ALL:\t!login ******")
+        self.assert_log_line(lines[1], "@1 [Joe] to TEAM:\t@login ******")
+        self.assert_log_line(lines[2], "@1 [Joe] to PM:\t!login ******")
+        self.assert_log_line(lines[3], "@1 [Joe] to ALL:\t!setpassword ****** simon")
+        for line in lines:
+            self.assertNotIn("s3cr3t", line)

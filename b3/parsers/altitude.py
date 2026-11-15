@@ -499,7 +499,7 @@ class AltitudeParser(Parser):
             "source":"c0aaf37d-e56d-4431-aa1e-69d5e18be5e6", "command":"vote",
             "group":"Anonymous", "type":"consoleCommandExecute"}
         """ 
-        c = self.clients.getByGUID(altitude_event["vaporId"])
+        c = self.clients.getByGUID(altitude_event["source"])
         return self.getEvent("EVT_CLIENT_CALL_VOTE", data=altitude_event, client=c)
 
     def OnAltitudeCommandCastBallot(self, altitude_event):

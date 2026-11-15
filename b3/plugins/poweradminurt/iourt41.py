@@ -622,6 +622,25 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             old = client.var(self, var, 0).value
             client.setvar(self, "prev_" + var, old)
 
+    def _getXlrstatsHeadshotKills(self, xlrstats, stats):
+        """
+        Return the number of kills the given xlrstats player made with a head or helmet hit.
+        xlrstats stores bodyparts by hit location name (the parser's HL_HEAD/HL_HELMET values) and
+        indexes playerbody rows by the xlrstats player id (not the client slot number).
+        :param xlrstats: the xlrstats plugin instance
+        :param stats: the PlayerStats object of the player
+        """
+        if stats is None or stats.id is None or hasattr(stats, '_new'):
+            return 0
+        total = 0
+        for key, default in (('HL_HEAD', '0'), ('HL_HELMET', '1')):
+            bodypart = xlrstats.get_Bodypart(name=str(self._hitlocations.get(key, default)))
+            if not bodypart or hasattr(bodypart, '_new') or bodypart.id is None:
+                continue
+            playerbody = xlrstats.get_PlayerBody(playerid=stats.id, bodypartid=bodypart.id)
+            total += playerbody.kills or 0
+        return total
+
     def _getScores(self, clients, usexlrstats=True):
         xlrstats = usexlrstats and self.console.getPlugin('xlrstats')
         playerstats = {}
@@ -660,9 +679,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             stats = xlrstats.get_PlayerStats(c) if xlrstats else None
             if stats:
                 playerstats[c.id]['xkillratio'] = stats.ratio
-                head = xlrstats.get_PlayerBody(playerid=c.cid, bodypartid=0).kills
-                helmet = xlrstats.get_PlayerBody(playerid=c.cid, bodypartid=1).kills
-                xhsratio = min(1.0, (head + helmet) / (1.0 + kills))
+                xhs = self._getXlrstatsHeadshotKills(xlrstats, stats)
+                xhsratio = min(1.0, xhs / (1.0 + (stats.kills or 0)))
                 playerstats[c.id]['xhsratio'] = xhsratio
             else:
                 playerstats[c.id]['xhsratio'] = 0.0

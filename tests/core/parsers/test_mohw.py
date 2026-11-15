@@ -35,7 +35,11 @@ from tests import logging_disabled
 
 
 sleep_patcher = None
+sleep_patcher = None
+
+
 def setUpModule():
+    global sleep_patcher
     sleep_patcher = patch("time.sleep")
     sleep_patcher.start()
 

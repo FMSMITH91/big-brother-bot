@@ -28,6 +28,7 @@ import asyncore
 import socket
 
 from b3.parser import Parser
+from b3.parsers.frostbite2.protocol import ThreadSafeDispatcherWithSend
 from b3.plugins.admin import AdminPlugin
 from struct import pack
 from struct import unpack
@@ -579,10 +580,10 @@ class Packet(object):
         p.raw_packet = raw_packet[0:6+p.dataLength]
         return p
 
-class Client(asyncore.dispatcher_with_send):
+class Client(ThreadSafeDispatcherWithSend):
 
     def __init__(self, console, host, port, password, packetListener):
-        asyncore.dispatcher_with_send.__init__(self)
+        ThreadSafeDispatcherWithSend.__init__(self)
         self.console = console
         self._host = host
         self._port = port

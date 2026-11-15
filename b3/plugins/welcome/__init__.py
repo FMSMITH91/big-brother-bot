@@ -42,6 +42,14 @@ F_ANNOUNCE_FIRST = 8
 F_ANNOUNCE_USER = 2
 F_CUSTOM_GREETING = 32
 
+# variables a player can use in his custom greeting (as $name, $maxLevel, ...)
+GREETING_VARIABLES = ('name', 'maxLevel', 'group', 'connections')
+GREETING_MAX_LENGTH = 255
+# greetings are stored with %(var)s placeholders: only plain %(var)s and %% are ever interpreted when rendering,
+# any other %-format directive (width, precision, flags...) is left as literal text so it cannot be abused
+_GREETING_TOKEN_RE = re.compile(r'%(?:\((\w+)\)s|%)')
+_GREETING_VARIABLE_RE = re.compile(r'\$(%s)' % '|'.join(GREETING_VARIABLES))
+
 
 class WelcomePlugin(b3.plugin.Plugin):
 
@@ -245,7 +253,7 @@ class WelcomePlugin(b3.plugin.Plugin):
                     self.console.say(self.getMessage('announce_first', info))
 
             if self._welcomeFlags & F_CUSTOM_GREETING and client.greeting:
-                _info = {'greeting': client.greeting % info}
+                _info = {'greeting': self.render_greeting(client.greeting, self.get_greeting_info(client))}
                 _info.update(info)
                 self.console.say(self.getMessage('greeting', _info))
         else:
@@ -274,6 +282,41 @@ class WelcomePlugin(b3.plugin.Plugin):
 
         return info
 
+    def get_greeting_info(self, client):
+        """
+        Return the values of the variables a custom greeting can use (see GREETING_VARIABLES).
+        """
+        group = client.maskedGroup
+        return {
+            'name': client.exactName,
+            'maxLevel': str(group.level) if group else '0',
+            'group': group.name if group else 'None',
+            'connections': str(client.connections),
+        }
+
+    @staticmethod
+    def prepare_greeting(data):
+        """
+        Convert a greeting typed by a player (using $var placeholders) into its stored form.
+        Literal '%' are escaped so the player cannot inject %-format directives.
+        """
+        return _GREETING_VARIABLE_RE.sub(r'%(\1)s', data.replace('%', '%%'))
+
+    @staticmethod
+    def render_greeting(greeting, variables):
+        """
+        Safely render a stored greeting: only %(var)s placeholders for known variables and %% are substituted.
+        Never raises and never pads, whatever the stored greeting contains.
+        """
+        def repl(match):
+            key = match.group(1)
+            if key is None:
+                return '%'
+            if key in variables:
+                return str(variables[key])
+            return match.group(0)
+        return _GREETING_TOKEN_RE.sub(repl, greeting or '')
+
     ####################################################################################################################
     #                                                                                                                  #
     #    COMMANDS                                                                                                      #
@@ -289,26 +332,16 @@ class WelcomePlugin(b3.plugin.Plugin):
             client.save()
             client.message(self.getMessage('greeting_cleared'))
         elif data:
-            prepared_data = re.sub(r'\$(name|maxLevel|group|connections)', r'%(\1)s', data)
+            prepared_data = self.prepare_greeting(data)
 
-            if len(prepared_data) > 255:
+            if len(data) > GREETING_MAX_LENGTH or len(prepared_data) > GREETING_MAX_LENGTH:
                 client.message('^7Your greeting is too long')
             else:
-                try:
-                    client.message('Greeting Test: %s' % (str(prepared_data) % {
-                        'name': client.exactName,
-                        'maxLevel': client.maxLevel,
-                        'group': getattr(client.maxGroup, 'name', None),
-                        'connections': client.connections
-                    }))
-                except ValueError as msg:
-                    client.message(self.getMessage('greeting_bad', msg))
-                    return False
-                else:
-                    client.greeting = prepared_data
-                    client.save()
-                    client.message(self.getMessage('greeting_changed', data))
-                    return True
+                client.message('Greeting Test: %s' % self.render_greeting(prepared_data, self.get_greeting_info(client)))
+                client.greeting = prepared_data
+                client.save()
+                client.message(self.getMessage('greeting_changed', data))
+                return True
         else:
             if client.greeting:
                 client.message(self.getMessage('greeting_yours', client.greeting))

@@ -13,7 +13,7 @@ available to player to those particular B3 groups. Those sections are :
 
 - guest commands
 - user commands
-- regular commands
+- reg commands (the section name `regular commands` is accepted too)
 - mod commands
 - admin commands
 - fulladmin commands

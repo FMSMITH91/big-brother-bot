@@ -25,6 +25,7 @@
 __version__ = '1.1'
 
 import socket
+import threading
 
 from struct import *
 
@@ -124,15 +125,25 @@ def DecodePacket(data):
     return [isFromServer, isResponse, sequence, words]
 
 clientSequenceNr = 0
+_clientSequenceLock = threading.Lock()
+
+
+def nextClientSequence():
+    """
+    Return the sequence number to use for the next client request (thread safe).
+    """
+    global clientSequenceNr
+    with _clientSequenceLock:
+        sequence = clientSequenceNr
+        clientSequenceNr = (clientSequenceNr + 1) & 0x3fffffff
+    return sequence
+
 
 def EncodeClientRequest(words):
     """
     Encode a request packet.
     """
-    global clientSequenceNr
-    packet = EncodePacket(False, False, clientSequenceNr, words)
-    clientSequenceNr = (clientSequenceNr + 1) & 0x3fffffff
-    return packet
+    return EncodePacket(False, False, nextClientSequence(), words)
 
     
 def EncodeClientResponse(sequence, words):
