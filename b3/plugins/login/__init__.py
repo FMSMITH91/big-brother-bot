@@ -39,7 +39,7 @@ class LoginPlugin(b3.plugin.Plugin):
 
     _pmcomm = ''
     _threshold = 1000
-    _passwdlevel = 100
+    _setpassword_cmd_level = 100  # level needed to use !setpassword (config: settings/passwdlevel)
 
     ####################################################################################################################
     #                                                                                                                  #
@@ -52,7 +52,7 @@ class LoginPlugin(b3.plugin.Plugin):
         Load plugin configuration.
         """
         self._threshold = self.getSetting('settings', 'thresholdlevel', b3.INT, self._threshold)
-        self._passwdlevel = self.getSetting('settings', 'passwdlevel', b3.INT, self._passwdlevel)
+        self._setpassword_cmd_level = self.getSetting('settings', 'passwdlevel', b3.INT, self._setpassword_cmd_level)
 
     def onStartup(self):
         """
@@ -65,7 +65,7 @@ class LoginPlugin(b3.plugin.Plugin):
 
         # register our commands
         self._adminPlugin.registerCommand(self, 'login', 2, self.cmd_login, secretLevel=1)
-        self._adminPlugin.registerCommand(self, 'setpassword', self._passwdlevel, self.cmd_setpassword)
+        self._adminPlugin.registerCommand(self, 'setpassword', self._setpassword_cmd_level, self.cmd_setpassword)
 
         # Whats the command to send a private message?
         self._pmcomm = '/m' if self.console.gameName[:5] == 'etpro' else '/tell'

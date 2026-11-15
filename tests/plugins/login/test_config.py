@@ -36,7 +36,7 @@ class Test_default_config(LoginTestCase):
         self.assertEqual(40, self.p._threshold)
 
     def test_passwdlevel(self):
-        self.assertEqual(40, self.p._passwdlevel)
+        self.assertEqual(40, self.p._setpassword_cmd_level)
 
 
 class Test_load_config(LoginTestCase):
@@ -46,7 +46,7 @@ class Test_load_config(LoginTestCase):
             [settings]
         """))
         self.assertEqual(1000, self.p._threshold)
-        self.assertEqual(100, self.p._passwdlevel)
+        self.assertEqual(100, self.p._setpassword_cmd_level)
 
     def test_thresholdlevel_empty(self):
         self.init_plugin(dedent("""
@@ -67,11 +67,11 @@ class Test_load_config(LoginTestCase):
             [settings]
             passwdlevel:
         """))
-        self.assertEqual(100, self.p._passwdlevel)
+        self.assertEqual(100, self.p._setpassword_cmd_level)
 
     def test_passwdlevel_junk(self):
         self.init_plugin(dedent("""
             [settings]
             passwdlevel: f00
         """))
-        self.assertEqual(100, self.p._passwdlevel)
+        self.assertEqual(100, self.p._setpassword_cmd_level)
