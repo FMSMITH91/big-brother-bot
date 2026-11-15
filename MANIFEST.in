@@ -1,13 +1,11 @@
-include *.py
-include b3_run.py
-include b3/sql/*.sql
-include CHANGELOG README.md b3/PKG-INFO *.txt
-include b3/conf/*.xml
-include b3/conf/*.ini
-include b3/conf/templates/*.tpl
+include b3_run.py b3_debug.py
+include CHANGELOG README.md *.txt
+# all of b3/, data files included (plugin sql scripts, sample configs, the bundled GeoIP database...)
+recursive-include b3 *
+prune b3/docs/user_documentation
+recursive-include examples *
+recursive-include scripts *
+global-exclude *.py[co] __pycache__
 exclude .idea/*
-exclude tests/*
+prune tests
 exclude setup.cfg
-exclude setup.py
-exclude build-requirements.txt
-exclude MANIFEST.in
