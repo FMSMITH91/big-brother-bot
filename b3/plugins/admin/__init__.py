@@ -683,7 +683,9 @@ class AdminPlugin(b3.plugin.Plugin):
                     event.client.message("plugin disabled: cannot execute command %s" % cmd)
                 return
 
-            elif not event.client.authed and command.level is not None and command.level[0] > 0:
+            elif not event.client.authed:
+                # deny by default: no command at all until B3 knows who the player is (a guest level command such as
+                # !iamgod or !register would otherwise write the groups of a player with no guid)
                 event.client.message('^7Please try your command after you have been authenticated')
                 self.console.clients.authorizeClients()
                 return
@@ -1225,6 +1227,9 @@ class AdminPlugin(b3.plugin.Plugin):
             if not sclient:
                 return
 
+        if self.refuseUnidentified(sclient, client):
+            return
+
         try:
             group = Group(keyword=groupname)
             group = self.console.storage.getGroup(group)
@@ -1250,7 +1255,7 @@ class AdminPlugin(b3.plugin.Plugin):
         else:
             sclient = self.findClientPrompt(m[0], client)
 
-        if sclient:
+        if sclient and not self.refuseUnidentified(sclient, client):
             sclient.maskLevel = 0
             sclient.save()
             if sclient != client:
@@ -1352,6 +1357,8 @@ class AdminPlugin(b3.plugin.Plugin):
         except Exception:
             return
         else:
+            if self.refuseUnidentified(client, client):
+                return
             if client.inGroup(group):
                 client.message(self.getMessage('groups_already_in', client.exactName, group.name))
             elif client.maxLevel >= group.level:
@@ -1513,7 +1520,7 @@ class AdminPlugin(b3.plugin.Plugin):
             client.message('^7Group ^1reg ^7does not exist')
         else:
             sclient = self.findClientPrompt(cid, client)
-            if sclient:
+            if sclient and not self.refuseUnidentified(sclient, client):
                 if sclient.inGroup(group):
                     client.message(self.getMessage('groups_already_in', sclient.exactName, group.name))
                 elif sclient.maxLevel >= group.level:
@@ -1548,7 +1555,7 @@ class AdminPlugin(b3.plugin.Plugin):
                 client.message("^7Group ^1user ^7does not exist")
             else:
                 sclient = self.findClientPrompt(cid, client)
-                if sclient:
+                if sclient and not self.refuseUnidentified(sclient, client):
                     if sclient.inGroup(group_reg):
                         sclient.remGroup(group_reg)
                         sclient.setGroup(group_user)
@@ -1556,6 +1563,27 @@ class AdminPlugin(b3.plugin.Plugin):
                         cmd.sayLoudOrPM(client, '^7%s^7 removed from group %s' % (sclient.exactName, group_reg.name))
                     else:
                         client.message('^7%s^7 is not in group %s' % (sclient.exactName, group_reg.name))
+
+    @staticmethod
+    def isIdentified(client):
+        """
+        Return True if B3 knows who the client is (authenticated, with a guid): only such a client may have its groups
+        or mask level changed and saved.
+        """
+        return bool(client and client.authed and client.guid)
+
+    def refuseUnidentified(self, sclient, client):
+        """
+        Tell client and return True when sclient is not identified yet (see isIdentified).
+        """
+        if self.isIdentified(sclient):
+            return False
+        self.warning('refused to change the groups of %s: not authenticated or no guid', sclient.name)
+        if sclient is client:
+            client.message('^7Please try your command after you have been authenticated')
+        else:
+            client.message('^7%s ^7is not authenticated yet: try again later' % sclient.exactName)
+        return True
 
     @staticmethod
     def canChangeGroupsOf(sclient, client):
@@ -1591,7 +1619,7 @@ class AdminPlugin(b3.plugin.Plugin):
                 client.message(self.getMessage('group_beyond_reach', {'group_name': group.name}))
             else:
                 sclient = self.findClientPrompt(cid, client)
-                if sclient:
+                if sclient and not self.refuseUnidentified(sclient, client):
                     if not self.canChangeGroupsOf(sclient, client):
                         client.message('^7You cannot change the groups of %s' % sclient.exactName)
                     elif sclient.inGroup(group):
@@ -1628,7 +1656,7 @@ class AdminPlugin(b3.plugin.Plugin):
                     client.message(self.getMessage('group_beyond_reach', {'group_name': group.name}))
                     return
                 sclient = self.findClientPrompt(cid, client)
-                if sclient:
+                if sclient and not self.refuseUnidentified(sclient, client):
                     if not self.canChangeGroupsOf(sclient, client):
                         client.message('^7You cannot change the groups of %s' % sclient.exactName)
                     elif sclient.inGroup(group):
@@ -1642,6 +1670,9 @@ class AdminPlugin(b3.plugin.Plugin):
         """
         - register yourself as the super admin
         """
+        if self.refuseUnidentified(client, client):
+            # round 3c (2026-11-18): a player with no guid became the super admin and locked the real owner out
+            return
         superadmins = self.console.clients.lookupSuperAdmins()
         if len(superadmins) > 0:
             # There are already superadmins, disable this command

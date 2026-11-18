@@ -224,6 +224,15 @@ class Test_vanilla_et260b(EtTestCase):
         self.assertLessEqual(len(client.pbid), 32)
         self.assertLessEqual(len(client.guid), 36)
 
+    def test_pbid_kept_when_status_is_read(self):
+        # round 3c: status without PunkBuster gives pbid None, and authorizeClients saved an empty pbid over it
+        for line in self.LINES:
+            self.console.parseLine(line)
+        self.console.authorizeClients()
+        client = self.console.clients.getByCID('5')
+        self.assertEqual('B3B3B3B3B3B3B3B3B3B3B3B3B3000001', client.pbid)
+        self.assertEqual('et:B3B3B3B3B3B3B3B3B3B3B3B3B3000001', client.guid)
+
     def test_say_from_known_player(self):
         for line in self.LINES:
             self.console.parseLine(line)
