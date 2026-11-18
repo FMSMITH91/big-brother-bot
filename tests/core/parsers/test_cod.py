@@ -186,3 +186,86 @@ class Test_players_connected_before_b3(CodTestCase):
         self.queued[:] = []
         self.console.joinConnectedPlayers()
         self.assertEqual([], self.events('EVT_CLIENT_JOIN'))
+
+
+# Builds a CoD parser on FakeConsole, makes it start authenticating an unknown player (which arms the real
+# newPlayer timer), then lets the main thread end, as B3 does after "EXITING".
+EXIT_WITH_PENDING_TIMER = '''
+import sys
+from b3.parsers.q3a.abstractParser import AbstractParser
+from b3.fake import FakeConsole
+AbstractParser.__bases__ = (FakeConsole,)
+from b3.config import XmlConfigParser
+from b3.parsers.cod import CodParser
+conf = XmlConfigParser()
+conf.loadFromString('<configuration><settings name="server"><set name="game_log"/></settings></configuration>')
+console = CodParser(conf)
+console.PunkBuster = None
+console.write = lambda *args, **kwargs: ''
+console.queueEvent = lambda *args, **kwargs: None
+console.parseLine('1319:34 say;2019598;7;Joe;!iamgod')
+assert console._counter, 'no authentication timer was armed'
+console.working = False
+print('ready', flush=True)
+'''
+
+
+class Test_pending_timers_do_not_block_shutdown(CodTestCase):
+    """
+    linuxgsm-panel add-ons (2026-11-18): B3 printed "EXITING: 0" but its process stayed alive, because the
+    newPlayer / clients.sync threading.Timer threads were not daemon. In a container the stop then waited until
+    the runtime killed B3 (exit 137).
+    """
+
+    def test_process_exits_at_once_with_an_authentication_timer_pending(self):
+        import os
+        import subprocess
+        import sys
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        import tempfile
+        stderr = tempfile.TemporaryFile(mode='w+')
+        self.addCleanup(stderr.close)
+        proc = subprocess.Popen([sys.executable, '-c', EXIT_WITH_PENDING_TIMER], cwd=root,
+                                stdout=subprocess.PIPE, stderr=stderr, text=True)
+        try:
+            for line in proc.stdout:  # FakeConsole prints a line of its own first
+                if line.strip() == 'ready':
+                    break
+            else:
+                proc.wait()
+                stderr.seek(0)
+                self.fail('the script failed:\n' + stderr.read())
+            # the timer fires after 2 s: a non-daemon timer keeps the process alive at least that long
+            self.assertEqual(0, proc.wait(timeout=1.5))
+        except subprocess.TimeoutExpired:
+            self.fail('B3 did not exit while an authentication timer was pending')
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait()
+            proc.stdout.close()
+
+    def test_parser_timers_are_daemon(self):
+        import threading
+        self.console.PunkBuster = None
+        when(self.console).write('status', maxRetries=anything()).thenReturn('')
+        when(self.console).write('status').thenReturn('')
+        self.console.queueEvent = lambda event, expire=10: None
+        self.addCleanup(self.console._counter.clear)
+        before = set(threading.enumerate())
+        self.console.parseLine('1319:34 say;2019598;7;Joe;!iamgod')
+        self.console.OnExitlevel('ExitLevel', '')
+        started = [t for t in threading.enumerate() if t not in before and isinstance(t, threading.Timer)]
+        for timer in started:
+            self.addCleanup(timer.cancel)
+        self.assertEqual(2, len(started))
+        self.assertTrue(all(t.daemon for t in started), started)
+
+    def test_newPlayer_does_not_rearm_once_b3_is_stopping(self):
+        self.console._counter['7'] = 1
+        self.addCleanup(self.console._counter.clear)
+        self.console.working = False
+        self.addCleanup(setattr, self.console, 'working', True)
+        with patch('b3.parsers.cod.Timer') as timer:
+            self.assertIsNone(self.console.newPlayer('7', '2019598', 'Joe'))
+        timer.assert_not_called()

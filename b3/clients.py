@@ -1742,6 +1742,7 @@ class Clients(dict):
             # are joining at once
             self._authorizing = True
             t = threading.Timer(5, self._authorizeClients)
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t.start()
 
     def _authorizeClients(self):

@@ -300,7 +300,9 @@ class RestartTask(Task):
     def runcommands(self):
         if 'delay' in self.config.attrib:
             delay_minutes = b3.functions.time2minutes(self.config.attrib['delay'])
-            threading.Timer(delay_minutes * 60, Task.runcommands, [self]).start()
+            t = threading.Timer(delay_minutes * 60, Task.runcommands, [self])
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
+            t.start()
         else:
             Task.runcommands(self)
 

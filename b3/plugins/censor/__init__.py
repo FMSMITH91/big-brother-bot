@@ -316,6 +316,7 @@ class CensorPlugin(b3.plugin.Plugin):
         if was_penalized:
             # check again in 1 minute
             t = threading.Timer(60, self.checkBadName, (client,))
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t.start()
             return
 

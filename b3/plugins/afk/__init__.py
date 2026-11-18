@@ -415,6 +415,7 @@ class AfkPlugin(Plugin):
         client.message(self.are_you_afk)
         self.console.say(self.suspicion_announcement.format(name=client.name, last_chance_delay=self.last_chance_delay))
         t = Timer(self.last_chance_delay, self.kick_client, (client, ))
+        t.daemon = True  # a pending timer must never keep B3 alive at shutdown
         t.start()
         self.kick_timers[client] = t
 

@@ -131,7 +131,7 @@ class Cod7HttpPlugin(b3.plugin.Plugin):
         """
         Starts a thread for cod7http plugin.
         """
-        thread1 = threading.Thread(target=self.processData)
+        thread1 = threading.Thread(target=self.processData, daemon=True)
         self.info("starting cod7http thread")
         thread1.start()
         self.httpthreadinst = thread1

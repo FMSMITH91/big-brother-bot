@@ -127,7 +127,7 @@ class HttpytailPlugin(b3.plugin.Plugin):
         self.httpconfig = functions.splitDSN(httpfileDSN)
         self.url = httpfileDSN
         self.stop_event.clear()
-        self.thread1 = threading.Thread(target=self.update)
+        self.thread1 = threading.Thread(target=self.update, daemon=True)
         self.info("Starting httpytail thread")
         self.thread1.start()
 

@@ -248,7 +248,9 @@ class MakeroomPlugin(Plugin):
                 except ConfigParser.NoOptionError:
                     info_message = "Making room for clan member, please come back again"
                 self.console.say(info_message)
-                threading.Timer(self._delay, self._free_a_slot, (client, )).start()
+                t = threading.Timer(self._delay, self._free_a_slot, (client, ))
+                t.daemon = True  # a pending timer must never keep B3 alive at shutdown
+                t.start()
 
     ####################################################################################################################
     #                                                                                                                  #
@@ -309,8 +311,10 @@ class MakeroomPlugin(Plugin):
                 if self._delay == 0:
                     last_connected_client.kick(reason=kick_reason, keyword="makeroom", silent=True)
                 else:
-                    threading.Timer(self._delay, last_connected_client.kick, (),
-                                    {'reason': kick_reason, 'keyword': "makeroom", 'silent': True}).start()
+                    t = threading.Timer(self._delay, last_connected_client.kick, (),
+                                        {'reason': kick_reason, 'keyword': "makeroom", 'silent': True})
+                    t.daemon = True  # a pending timer must never keep B3 alive at shutdown
+                    t.start()
             else:
                 self.info("someone will be kicked")
                 self.cmd_makeroom()

@@ -214,6 +214,7 @@ class WelcomePlugin(b3.plugin.Plugin):
             self.debug('not welcoming player because the bot started less than 5 min ago')
             return
         t = threading.Timer(self._welcomeDelay, self.welcome, (event.client,))
+        t.daemon = True  # a pending timer must never keep B3 alive at shutdown
         t.start()
 
     ####################################################################################################################
