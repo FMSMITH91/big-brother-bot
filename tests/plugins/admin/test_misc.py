@@ -25,6 +25,8 @@
 import unittest
 
 from unittest.mock import Mock, patch
+from b3.clients import Group
+from b3.fake import FakeClient
 from tests.plugins.admin import Admin_TestCase, Admin_functional_test
 
 
@@ -161,6 +163,55 @@ class Test_command_from_unauthenticated_player(Admin_functional_test):
         self.assertEqual(['Please try your command after you have been authenticated'], self.joe.message_history)
         self.authorize.assert_called_once()
 
-    def test_guest_command_still_works(self):
+    def test_guest_command_is_denied_too(self):
+        # deny by default (OWASP A01): no command at all before authentication
         self.joe.says('!help')
-        self.assertNotIn('Please try your command after you have been authenticated', self.joe.message_history)
+        self.assertEqual(['Please try your command after you have been authenticated'], self.joe.message_history)
+
+
+class Test_iamgod_needs_an_identified_player(Admin_functional_test):
+    """
+    SECURITY, round 3c (2026-11-18, vanilla ET): a player with a missing cl_guid (not authenticated, empty guid) typed
+    !iamgod and was saved as the super admin (guid ''), which disabled !iamgod for the real owner.
+    """
+
+    def setUp(self):
+        Admin_functional_test.setUp(self)
+        self.init()
+        patcher = patch.object(self.console.clients, 'authorizeClients')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.superadmin = self.console.storage.getGroup(Group(keyword='superadmin'))
+        self.bad = FakeClient(self.console, name="BadGuid", exactName="BadGuid", guid="", groupBits=0)
+        self.bad.connects(3)
+        self.bad.authed = False
+
+    def test_unauthenticated_empty_guid_cannot_become_superadmin(self):
+        self.bad.says('!iamgod')
+        self.assertFalse(self.bad.inGroup(self.superadmin))
+        self.assertEqual([], self.console.clients.lookupSuperAdmins())
+
+    def test_cmd_iamgod_refuses_even_when_called_directly(self):
+        # defence in depth: the command itself checks, whatever path reaches it
+        self.p.cmd_iamgod('', self.bad, self.p._commands['iamgod'])
+        self.assertFalse(self.bad.inGroup(self.superadmin))
+        self.assertIn('Please try your command after you have been authenticated', self.bad.message_history)
+
+    def test_authenticated_but_no_guid_is_refused(self):
+        self.bad.authed = True
+        self.p.cmd_iamgod('', self.bad, self.p._commands['iamgod'])
+        self.assertFalse(self.bad.inGroup(self.superadmin))
+
+    def test_identified_player_can_still_use_it(self):
+        self.mike.connects(1)
+        self.mike.says('!iamgod')
+        self.assertTrue(self.mike.inGroup(self.superadmin))
+
+    def test_admin_cannot_change_groups_of_an_unidentified_player(self):
+        self.joe.connects(0)
+        for command in ('!putgroup BadGuid reg', '!makereg BadGuid', '!mask reg BadGuid', '!ungroup BadGuid reg'):
+            self.joe.clearMessageHistory()
+            self.joe.says(command)
+            self.assertIn('BadGuid is not authenticated yet: try again later', self.joe.message_history, command)
+        self.assertEqual(0, self.bad.groupBits)
+        self.assertEqual(0, self.bad.maskLevel)

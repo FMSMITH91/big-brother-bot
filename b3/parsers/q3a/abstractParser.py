@@ -883,10 +883,11 @@ class AbstractParser(b3.parser.Parser):
         for cid, p in players.items():
             sp = self.clients.getByCID(cid)
             if sp:
-                # Only set provided data, otherwise use the currently set data
-                sp.ip = p.get('ip', sp.ip)
-                sp.pbid = p.get('pbid', sp.pbid)
-                sp.guid = p.get('guid', sp.guid)
+                # Only set provided data, otherwise use the currently set data (status without PunkBuster gives
+                # pbid None: it must not wipe the pbid the game log gave)
+                sp.ip = p.get('ip') or sp.ip
+                sp.pbid = p.get('pbid') or sp.pbid
+                sp.guid = p.get('guid') or sp.guid
                 sp.data = p
                 sp.auth()
 
