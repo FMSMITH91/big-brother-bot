@@ -23,7 +23,7 @@
 # ################################################################### #
 
 __author__ = 'Fenix'
-__version__ = '1.6'
+__version__ = '1.7'
 
 import b3
 import b3.clients
@@ -37,6 +37,18 @@ from .geolocators import IpWhoIsGeolocator
 from .geolocators import MaxMindGeolocator
 
 
+# services by the name used in the "geolocators" setting (plugin_geolocation.ini)
+GEOLOCATORS = {
+    'ipwho.is': IpWhoIsGeolocator,
+    'ipapi.co': IpApiCoGeolocator,
+    'maxmind': MaxMindGeolocator,
+}
+GEOLOCATOR_ALIASES = {'ipwho': 'ipwho.is', 'ipapi': 'ipapi.co'}
+# online services first (they know the city, region and ISP), over HTTPS only: player IP addresses must not cross
+# the internet in clear text. The bundled MaxMind database (country only, offline) is the fallback.
+DEFAULT_GEOLOCATORS = ('ipwho.is', 'ipapi.co', 'maxmind')
+
+
 class GeolocationPlugin(b3.plugin.Plugin):
 
     requiresConfigFile = False
@@ -46,16 +58,62 @@ class GeolocationPlugin(b3.plugin.Plugin):
         Build the plugin object.
         """
         b3.plugin.Plugin.__init__(self, console, config)
-        # create geolocators instances
         self.info('creating geolocators object instances...')
-        # online services first (they know the city, region and ISP), over HTTPS only: player IP addresses must
-        # not cross the internet in clear text. The bundled MaxMind database (country only) is the offline fallback.
-        self._geolocators = [IpWhoIsGeolocator(), IpApiCoGeolocator()]
-        try:
-            # append this one separately since db may be missing
-            self._geolocators.append(MaxMindGeolocator())
-        except IOError as e:
-            self.debug('MaxMind geolocation not available: %s' % e)
+        self._geolocators = self._build_geolocators(DEFAULT_GEOLOCATORS)
+
+    def onLoadConfig(self):
+        """
+        Load the plugin configuration: the optional "geolocators" setting picks the services and their order.
+        """
+        names = self._geolocator_names()
+        if names != DEFAULT_GEOLOCATORS:
+            self._geolocators = self._build_geolocators(names)
+        self.info('geolocation services, in order: %s',
+                  ', '.join(self._geolocator_name(g) for g in self._geolocators) or 'none')
+
+    def _geolocator_names(self):
+        """
+        Read [settings] geolocators: a comma separated list of service names (ipwho.is, ipapi.co, maxmind).
+        Unknown names are skipped; a missing or empty setting keeps the default order.
+        """
+        if not self.config or not self.config.has_option('settings', 'geolocators'):
+            return DEFAULT_GEOLOCATORS
+        names = []
+        for raw in self.config.get('settings', 'geolocators').split(','):
+            name = raw.strip().lower()
+            if not name:
+                continue
+            name = GEOLOCATOR_ALIASES.get(name, name)
+            if name not in GEOLOCATORS:
+                self.warning('unknown geolocation service %r in settings/geolocators: expected one of %s',
+                             raw.strip(), ', '.join(sorted(GEOLOCATORS)))
+            elif name not in names:
+                names.append(name)
+        if not names:
+            self.warning('no valid geolocation service in settings/geolocators: using the default (%s)',
+                         ', '.join(DEFAULT_GEOLOCATORS))
+            return DEFAULT_GEOLOCATORS
+        return tuple(names)
+
+    def _build_geolocators(self, names):
+        """
+        Create the geolocator objects for the given service names, in order.
+        """
+        geolocators = []
+        for name in names:
+            try:
+                geolocators.append(GEOLOCATORS[name]())
+            except IOError as e:
+                # the MaxMind database may be missing
+                self.debug('%s geolocation not available: %s', name, e)
+        return geolocators
+
+    @staticmethod
+    def _geolocator_name(geolocator):
+        for name, clazz in GEOLOCATORS.items():
+            if isinstance(geolocator, clazz):
+                return name
+        return geolocator.__class__.__name__
 
     def onStartup(self):
         """
