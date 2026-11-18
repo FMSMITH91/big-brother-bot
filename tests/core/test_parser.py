@@ -306,3 +306,38 @@ class Test_critical(unittest.TestCase):
         self.assertEqual(220, parser.exitcode)
         shutdown_mock.assert_called_once_with()
         finalize_mock.assert_called_once_with()
+
+
+class Test_testRcon(B3TestCase):
+    """
+    linuxgsm-panel (2026-11-18): "Testing RCON : OK" went only to the console, so a log viewer reading b3.log could
+    not tell whether RCON worked.
+    """
+
+    def run_test(self, reply):
+        from unittest.mock import Mock, patch
+        self.console.output = Mock()
+        self.console.output.write = Mock(return_value=reply)
+        self.console.screen = Mock()
+        with patch.object(self.console, 'bot') as bot, patch.object(self.console, 'warning') as warning, \
+                patch.object(self.console, 'error') as error, patch('time.sleep'):
+            self.console.testRcon()
+        return bot, warning, error
+
+    def test_ok_is_logged(self):
+        bot, warning, error = self.run_test('map: mp_harbor\nnum score ping guid name\n')
+        bot.assert_called_once_with('Testing RCON: OK')
+        warning.assert_not_called()
+        error.assert_not_called()
+
+    def test_bad_password_is_logged(self):
+        bot, warning, error = self.run_test('Bad rconpassword.')
+        error.assert_called_once()
+        self.assertIn('bad RCON password', error.call_args[0][0])
+        bot.assert_not_called()
+
+    def test_no_response_is_logged(self):
+        bot, warning, error = self.run_test('')
+        warning.assert_called_once()
+        self.assertIn('no response', warning.call_args[0][0])
+        bot.assert_not_called()

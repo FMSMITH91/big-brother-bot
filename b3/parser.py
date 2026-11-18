@@ -398,27 +398,8 @@ class Parser(object):
             self._multiline_noprefix = self.config.getboolean('server', 'multiline_noprefix')
             self.bot('Setting multiline_noprefix to: %s', self._multiline_noprefix)
 
-        # testing rcon
         if self.rconTest:
-            res = self.output.write('status')
-            self.output.flush()
-            self.screen.write('Testing RCON     : ')
-            self.screen.flush()
-            badRconReplies = ['Bad rconpassword.', 'Invalid password.']
-            if res in badRconReplies:
-                self.screen.write('>>> Oops: Bad RCON password\n'
-                                  '>>> Hint: This will lead to errors and render B3 without any power to interact!\n')
-                self.screen.flush()
-                time.sleep(2)
-            elif res == '':
-                self.screen.write('>>> Oops: No response\n'
-                                  '>>> Could be something wrong with the rcon connection to the server!\n'
-                                  '>>> Hint 1: The server is not running or it is changing maps.\n'
-                                  '>>> Hint 2: Check your server-ip and port.\n')
-                self.screen.flush()
-                time.sleep(2)
-            else:
-                self.screen.write('OK\n')
+            self.testRcon()
 
         self.loadEvents()
         self.screen.write('Loading events   : %s events loaded\n' % len(self._events))
@@ -553,6 +534,33 @@ class Parser(object):
         self._pauseNotice = False
         self.input.seek(0, os.SEEK_END)
         self._partialLine = ''
+
+    def testRcon(self):
+        """
+        Send "status" to check the RCON connection and password: the result goes to the console and to b3.log.
+        """
+        res = self.output.write('status')
+        self.output.flush()
+        self.screen.write('Testing RCON     : ')
+        self.screen.flush()
+        badRconReplies = ['Bad rconpassword.', 'Invalid password.']
+        if res in badRconReplies:
+            self.error('Testing RCON: bad RCON password: B3 will not be able to act on the server')
+            self.screen.write('>>> Oops: Bad RCON password\n'
+                              '>>> Hint: This will lead to errors and render B3 without any power to interact!\n')
+            self.screen.flush()
+            time.sleep(2)
+        elif res == '':
+            self.warning('Testing RCON: no response (is the server running? check the server ip and port)')
+            self.screen.write('>>> Oops: No response\n'
+                              '>>> Could be something wrong with the rcon connection to the server!\n'
+                              '>>> Hint 1: The server is not running or it is changing maps.\n'
+                              '>>> Hint 2: Check your server-ip and port.\n')
+            self.screen.flush()
+            time.sleep(2)
+        else:
+            self.bot('Testing RCON: OK')
+            self.screen.write('OK\n')
 
     def loadEvents(self):
         """
