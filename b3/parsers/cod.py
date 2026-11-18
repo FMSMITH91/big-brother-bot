@@ -401,6 +401,7 @@ class CodParser(AbstractParser):
 
             self._counter[cid] = 1
             t = Timer(2, self.newPlayer, (cid, codguid, name))
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t.start()
             self.debug('%s connected: waiting for authentication...' % name)
             self.debug('Our authentication queue: %s' % self._counter)
@@ -515,6 +516,7 @@ class CodParser(AbstractParser):
 
     def OnExitlevel(self, action, data, match=None):
         t = Timer(60, self.clients.sync)
+        t.daemon = True  # a pending timer must never keep B3 alive at shutdown
         t.start()
         self.game.mapEnd()
         return self.getEvent('EVT_GAME_EXIT', data=data)
@@ -571,6 +573,9 @@ class CodParser(AbstractParser):
         :param codguid: The client GUID
         :param name: The client name
         """
+        if not self.working:
+            # B3 is shutting down: end the retry chain instead of re-arming it
+            return None
         if not self._counter.get(cid):
             self.verbose('newPlayer thread no longer needed: key no longer available')
             return None
@@ -589,6 +594,7 @@ class CodParser(AbstractParser):
                 self.debug('PB-id is not valid: giving it another try')
                 self._counter[cid] += 1
                 t = Timer(4, self.newPlayer, (cid, codguid, name))
+                t.daemon = True  # a pending timer must never keep B3 alive at shutdown
                 t.start()
                 return None
             if self.IpsOnly:
@@ -631,6 +637,7 @@ class CodParser(AbstractParser):
                 self.debug('%s not yet fully connected: retrying...#:%s' % (name, self._counter.get(cid)))
                 self._counter[cid] += 1
                 t = Timer(4, self.newPlayer, (cid, codguid, name))
+                t.daemon = True  # a pending timer must never keep B3 alive at shutdown
                 t.start()
             else:
                 self.warning('All authentication attempts failed')

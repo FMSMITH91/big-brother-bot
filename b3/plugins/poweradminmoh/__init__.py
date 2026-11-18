@@ -838,6 +838,7 @@ class MatchManager(object):
         self.console.say('MATCH starting soon !!')
         self.console.say('ALL PLAYERS : type !ready when you are ready')
         self.timer = threading.Timer(10.0, self._checkIfEveryoneIsReady)
+        self.timer.daemon = True  # a pending timer must never keep B3 alive at shutdown
         self.timer.start()
     
     def registerCommandReady(self):
@@ -888,6 +889,7 @@ class MatchManager(object):
             self.timer = threading.Timer(10.0, self._checkIfEveryoneIsReady)
             
         if self.running:
+            self.timer.daemon = True  # a pending timer must never keep B3 alive at shutdown
             self.timer.start()
 
     def _countDown(self):
@@ -897,6 +899,7 @@ class MatchManager(object):
             self.countDown -= 1
             if self.running:
                 self.timer = threading.Timer(1.0, self._countDown)
+                self.timer.daemon = True  # a pending timer must never keep B3 alive at shutdown
                 self.timer.start()
         else:    
             # make sure to have a brief big text

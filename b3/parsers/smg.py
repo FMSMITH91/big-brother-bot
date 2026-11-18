@@ -313,6 +313,7 @@ class SmgParser(AbstractParser):
 
                 self._counter[cid] = 1
                 t = threading.Timer(2, self.newPlayer, (cid, guid, bclient['name']))
+                t.daemon = True  # a pending timer must never keep B3 alive at shutdown
                 t.start()
                 self.debug('%s connected, waiting for authentication...' % bclient['name'])
                 self.debug('our authentication queue: %s' % str(self._counter))
@@ -564,6 +565,9 @@ class SmgParser(AbstractParser):
                 return p
 
     def newPlayer(self, cid, guid, name):
+        if not self.working:
+            # B3 is shutting down: end the retry chain instead of re-arming it
+            return None
         if not self._counter.get(cid):
             self.verbose('newPlayer thread no longer needed: key no longer available')
             return None
@@ -588,6 +592,7 @@ class SmgParser(AbstractParser):
             self.debug('%s not yet fully connected: retrying...#:%s' % (name, self._counter[cid]))
             self._counter[cid] += 1
             t = threading.Timer(4, self.newPlayer, (cid, guid, name))
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t.start()
             return None
             

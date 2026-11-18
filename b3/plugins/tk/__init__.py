@@ -415,6 +415,7 @@ class TkPlugin(b3.plugin.Plugin):
                                                                      'points': points, 'cid': event.client.cid}) + msg)
                 event.client.setvar(self, 'checkBan', True)
                 t = threading.Timer(30, self.checkTKBan, (event.client,))
+                t.daemon = True  # a pending timer must never keep B3 alive at shutdown
                 t.start()
 
     ####################################################################################################################

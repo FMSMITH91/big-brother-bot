@@ -123,6 +123,7 @@ class GeowelcomePlugin(WelcomePlugin):
         """
         if self.must_welcome(event.client):
             t = threading.Timer(self._welcomeDelay, self.geowelcome, (event.client,))
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t.start()
 
     def onGeolocationFailure(self, event):
@@ -131,6 +132,7 @@ class GeowelcomePlugin(WelcomePlugin):
         """
         if self.must_welcome(event.client):
             t = threading.Timer(self._welcomeDelay, self.welcome, (event.client,))
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t.start()
 
     ####################################################################################################################

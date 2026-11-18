@@ -581,7 +581,7 @@ class Bf3Parser(AbstractParser):
                 # we'll still leave the call here since it provides us self.game.roundTime()
                 # next function call will increase roundcount by one, this is not wanted
                 correct_rounds_value = self.game.rounds
-                threading.Thread(target=self._startRound).start()
+                threading.Thread(target=self._startRound, daemon=True).start()
                 self.game.rounds = correct_rounds_value
                 self.queueEvent(self.getEvent('EVT_GAME_ROUND_START', data=self.game))
 

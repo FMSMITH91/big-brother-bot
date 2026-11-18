@@ -107,6 +107,7 @@ class CensorurtPlugin(CensorPlugin):
                         self.console.write('mute %s' % client.cid)
                         client.langMuted = True
                         t = threading.Timer(self._muteduration1 * 60, self.unmutePlayer, (client,))
+                        t.daemon = True  # a pending timer must never keep B3 alive at shutdown
                         t.start()
                 elif client.langWarnings == 2:
                     if self._muteduration2 != 0:
@@ -116,6 +117,7 @@ class CensorurtPlugin(CensorPlugin):
                         self.console.write('mute %s' % client.cid)
                         client.langMuted = True
                         t = threading.Timer(self._muteduration2 * 60, self.unmutePlayer, (client,))
+                        t.daemon = True  # a pending timer must never keep B3 alive at shutdown
                         t.start()
                 else:
                     self.debug('Muting %s for %s minutes.' % (client.name, self._muteduration3))
@@ -124,6 +126,7 @@ class CensorurtPlugin(CensorPlugin):
                     self.console.write('mute %s' % client.cid)
                     client.langMuted = True
                     t = threading.Timer(self._muteduration3 * 60, self.unmutePlayer, (client,))
+                    t.daemon = True  # a pending timer must never keep B3 alive at shutdown
                     t.start()
 
                 if client.langWarnings > self._warnafter:

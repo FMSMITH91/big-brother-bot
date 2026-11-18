@@ -257,7 +257,7 @@ class XlrstatsPlugin(b3.plugin.Plugin):
         # let's try and get some variables from our webfront installation
         if self.webfront_url and self.webfront_url != '':
             self.debug('webfront set to: %s' % self.webfront_url)
-            thread1 = threading.Thread(target=self.getWebsiteVariables)
+            thread1 = threading.Thread(target=self.getWebsiteVariables, daemon=True)
             thread1.start()
         else:
             self.debug('no webfront url available: using default')

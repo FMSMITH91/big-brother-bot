@@ -336,6 +336,7 @@ class Cod7Parser(b3.parsers.cod5.Cod5Parser):
 
             self._counter[cid] = 1
             t = Timer(2, self.newPlayer, (cid, codguid, name))
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t.start()
             self.debug('%s connected: waiting for authentication...' %name)
             self.debug('Our authentication queue: %s' % self._counter.__str__())

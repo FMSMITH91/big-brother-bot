@@ -185,7 +185,7 @@ class FtpytailPlugin(b3.plugin.Plugin):
         self.ftpconfig = functions.splitDSN(ftpfiledsn)
         # the '/' is not part of the uri-path according to RFC 1738 3.1. Common Internet Scheme Syntax
         self.url_path = self.ftpconfig['path'][1:]
-        thread1 = threading.Thread(target=self.update)
+        thread1 = threading.Thread(target=self.update, daemon=True)
         self.info("starting ftpytail thread")
         thread1.start()
 

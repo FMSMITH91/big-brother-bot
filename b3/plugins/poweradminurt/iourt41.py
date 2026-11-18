@@ -540,6 +540,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             tm = self._votedelay * 60
             t1 = threading.Timer(tm, self.votedelay)
             self.debug('Starting Vote delay Timer: %s seconds' % tm)
+            t1.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t1.start()
 
     def onGameExit(self, _):
@@ -568,6 +569,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             self._dontcount = self.console.time() + tm
             t2 = threading.Timer(tm, self.recountplayers)
             self.debug('Starting RecountPlayers Timer: %s seconds' % tm)
+            t2.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t2.start()
 
     def onGameMapChange(self, _):

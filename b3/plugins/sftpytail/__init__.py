@@ -189,7 +189,7 @@ class SftpytailPlugin(b3.plugin.Plugin):
 
     def init_thread(self, ftpfiledsn):
         self.sftpconfig = functions.splitDSN(ftpfiledsn)
-        thread1 = threading.Thread(target=self.update)
+        thread1 = threading.Thread(target=self.update, daemon=True)
         self.info("starting sftpytail thread")
         thread1.start()
         return thread1

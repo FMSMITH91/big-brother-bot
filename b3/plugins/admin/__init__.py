@@ -1087,6 +1087,7 @@ class AdminPlugin(b3.plugin.Plugin):
 
             sclient.setvar(self, 'checkWarn', True)
             t = threading.Timer(25, self.checkWarnKick, (sclient, admin, data))
+            t.daemon = True  # a pending timer must never keep B3 alive at shutdown
             t.start()
 
         return warnrecord
