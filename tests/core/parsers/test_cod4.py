@@ -26,6 +26,7 @@ import logging
 from unittest.mock import Mock, patch, ANY
 from mockito import mock, when, any as anything
 import unittest
+from tests.core.parsers.cod_auth_helpers import CodAuthMixin
 from b3.clients import Client
 from b3.config import XmlConfigParser
 from b3.fake import FakeClient
@@ -156,7 +157,7 @@ num score ping playerid            steamid           name             lastmsg ad
 '''
 
 
-class Test_cod4x(Cod4TestCase):
+class Test_cod4x(CodAuthMixin, Cod4TestCase):
     """
     Round 3 live test (2026-11-18): on CoD4x the guid is the decimal playerid and status has a steamid column, so B3
     logged "Missing or wrong CodGuid and PunkBuster is disabled: cannot authenticate!" and answered no command.
@@ -164,30 +165,7 @@ class Test_cod4x(Cod4TestCase):
 
     def setUp(self):
         Cod4TestCase.setUp(self)
-        self.console.PunkBuster = None
-        when(self.console).write('status', maxRetries=anything()).thenReturn(STATUS_COD4X)
-        when(self.console).write('status').thenReturn(STATUS_COD4X)
-        self.queued = []
-        self.console.queueEvent = lambda event, expire=10: self.queued.append(event)
-        self.timers = []
-        patcher = patch('b3.parsers.cod.Timer', side_effect=self._timer)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        self.addCleanup(self.console._counter.clear)
-
-    def _timer(self, interval, function, args=()):
-        timer = Mock()
-        timer.start = lambda: self.timers.append((function, args))
-        return timer
-
-    def run_timers(self):
-        while self.timers:
-            function, args = self.timers.pop(0)
-            function(*args)
-
-    def events(self, key):
-        event_id = self.console.getEventID(key)
-        return [e for e in self.queued if e.type == event_id]
+        self.setUpAuthQueue(STATUS_COD4X)
 
     def test_status_with_steamid_column(self):
         players = self.console.getPlayerList()

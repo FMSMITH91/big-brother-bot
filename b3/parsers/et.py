@@ -120,15 +120,8 @@ class EtParser(AbstractParser):
     # num score ping name            lastmsg address               qport rate
     # --- ----- ---- --------------- ------- --------------------- ----- -----
     #   5     0   48 B3Tester^7            0 192.0.2.15:27970       1773 25000
-    _regPlayerNoGuid = re.compile(r'^(?P<slot>[0-9]+)\s+'
-                                  r'(?P<score>[0-9-]+)\s+'
-                                  r'(?P<ping>[0-9]+)\s+'
-                                  r'(?P<name>.*?)\s+'
-                                  r'(?P<last>[0-9]+)\s+'
-                                  r'(?P<ip>[0-9.]+):'
-                                  r'(?P<port>[0-9-]+)\s+'
-                                  r'(?P<qport>[0-9]+)\s+'
-                                  r'(?P<rate>[0-9]+)$', re.IGNORECASE)
+    _regPlayerNoGuid = re.compile(AbstractParser._regPlayer.pattern.replace(r'(?P<guid>[0-9a-zA-Z]+)\s+', ''),
+                                  re.IGNORECASE)
 
     _reGuid = re.compile(r'^[0-9A-F]{32}$', re.IGNORECASE)
 

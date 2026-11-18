@@ -27,6 +27,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 from mockito import mock, when, any as anything
 import unittest
+from tests.core.parsers.cod_auth_helpers import CodAuthMixin
 from b3.config import XmlConfigParser
 from b3.parsers.cod import CodParser
 
@@ -121,7 +122,7 @@ num score ping guid   name            lastmsg address               qport rate
 '''
 
 
-class Test_players_connected_before_b3(CodTestCase):
+class Test_players_connected_before_b3(CodAuthMixin, CodTestCase):
     """
     Live CoD1 test (2026-11-15): a player who was on the server when B3 started typed !iamgod and B3 only used the
     line to start authenticating him: the command itself was dropped.
@@ -129,30 +130,7 @@ class Test_players_connected_before_b3(CodTestCase):
 
     def setUp(self):
         CodTestCase.setUp(self)
-        self.console.PunkBuster = None
-        when(self.console).write('status', maxRetries=anything()).thenReturn(STATUS_WITH_JOE)
-        when(self.console).write('status').thenReturn(STATUS_WITH_JOE)
-        self.queued = []
-        self.console.queueEvent = lambda event, expire=10: self.queued.append(event)
-        self.timers = []
-        patcher = patch('b3.parsers.cod.Timer', side_effect=self._timer)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        self.addCleanup(self.console._counter.clear)
-
-    def _timer(self, interval, function, args=()):
-        timer = Mock()
-        timer.start = lambda: self.timers.append((function, args))
-        return timer
-
-    def run_timers(self):
-        while self.timers:
-            function, args = self.timers.pop(0)
-            function(*args)
-
-    def events(self, key):
-        event_id = self.console.getEventID(key)
-        return [e for e in self.queued if e.type == event_id]
+        self.setUpAuthQueue(STATUS_WITH_JOE)
 
     def test_command_from_unauthenticated_player_is_handled_once_authenticated(self):
         # WHEN Joe, unknown to B3, types a command
