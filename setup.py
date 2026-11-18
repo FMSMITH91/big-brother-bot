@@ -123,6 +123,8 @@ setup(
         'python-dateutil>=2.8',
         'feedparser>=6.0',
         'requests>=2.25',
+        # offline country lookups in .mmdb databases (geolocation plugin): MaxMind's own reader, Apache-2.0
+        'maxminddb>=2.6',
         # asyncore was removed from the standard library in Python 3.12
         'pyasyncore>=1.0; python_version >= "3.12"',
     ],

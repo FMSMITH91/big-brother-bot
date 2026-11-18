@@ -24,9 +24,10 @@
 
 import b3
 import b3.clients
-import re
+import ipaddress
 import os
 import os.path
+import time
 import requests
 
 from .exceptions import GeolocalizationError
@@ -48,24 +49,22 @@ class Geolocator(object):
     def _getIp(data):
         """
         Extract ip information from the given data
-        :param data: The data from where to extract the ip address
-        :raise TypeError: if we receive an invalid input data
+        :param data: The data from where to extract the ip address (a B3 client or an IP string, IPv4 or IPv6)
+        :raise GeolocalizationError: if we receive an invalid input data
         :return: string
         """
         if isinstance(data, str):
-            if not re.match(r'''^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}''', str(data)):
-                raise GeolocalizationError('invalid ip address string supplied: %s' % data)
+            ip = data
         elif isinstance(data, b3.clients.Client):
-            client = data
-            if not client.ip:
+            ip = data.ip
+            if not ip:
                 raise GeolocalizationError('b3.clients.Client object instance has not ip attribute set')
-            elif not re.match(r'''^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}''', client.ip):
-                raise GeolocalizationError('b3.clients.Client object instance has an invalid ip address string: %s' % client.ip)
         else:
             raise GeolocalizationError('invalid argument supplied: %s' % type(data).__name__)
-
-
-        return data if isinstance(data, str) else data.ip
+        try:
+            return str(ipaddress.ip_address(ip.strip()))
+        except ValueError:
+            raise GeolocalizationError('invalid ip address string supplied: %s' % ip)
 
     def getLocation(self, data):
         """
@@ -131,6 +130,73 @@ class IpApiCoGeolocator(Geolocator):
                         zipcode=rt.get('postal', None))
 
 
+class MmdbGeolocator(Geolocator):
+    """
+    Offline lookup in a current country database in the MaxMind DB (.mmdb) format: DB-IP "IP to Country Lite"
+    (CC BY 4.0, monthly, no account: https://db-ip.com/db/download/ip-to-country-lite) or MaxMind GeoLite2 Country.
+    IPv4 and IPv6. No player IP address leaves the machine. The file is supplied by the operator: B3 downloads nothing.
+    """
+
+    DEFAULT_PATH = '@home/dbip-country-lite.mmdb'
+    # a monthly database older than this is reported as stale (countries of reassigned IP blocks go wrong)
+    STALE_AFTER_DAYS = 90
+
+    def __init__(self, path=None, *args, **kwargs):
+        """
+        Object constructor.
+        :param path: The .mmdb file (B3 path prefixes such as @home/ allowed)
+        :raise IOError: if the database is missing, unreadable, or the maxminddb module is not installed
+        """
+        super(MmdbGeolocator, self).__init__(*args, **kwargs)
+        self._path = b3.getAbsolutePath(path or self.DEFAULT_PATH, decode=True)
+        if not os.path.isfile(self._path):
+            raise IOError('no country database at %s' % self._path)
+        try:
+            import maxminddb
+        except ImportError:
+            raise IOError('the maxminddb Python module is not installed (pip install maxminddb)')
+        try:
+            self._reader = maxminddb.open_database(self._path)
+        except (ValueError, maxminddb.InvalidDatabaseError) as e:
+            raise IOError('%s is not a valid MaxMind DB file: %s' % (self._path, e))
+        meta = self._reader.metadata()
+        self.database_type = meta.database_type
+        self.build_time = time.gmtime(meta.build_epoch)
+        self.age_days = int((time.time() - meta.build_epoch) // 86400)
+
+    @property
+    def path(self):
+        return self._path
+
+    @property
+    def is_stale(self):
+        return self.age_days > self.STALE_AFTER_DAYS
+
+    def describe(self):
+        """
+        Return a one line description for the log.
+        """
+        return '%s (%s, built %s)' % (self._path, self.database_type, time.strftime('%Y-%m-%d', self.build_time))
+
+    def getLocation(self, data):
+        """
+        Retrieve location data
+        :param data: A B3 client object or an IP string
+        :raise GeolocalizationError: When we are not able to retrieve location information
+        :return: A Location object initialized with location data
+        """
+        ip = self._getIp(data)
+        try:
+            record = self._reader.get(ip)
+        except ValueError as e:
+            raise GeolocalizationError('invalid IP address %r: %s' % (ip, e))
+        country = (record or {}).get('country') or {}
+        cc = country.get('iso_code')
+        if not cc:
+            raise GeolocalizationError('no country found for %s in %s' % (ip, self._path))
+        return Location(country=(country.get('names') or {}).get('en', None), cc=cc)
+
+
 class MaxMindGeolocator(Geolocator):
 
     _path = None
@@ -159,5 +225,8 @@ class MaxMindGeolocator(Geolocator):
         :raise GeolocalizationError: When we are not able to retrieve location information
         :return: A Location object initialized with location data
         """
-        country_id = self.geoip.id_by_addr(self._getIp(data))
+        ip = self._getIp(data)
+        if ':' in ip:
+            raise GeolocalizationError('the legacy MaxMind GeoIP.dat database has no IPv6 data (%s)' % ip)
+        country_id = self.geoip.id_by_addr(ip)
         return Location(country=GeoIP.id_to_country_name(country_id), cc=GeoIP.id_to_country_code(country_id))

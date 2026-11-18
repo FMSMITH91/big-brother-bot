@@ -9,12 +9,28 @@ retrieve geolocation data using multiple data sources:
 
 * [ipwho.is](https://ipwhois.io/documentation) (HTTPS, no API key, 1000 lookups per day)
 * [ipapi.co](https://ipapi.co/api/) (HTTPS, no API key, 1000 lookups per day)
-* [MaxMind GeoIP](https://dev.maxmind.com/geoip/legacy/install/country/) (bundled offline database, country only: used
-  when both online services fail)
+* `mmdb`: an offline country database in the MaxMind DB format that you supply (IPv4 and IPv6), such as
+  [DB-IP IP to Country Lite](https://db-ip.com/db/download/ip-to-country-lite) (free, monthly, CC BY 4.0) or MaxMind
+  GeoLite2 Country
+* [MaxMind GeoIP](https://dev.maxmind.com/geoip/legacy/install/country/) (bundled offline database from 2015, IPv4
+  and country only: the last resort)
 
 The online services are only ever queried over HTTPS, so player IP addresses do not cross the internet in clear text.
-They still receive the IP address of every player who connects: remove them from the list in `GeolocationPlugin` if
-that is not acceptable for your server, and the plugin will use the offline database alone.
+They still receive the IP address of every player who connects. To choose the services and their order, list the
+plugin in b3.ini with its configuration file (`geolocation: @conf/plugin_geolocation.ini`) and set `geolocators`:
+`mmdb, maxmind` keeps every lookup on your machine.
+
+### Offline country database (mmdb)
+B3 never downloads it. To use DB-IP's free database:
+
+1. Download `dbip-country-lite-YYYY-MM.mmdb.gz` from https://db-ip.com/db/download/ip-to-country-lite and check its
+   SHA1 against the one on that page.
+2. Unzip it to `~/.b3/dbip-country-lite.mmdb` (Windows: `%USERPROFILE%\.b3\dbip-country-lite.mmdb`), or set
+   `mmdb_file` to where you put it.
+3. Replace it every month or so: B3 logs the file and its build date at startup, and warns when it is over 90 days old.
+
+IP Geolocation by [DB-IP](https://db-ip.com), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). B3 does not include DB-IP data: the operator downloads it.
 
 For plugin developers
 ---------------------

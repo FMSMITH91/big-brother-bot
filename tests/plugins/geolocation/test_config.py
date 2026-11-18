@@ -29,6 +29,7 @@ from b3.plugins.geolocation import GeolocationPlugin
 from b3.plugins.geolocation.geolocators import IpApiCoGeolocator
 from b3.plugins.geolocation.geolocators import IpWhoIsGeolocator
 from b3.plugins.geolocation.geolocators import MaxMindGeolocator
+from b3.plugins.geolocation.geolocators import MmdbGeolocator
 from tests import B3TestCase
 
 
@@ -37,6 +38,14 @@ class Test_geolocators_setting(B3TestCase):
     linuxgsm-panel (2026-11-18): its network lock can relay a single HTTPS service, so lookups to the other one failed
     quietly. The geolocators setting picks the services, and lets the owner choose who sees player IP addresses.
     """
+
+    def setUp(self):
+        B3TestCase.setUp(self)
+        # no offline .mmdb database for these tests, whatever is in the developer's ~/.b3
+        from unittest.mock import patch
+        patcher = patch.object(MmdbGeolocator, 'DEFAULT_PATH', os.path.join(os.path.dirname(__file__), 'missing.mmdb'))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def plugin(self, ini=None):
         conf = CfgConfigParser()
@@ -81,4 +90,7 @@ class Test_geolocators_setting(B3TestCase):
         sample = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'b3', 'conf', 'plugin_geolocation.ini')
         with open(sample, encoding='utf-8') as f:
             p = self.plugin(f.read())
-        self.assertEqual([IpWhoIsGeolocator, IpApiCoGeolocator, MaxMindGeolocator], self.classes(p))
+        self.assertEqual(('ipwho.is', 'ipapi.co', 'mmdb', 'maxmind'), p._geolocator_names())
+        # mmdb only when the developer has a database in ~/.b3
+        self.assertEqual([IpWhoIsGeolocator, IpApiCoGeolocator, MaxMindGeolocator],
+                         [c for c in self.classes(p) if c is not MmdbGeolocator])
