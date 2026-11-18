@@ -23,7 +23,7 @@
 # ################################################################### #
 
 __author__ = 'Fenix'
-__version__ = '1.7'
+__version__ = '1.8'
 
 import b3
 import b3.clients
@@ -35,18 +35,21 @@ from .exceptions import GeolocalizationError
 from .geolocators import IpApiCoGeolocator
 from .geolocators import IpWhoIsGeolocator
 from .geolocators import MaxMindGeolocator
+from .geolocators import MmdbGeolocator
 
 
 # services by the name used in the "geolocators" setting (plugin_geolocation.ini)
 GEOLOCATORS = {
     'ipwho.is': IpWhoIsGeolocator,
     'ipapi.co': IpApiCoGeolocator,
+    'mmdb': MmdbGeolocator,
     'maxmind': MaxMindGeolocator,
 }
-GEOLOCATOR_ALIASES = {'ipwho': 'ipwho.is', 'ipapi': 'ipapi.co'}
+GEOLOCATOR_ALIASES = {'ipwho': 'ipwho.is', 'ipapi': 'ipapi.co', 'dbip': 'mmdb', 'geolite2': 'mmdb'}
 # online services first (they know the city, region and ISP), over HTTPS only: player IP addresses must not cross
-# the internet in clear text. The bundled MaxMind database (country only, offline) is the fallback.
-DEFAULT_GEOLOCATORS = ('ipwho.is', 'ipapi.co', 'maxmind')
+# the internet in clear text. Then the offline country databases: a current .mmdb file if the operator supplied one
+# (mmdb_file), and the MaxMind GeoIP.dat bundled with B3 (2015, IPv4 only) as the last resort.
+DEFAULT_GEOLOCATORS = ('ipwho.is', 'ipapi.co', 'mmdb', 'maxmind')
 
 
 class GeolocationPlugin(b3.plugin.Plugin):
@@ -59,17 +62,27 @@ class GeolocationPlugin(b3.plugin.Plugin):
         """
         b3.plugin.Plugin.__init__(self, console, config)
         self.info('creating geolocators object instances...')
+        self._mmdb_file = MmdbGeolocator.DEFAULT_PATH
         self._geolocators = self._build_geolocators(DEFAULT_GEOLOCATORS)
 
     def onLoadConfig(self):
         """
-        Load the plugin configuration: the optional "geolocators" setting picks the services and their order.
+        Load the plugin configuration: "geolocators" picks the services and their order, "mmdb_file" is the offline
+        country database used by the mmdb service.
         """
-        names = self._geolocator_names()
-        if names != DEFAULT_GEOLOCATORS:
-            self._geolocators = self._build_geolocators(names)
+        self._mmdb_file = MmdbGeolocator.DEFAULT_PATH
+        if self.config and self.config.has_option('settings', 'mmdb_file'):
+            self._mmdb_file = self.config.get('settings', 'mmdb_file').strip() or MmdbGeolocator.DEFAULT_PATH
+        self._geolocators = self._build_geolocators(self._geolocator_names())
         self.info('geolocation services, in order: %s',
                   ', '.join(self._geolocator_name(g) for g in self._geolocators) or 'none')
+        for geolocator in self._geolocators:
+            if isinstance(geolocator, MmdbGeolocator):
+                # CC BY 4.0 (DB-IP Lite) asks for attribution: https://db-ip.com
+                self.info('offline country database: %s', geolocator.describe())
+                if geolocator.is_stale:
+                    self.warning('offline country database %s is %s days old: download the current one (DB-IP Lite '
+                                 'is updated monthly)', geolocator.path, geolocator.age_days)
 
     def _geolocator_names(self):
         """
@@ -102,10 +115,14 @@ class GeolocationPlugin(b3.plugin.Plugin):
         geolocators = []
         for name in names:
             try:
-                geolocators.append(GEOLOCATORS[name]())
+                if name == 'mmdb':
+                    geolocators.append(MmdbGeolocator(self._mmdb_file))
+                else:
+                    geolocators.append(GEOLOCATORS[name]())
             except IOError as e:
-                # the MaxMind database may be missing
-                self.debug('%s geolocation not available: %s', name, e)
+                # an offline database may be missing: only worth a warning when it was asked for explicitly
+                log = self.debug if names is DEFAULT_GEOLOCATORS else self.warning
+                log('%s geolocation not available: %s', name, e)
         return geolocators
 
     @staticmethod
