@@ -84,6 +84,8 @@ class EtParser(AbstractParser):
 
         re.compile(r'^(?P<action>[a-z]+):\s*(?P<data>(?P<cid>[0-9]+):\s*(?P<text>.*))$', re.IGNORECASE),
         re.compile(r'^(?P<action>[a-z]+):\s*(?P<data>(?P<cid>[0-9]+)\s(?P<text>.*))$', re.IGNORECASE),
+        # 1101:24 ClientDisconnect: 7 (vanilla ET 2.60b: ClientConnect, ClientBegin and ClientDisconnect)
+        re.compile(r'^(?P<action>[a-z]+):\s*(?P<data>(?P<cid>[0-9]+))$', re.IGNORECASE),
         re.compile(r'^(?P<action>[a-z]+):\s*(?P<data>.*)$', re.IGNORECASE)
     )
 
@@ -98,7 +100,15 @@ class EtParser(AbstractParser):
         Called after the parser is created before run().
         """
         self.clients.newClient('-1', guid=self.gameName + ':WORLD', name='World', pbid='WORLD', hide=True)
-        self.PunkBuster = PunkBuster(self)
+        # PunkBuster only when the server runs it: on a server without it (vanilla 2.60b as LinuxGSM installs it) its
+        # empty player list made every sync drop all the connected players
+        sv_punkbuster = self.getCvar('sv_punkbuster')
+        if sv_punkbuster and sv_punkbuster.getBoolean():
+            self.info('PunkBuster is enabled on the server: using it for the player list')
+            self.PunkBuster = PunkBuster(self)
+        else:
+            self.info('PunkBuster is not enabled on the server: using rcon status for the player list')
+            self.PunkBuster = None
         self._eventMap['warmup'] = self.getEventID('EVT_GAME_WARMUP')
         self._eventMap['restartgame'] = self.getEventID('EVT_GAME_ROUND_END')
 
@@ -106,11 +116,59 @@ class EtParser(AbstractParser):
         self.debug('Forcing server cvar g_logsync to %s' % self._logSync)
         self.setCvar('g_logsync', self._logSync)
 
+    # rcon status without a guid column (vanilla 2.60b, and ETPro without PunkBuster):
+    # num score ping name            lastmsg address               qport rate
+    # --- ----- ---- --------------- ------- --------------------- ----- -----
+    #   5     0   48 B3Tester^7            0 192.0.2.15:27970       1773 25000
+    _regPlayerNoGuid = re.compile(r'^(?P<slot>[0-9]+)\s+'
+                                  r'(?P<score>[0-9-]+)\s+'
+                                  r'(?P<ping>[0-9]+)\s+'
+                                  r'(?P<name>.*?)\s+'
+                                  r'(?P<last>[0-9]+)\s+'
+                                  r'(?P<ip>[0-9.]+):'
+                                  r'(?P<port>[0-9-]+)\s+'
+                                  r'(?P<qport>[0-9]+)\s+'
+                                  r'(?P<rate>[0-9]+)$', re.IGNORECASE)
+
+    _reGuid = re.compile(r'^[0-9A-F]{32}$', re.IGNORECASE)
+
+    def getStatusRegex(self, status):
+        """
+        Pick the player line layout from the rcon status header.
+        """
+        for line in status.split('\n')[:3]:
+            words = line.split()
+            if 'num' in words and 'name' in words:
+                return self._regPlayer if 'guid' in words else self._regPlayerNoGuid
+        return self._regPlayer
+
+    def parseUserInfo(self, info):
+        """
+        Parse an infostring. Vanilla ET 2.60b has no ConnectInfo line: the player's guid comes from cl_guid in the
+        Userinfo line, stored with the same game prefix as ConnectInfo does.
+        """
+        data = AbstractParser.parseUserInfo(self, info)
+        cl_guid = data.get('cl_guid', '')
+        if self._reGuid.match(cl_guid):
+            data['guid'] = data['pbid'] = self.gameName + ':' + cl_guid.upper()
+        else:
+            data.pop('pbid', None)
+        return data
+
     ####################################################################################################################
     #                                                                                                                  #
     #   EVENT HANDLERS                                                                                                 #
     #                                                                                                                  #
     ####################################################################################################################
+
+    def OnClientuserinfo(self, action, data, match=None):
+        AbstractParser.OnClientuserinfo(self, action, data, match)
+        # vanilla ET: the guid arrives with the Userinfo line, after the client was created without one
+        cid = data.split(' ', 1)[0]
+        client = self.clients.getByCID(cid)
+        if client and client.guid and not client.authed:
+            client.auth()
+        return None
 
     def OnConnectinfo(self, action, data, match=None):
         # clients are stored with a game-prefixed guid (see below): compare against the same form

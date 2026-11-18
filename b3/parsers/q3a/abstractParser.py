@@ -248,6 +248,8 @@ class AbstractParser(b3.parser.Parser):
         for o in options:
             data[o[0]] = o[1]
 
+        # the slot number: OnClientuserinfo looks the client up with it
+        data['cid'] = cid
         if 'n' in data:
             data['name'] = data['n']
 
@@ -276,6 +278,10 @@ class AbstractParser(b3.parser.Parser):
             return None
 
         client = self.clients.getByExactName(msg[0])
+        if not client:
+            # a chat line from a player B3 doesn't know (yet): the plugins expect a client on EVT_CLIENT_SAY
+            self.debug('No client found for chat line from %r', msg[0])
+            return None
         return self.getEvent('EVT_CLIENT_SAY', msg[1], client)
 
     def OnShutdowngame(self, action, data, match=None):
@@ -284,7 +290,11 @@ class AbstractParser(b3.parser.Parser):
         return self.getEvent('EVT_GAME_ROUND_END', data)
 
     def OnClientdisconnect(self, action, data, match=None):
-        client = self.getClient(match)
+        # "ClientDisconnect: 7": some line formats carry no cid group for a line with nothing after the slot number
+        if match and 'cid' in match.re.groupindex:
+            client = self.getClient(match)
+        else:
+            client = self.clients.getByCID(str(data).strip())
         if client:
             client.disconnect()
         return None
@@ -336,7 +346,8 @@ class AbstractParser(b3.parser.Parser):
                 for k, v in bclient.items():
                     setattr(client, k, v)
             else:
-                self.clients.newClient(bclient['cid'], **bclient)
+                cid = bclient.pop('cid')
+                self.clients.newClient(cid, **bclient)
 
         return None
 
@@ -733,8 +744,9 @@ class AbstractParser(b3.parser.Parser):
 
             players = {}
             lastslot = -1
+            regex = self.getStatusRegex(data)
             for line in data.split('\n')[3:]:
-                m = re.match(self._regPlayer, line.strip())
+                m = re.match(regex, line.strip())
                 if m:
                     d = m.groupdict()
                     if int(m.group('slot')) > lastslot:
@@ -747,6 +759,13 @@ class AbstractParser(b3.parser.Parser):
                                    'client ignored %s last slot %s' % (m.group('slot'), lastslot))
 
         return players
+
+    def getStatusRegex(self, status):
+        """
+        Return the regular expression matching a player line of this rcon status output.
+        :param status: The whole rcon status output (a parser may pick a layout from its header)
+        """
+        return self._regPlayer
 
     def getCvar(self, cvar_name):
         """

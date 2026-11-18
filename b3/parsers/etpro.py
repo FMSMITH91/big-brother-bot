@@ -244,8 +244,12 @@ class EtproParser(AbstractParser):
         """
         self.bot("TIP: Make sure b_privatemessages isn't set to `0` in your game server config file or B3 won't be able"
                  " to send private messages to players.")
-        b_privatemessages = self.getCvar('b_privatemessages').getString()
-        if b_privatemessages == "0":
+        cvar = self.getCvar('b_privatemessages')
+        b_privatemessages = cvar.getString() if cvar else None
+        if b_privatemessages is None:
+            self.warning("The server has no b_privatemessages cvar: is it running ETPro? For vanilla ET 2.60b use "
+                         "'parser: et'")
+        elif b_privatemessages == "0":
             self.warning("Current b_privatemessages value: %s" % b_privatemessages)
         else:
             self.info("Current b_privatemessages value: %s" % b_privatemessages)

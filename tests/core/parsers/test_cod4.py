@@ -144,3 +144,88 @@ class Test_kickbyfullname(Cod4TestCase):
         # THEN
         self.console.write.assert_called_once_with('kick Joe')
         admin.message.assert_called_once_with('^7Player kicked using full exact name')
+
+
+# rcon status of CoD4x build 1154 (LinuxGSM's cod4server), from the round 3 live test on 2026-11-18
+STATUS_COD4X = '''\
+map: mp_crash
+num score ping playerid            steamid           name             lastmsg address               qport rate
+--- ----- ---- ------------------- ----------------- ---------------- ------- --------------------- ----- -----
+  5     0   48 2310346600000000001 0                 B3Tester^7             0 192.0.2.15:28960       1773 25000
+  6     0   51 2310346600000000002 76561197960287930 Other Player^7         0 192.0.2.16:28960       1774 25000
+'''
+
+
+class Test_cod4x(Cod4TestCase):
+    """
+    Round 3 live test (2026-11-18): on CoD4x the guid is the decimal playerid and status has a steamid column, so B3
+    logged "Missing or wrong CodGuid and PunkBuster is disabled: cannot authenticate!" and answered no command.
+    """
+
+    def setUp(self):
+        Cod4TestCase.setUp(self)
+        self.console.PunkBuster = None
+        when(self.console).write('status', maxRetries=anything()).thenReturn(STATUS_COD4X)
+        when(self.console).write('status').thenReturn(STATUS_COD4X)
+        self.queued = []
+        self.console.queueEvent = lambda event, expire=10: self.queued.append(event)
+        self.timers = []
+        patcher = patch('b3.parsers.cod.Timer', side_effect=self._timer)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.console._counter.clear)
+
+    def _timer(self, interval, function, args=()):
+        timer = Mock()
+        timer.start = lambda: self.timers.append((function, args))
+        return timer
+
+    def run_timers(self):
+        while self.timers:
+            function, args = self.timers.pop(0)
+            function(*args)
+
+    def events(self, key):
+        event_id = self.console.getEventID(key)
+        return [e for e in self.queued if e.type == event_id]
+
+    def test_status_with_steamid_column(self):
+        players = self.console.getPlayerList()
+        self.assertEqual('B3Tester^7', players['5']['name'])
+        self.assertEqual('2310346600000000001', players['5']['guid'])
+        self.assertEqual('0', players['5']['steamid'])
+        self.assertEqual('192.0.2.15', players['5']['ip'])
+        self.assertEqual('Other Player^7', players['6']['name'])
+        self.assertEqual('76561197960287930', players['6']['steamid'])
+
+    def test_stock_status_still_parsed(self):
+        when(self.console).write('status', maxRetries=anything()).thenReturn('''\
+map: mp_backlot
+num score ping guid                             name            lastmsg address               qport rate
+--- ----- ---- -------------------------------- --------------- ------- --------------------- ----- -----
+  5    92  509 0123456789abcdef0123456789abcdef 7ajimaki^7            100 11.222.111.44:28960   -27329 25000
+''')
+        players = self.console.getPlayerList()
+        self.assertEqual('7ajimaki^7', players['5']['name'])
+        self.assertNotIn('steamid', players['5'])
+
+    def test_playerid_guid_authenticates_and_command_is_handled(self):
+        self.console.parseLine('1100:10 J;2310346600000000001;5;B3Tester')
+        self.console.parseLine('1100:20 say;2310346600000000001;5;B3Tester;\x15!list')
+        self.run_timers()
+        client = self.console.clients.getByCID('5')
+        self.assertIsNotNone(client)
+        self.assertEqual('2310346600000000001', client.guid)
+        self.assertEqual('B3Tester', client.name)
+        self.assertEqual(['!list'], [e.data for e in self.events('EVT_CLIENT_SAY')])
+
+    def test_valid_guids(self):
+        valid = self.console.isValidGuid
+        self.assertTrue(valid('2310346600000000001'))  # CoD4x playerid
+        self.assertTrue(valid('0123456789abcdef0123456789abcdef'))  # stock 1.7
+        self.assertFalse(valid('0'))  # bots
+        self.assertFalse(valid('000000'))
+        self.assertFalse(valid('12345'))
+        self.assertFalse(valid('abcdef'))
+        self.assertFalse(valid(''))
+        self.assertFalse(valid(None))

@@ -192,6 +192,20 @@ class EtproTestCase(unittest.TestCase):
                 return STATUS_RESPONSE
 
 
+class Test_startup_on_a_server_without_etpro(EtproTestCase):
+    """
+    Round 3 live test (2026-11-18): "parser: etpro" on vanilla ET 2.60b crashed at startup ('NoneType' object has no
+    attribute 'getString') because the server has no b_privatemessages cvar.
+    """
+
+    def test_startup_without_b_privatemessages(self):
+        when(self.parser).getCvar('b_privatemessages').thenReturn(None)
+        with patch.object(self.parser, 'warning') as warning:
+            self.parser.startup()
+        self.assertTrue(any("parser: et" in c[0][0] for c in warning.call_args_list), warning.call_args_list)
+        self.assertIsNotNone(self.parser.clients.getByCID('-1'))
+
+
 class Test_gamelog_parsing(EtproTestCase):
 
     def test_client_say(self):

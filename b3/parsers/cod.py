@@ -363,7 +363,7 @@ class CodParser(AbstractParser):
         codguid = match.group('guid')
         cid = match.group('cid')
         name = match.group('name')
-        if len(codguid) < self._guidLength:
+        if not self.isValidGuid(codguid):
             # invalid guid
             self.verbose2('Invalid GUID: %s. GUID length set to %s' % (codguid, self._guidLength))
             codguid = None
@@ -566,6 +566,12 @@ class CodParser(AbstractParser):
                 self.debug('%s found in status/playerList' % p['name'])
                 return p
 
+    def isValidGuid(self, codguid):
+        """
+        Whether a guid from the game log or from rcon status can identify a player.
+        """
+        return bool(codguid) and len(codguid) >= self._guidLength
+
     def newPlayer(self, cid, codguid, name):
         """
         Build a new client using data in the authentication queue.
@@ -693,7 +699,7 @@ class CodParser(AbstractParser):
             if self.clients.getByCID(cid) or self._counter.get(cid):
                 continue
             codguid = p.get('guid')
-            if codguid and len(codguid) < self._guidLength:
+            if not self.isValidGuid(codguid):
                 codguid = None
             self.debug('%s was already connected: authenticating...', p.get('name'))
             self._counter[cid] = 1

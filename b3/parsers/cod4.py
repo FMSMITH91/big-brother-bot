@@ -70,6 +70,26 @@ class Cod4Parser(b3.parsers.cod2.Cod2Parser):
                             r'(?P<qport>-?[0-9]{1,5})\s+'
                             r'(?P<rate>[0-9]+)$', re.IGNORECASE | re.VERBOSE)
 
+    # CoD4x (what LinuxGSM installs) adds a steamid column, and its guid is the decimal playerid (sv_legacymode off):
+    # num score ping playerid            steamid           name        lastmsg address               qport rate
+    # --- ----- ---- ------------------- ----------------- ----------- ------- --------------------- ----- -----
+    #   5     0   48 2310346600000000001 0                 B3Tester^7        0 192.0.2.15:28960       1773 25000
+    _regPlayerCoD4x = re.compile(r'^\s*(?P<slot>[0-9]+)\s+'
+                                 r'(?P<score>[0-9-]+)\s+'
+                                 r'(?P<ping>[0-9]+)\s+'
+                                 r'(?P<guid>[0-9a-f]+)\s+'
+                                 r'(?P<steamid>[0-9]+)\s+'
+                                 r'(?P<name>.*?)\s+'
+                                 r'(?P<last>[0-9]+?)\s*'
+                                 r'(?P<ip>(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}'
+                                 r'(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])):?'
+                                 r'(?P<port>-?[0-9]{1,5})\s*'
+                                 r'(?P<qport>-?[0-9]{1,5})\s+'
+                                 r'(?P<rate>[0-9]+)$', re.IGNORECASE)
+
+    # a CoD4x playerid has at least this many digits (it is a 64 bit number: real ones have 17 to 20)
+    _cod4xMinPlayeridLength = 6
+
     ####################################################################################################################
     #                                                                                                                  #
     #   PARSER INITIALIZATION                                                                                          #
@@ -86,6 +106,28 @@ class Cod4Parser(b3.parsers.cod2.Cod2Parser):
         """
         self.patch_b3_admin_plugin()
         self.debug('Admin plugin has been patched')
+        if self.config.has_option('b3', 'guid_length'):
+            self._guidLength = self.config.getint('b3', 'guid_length')
+            self.info('Min guid length has been set to %s', self._guidLength)
+
+    def isValidGuid(self, codguid):
+        """
+        Stock CoD4 1.7 uses a 32 character guid; CoD4x (sv_legacymode off) uses the decimal playerid.
+        """
+        if not codguid:
+            return False
+        if codguid.isdigit() and len(codguid) >= self._cod4xMinPlayeridLength and codguid.strip('0'):
+            return True
+        return len(codguid) >= self._guidLength
+
+    def getStatusRegex(self, status):
+        """
+        Pick the player line layout from the rcon status header: CoD4x has an extra steamid column.
+        """
+        for line in status.split('\n')[:3]:
+            if 'steamid' in line.split():
+                return self._regPlayerCoD4x
+        return self._regPlayer
 
     ####################################################################################################################
     #                                                                                                                  #
