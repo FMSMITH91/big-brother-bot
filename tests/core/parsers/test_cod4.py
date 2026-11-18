@@ -207,3 +207,36 @@ num score ping guid                             name            lastmsg address 
         self.assertFalse(valid('abcdef'))
         self.assertFalse(valid(''))
         self.assertFalse(valid(None))
+
+
+# the whole rcon status reply of CoD4x build 1154, with its preamble (round 3b live test, 2026-11-18)
+STATUS_COD4X_REAL = (
+    'hostname: LinuxGSM\n'
+    'version : CoD4 X - linux-i386 build 1154 May  1 2022\n'
+    'udp/ip  : 127.0.0.1:28963\n'
+    'os      : linux\n'
+    'type    : dedicated server\n'
+    'map     : mp_backlot\n'
+    '\n'
+    'num score ping playerid            steamid           name                             lastmsg address'
+    '                                              qport rate\n'
+    '--- ----- ---- ------------------- ----------------- -------------------------------- ------- '
+    '---------------------------------------------------- ----- -----\n'
+    '  4     0   50 2310346600000000009 0                 PreConn^7                              0 '
+    '192.0.2.14:28960                                      1772 25000\n'
+)
+
+
+class Test_cod4x_status_preamble(Cod4TestCase):
+    """
+    Round 3b (2026-11-18): CoD4x prints 7 lines before the status header, so a check of the first 3 lines missed the
+    steamid column and a player already on the server was stored as '0                 PreConn'.
+    """
+
+    def test_header_after_preamble(self):
+        self.console.PunkBuster = None
+        when(self.console).write('status', maxRetries=anything()).thenReturn(STATUS_COD4X_REAL)
+        players = self.console.getPlayerList()
+        self.assertEqual('PreConn^7', players['4']['name'])
+        self.assertEqual('0', players['4']['steamid'])
+        self.assertEqual('2310346600000000009', players['4']['guid'])

@@ -45,8 +45,9 @@ class EtParser(AbstractParser):
     _commands = {
         'ban': 'banid %(cid)s %(reason)s',
         'kick': 'clientkick %(cid)s %(reason)s',
-        'message': 'qsay %(message)s',
-        'say': 'qsay %(message)s',
+        # vanilla ET 2.60b has no qsay command (it broadcast "server: qsay ..."): say exists everywhere
+        'message': 'say %(message)s',
+        'say': 'say %(message)s',
         'set': 'set %(name)s %(value)s',
         'tempban': 'clientkick %(cid)s %(reason)s'
     }
@@ -129,7 +130,7 @@ class EtParser(AbstractParser):
         """
         Pick the player line layout from the rcon status header.
         """
-        for line in status.split('\n')[:3]:
+        for line in status.split('\n'):
             words = line.split()
             if 'num' in words and 'name' in words:
                 return self._regPlayer if 'guid' in words else self._regPlayerNoGuid
@@ -143,7 +144,9 @@ class EtParser(AbstractParser):
         data = AbstractParser.parseUserInfo(self, info)
         cl_guid = data.get('cl_guid', '')
         if self._reGuid.match(cl_guid):
-            data['guid'] = data['pbid'] = self.gameName + ':' + cl_guid.upper()
+            # guid has the game prefix (clients.guid is VARCHAR(36)); pbid stays the bare 32 characters (VARCHAR(32))
+            data['pbid'] = cl_guid.upper()
+            data['guid'] = self.gameName + ':' + data['pbid']
         else:
             data.pop('pbid', None)
         return data
@@ -180,7 +183,7 @@ class EtParser(AbstractParser):
                 self.verbose('disconnect the existing client %s %s => %s %s', match.group('cid'), guid, client.cid, client)
                 client.disconnect()
 
-        self.clients.newClient(match.group('cid'), guid=guid, pbid=guid, ip=match.group('ip'),
+        self.clients.newClient(match.group('cid'), guid=guid, pbid=match.group('pbid'), ip=match.group('ip'),
                                name=match.group('name'), state=b3.STATE_ALIVE)
 
     def OnClientuserinfochangedguid(self, action, data, match=None):

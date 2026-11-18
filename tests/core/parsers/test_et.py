@@ -85,8 +85,8 @@ class Test_parser_API_implementation(EtTestCase):
         # WHEN
         self.console.say("something else")
         # THEN
-        self.assertListEqual(self.console.write.mock_calls, [call('qsay B3: something'),
-                                                             call('qsay something else')])
+        self.assertListEqual(self.console.write.mock_calls, [call('say B3: something'),
+                                                             call('say something else')])
 
     def test_saybig(self):
         # GIVEN
@@ -98,16 +98,16 @@ class Test_parser_API_implementation(EtTestCase):
         # WHEN
         self.console.saybig("something else")
         # THEN
-        self.assertListEqual(self.console.write.mock_calls, [call('qsay B3: ^1something'),
-                                                             call('qsay B3: ^2something'),
-                                                             call('qsay B3: ^3something'),
-                                                             call('qsay B3: ^4something'),
-                                                             call('qsay B3: ^5something'),
-                                                             call('qsay ^1something else'),
-                                                             call('qsay ^2something else'),
-                                                             call('qsay ^3something else'),
-                                                             call('qsay ^4something else'),
-                                                             call('qsay ^5something else')])
+        self.assertListEqual(self.console.write.mock_calls, [call('say B3: ^1something'),
+                                                             call('say B3: ^2something'),
+                                                             call('say B3: ^3something'),
+                                                             call('say B3: ^4something'),
+                                                             call('say B3: ^5something'),
+                                                             call('say ^1something else'),
+                                                             call('say ^2something else'),
+                                                             call('say ^3something else'),
+                                                             call('say ^4something else'),
+                                                             call('say ^5something else')])
 
     def test_message(self):
         superman = Client(console=self.console, cid="11")
@@ -122,8 +122,8 @@ class Test_parser_API_implementation(EtTestCase):
         # WHEN
         self.console.message(superman, "something else")
         # THEN
-        self.assertListEqual(self.console.write.mock_calls, [call('qsay B3: ^3[pm]^7 something'),
-                                                             call('qsay something else')])
+        self.assertListEqual(self.console.write.mock_calls, [call('say B3: ^3[pm]^7 something'),
+                                                             call('say something else')])
 
 class Test_startup_and_clients(EtTestCase):
 
@@ -151,6 +151,7 @@ class Test_startup_and_clients(EtTestCase):
         client = self.console.clients.getByCID('3')
         self.assertIsNotNone(client)
         self.assertEqual('et:E24F9B2702B9E4A1223E905BF597FA92', client.guid)
+        self.assertEqual('E24F9B2702B9E4A1223E905BF597FA92', client.pbid)
         self.assertEqual('24.153.180.106', client.ip)
         self.assertEqual('[AS]Lead', client.name)
 
@@ -218,6 +219,10 @@ class Test_vanilla_et260b(EtTestCase):
         self.assertEqual('et:B3B3B3B3B3B3B3B3B3B3B3B3B3000001', client.guid)
         self.assertEqual('192.0.2.15', client.ip)
         self.assertTrue(client.authed)
+        # round 3b: pbid was 'et:' + cl_guid, 35 characters for the VARCHAR(32) clients.pbid column ("Data too long")
+        self.assertEqual('B3B3B3B3B3B3B3B3B3B3B3B3B3000001', client.pbid)
+        self.assertLessEqual(len(client.pbid), 32)
+        self.assertLessEqual(len(client.guid), 36)
 
     def test_say_from_known_player(self):
         for line in self.LINES:
@@ -251,3 +256,10 @@ class Test_vanilla_et260b(EtTestCase):
         self.assertEqual('B3Tester^7', players['5']['name'])
         self.assertEqual('192.0.2.15', players['5']['ip'])
         self.assertNotIn('guid', players['5'])
+
+
+class Test_status_preamble(EtTestCase):
+
+    def test_header_found_after_other_lines(self):
+        status = 'hostname: x\nversion : ET 2.60b\nos: linux\nmap: oasis\n\n' + STATUS_ET260.split('\n', 1)[1]
+        self.assertIs(self.console._regPlayerNoGuid, self.console.getStatusRegex(status))

@@ -683,7 +683,7 @@ class AdminPlugin(b3.plugin.Plugin):
                     event.client.message("plugin disabled: cannot execute command %s" % cmd)
                 return
 
-            elif not event.client.authed and command.level > 0:
+            elif not event.client.authed and command.level is not None and command.level[0] > 0:
                 event.client.message('^7Please try your command after you have been authenticated')
                 self.console.clients.authorizeClients()
                 return

@@ -115,9 +115,11 @@ class Cod4Parser(b3.parsers.cod2.Cod2Parser):
         """
         Pick the player line layout from the rcon status header: CoD4x has an extra steamid column.
         """
-        for line in status.split('\n')[:3]:
-            if 'steamid' in line.split():
-                return self._regPlayerCoD4x
+        # CoD4x prints hostname, version, udp/ip, os, type and map lines before the header: look at every line
+        for line in status.split('\n'):
+            words = line.split()
+            if 'num' in words and 'name' in words:
+                return self._regPlayerCoD4x if 'steamid' in words else self._regPlayer
         return self._regPlayer
 
     ####################################################################################################################
