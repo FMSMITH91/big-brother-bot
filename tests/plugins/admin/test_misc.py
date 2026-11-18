@@ -24,7 +24,7 @@
 
 import unittest
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from tests.plugins.admin import Admin_TestCase, Admin_functional_test
 
 
@@ -136,3 +136,31 @@ class Test_spell_checker(Admin_functional_test):
     def test_unrecognized_command_private(self):
         self.joe.says('/qfsmlkjazemlrkjazemrlkj')
         self.assertEqual(['Unrecognized command qfsmlkjazemlrkjazemrlkj'], self.joe.message_history)
+
+
+class Test_command_from_unauthenticated_player(Admin_functional_test):
+    """
+    Round 3b live test (2026-11-18, vanilla ET): a command from a player not authenticated yet raised
+    "TypeError: '>' not supported between instances of 'tuple' and 'int'" (command.level is a (min, max) tuple), so the
+    player got no answer at all.
+    """
+
+    def setUp(self):
+        Admin_functional_test.setUp(self)
+        self.init()
+        self.joe.connects(0)
+        self.joe.authed = False
+        patcher = patch.object(self.console.clients, 'authorizeClients')
+        self.authorize = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_is_told_to_wait_for_authentication(self):
+        with patch.object(self.p, 'error') as error:
+            self.joe.says('!map')
+        error.assert_not_called()
+        self.assertEqual(['Please try your command after you have been authenticated'], self.joe.message_history)
+        self.authorize.assert_called_once()
+
+    def test_guest_command_still_works(self):
+        self.joe.says('!help')
+        self.assertNotIn('Please try your command after you have been authenticated', self.joe.message_history)
