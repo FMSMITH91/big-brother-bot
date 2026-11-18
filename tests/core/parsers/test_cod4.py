@@ -26,6 +26,7 @@ import logging
 from unittest.mock import Mock, patch, ANY
 from mockito import mock, when, any as anything
 import unittest
+from tests.core.parsers.cod_auth_helpers import CodAuthMixin
 from b3.clients import Client
 from b3.config import XmlConfigParser
 from b3.fake import FakeClient
@@ -144,3 +145,65 @@ class Test_kickbyfullname(Cod4TestCase):
         # THEN
         self.console.write.assert_called_once_with('kick Joe')
         admin.message.assert_called_once_with('^7Player kicked using full exact name')
+
+
+# rcon status of CoD4x build 1154 (LinuxGSM's cod4server), from the round 3 live test on 2026-11-18
+STATUS_COD4X = '''\
+map: mp_crash
+num score ping playerid            steamid           name             lastmsg address               qport rate
+--- ----- ---- ------------------- ----------------- ---------------- ------- --------------------- ----- -----
+  5     0   48 2310346600000000001 0                 B3Tester^7             0 192.0.2.15:28960       1773 25000
+  6     0   51 2310346600000000002 76561197960287930 Other Player^7         0 192.0.2.16:28960       1774 25000
+'''
+
+
+class Test_cod4x(CodAuthMixin, Cod4TestCase):
+    """
+    Round 3 live test (2026-11-18): on CoD4x the guid is the decimal playerid and status has a steamid column, so B3
+    logged "Missing or wrong CodGuid and PunkBuster is disabled: cannot authenticate!" and answered no command.
+    """
+
+    def setUp(self):
+        Cod4TestCase.setUp(self)
+        self.setUpAuthQueue(STATUS_COD4X)
+
+    def test_status_with_steamid_column(self):
+        players = self.console.getPlayerList()
+        self.assertEqual('B3Tester^7', players['5']['name'])
+        self.assertEqual('2310346600000000001', players['5']['guid'])
+        self.assertEqual('0', players['5']['steamid'])
+        self.assertEqual('192.0.2.15', players['5']['ip'])
+        self.assertEqual('Other Player^7', players['6']['name'])
+        self.assertEqual('76561197960287930', players['6']['steamid'])
+
+    def test_stock_status_still_parsed(self):
+        when(self.console).write('status', maxRetries=anything()).thenReturn('''\
+map: mp_backlot
+num score ping guid                             name            lastmsg address               qport rate
+--- ----- ---- -------------------------------- --------------- ------- --------------------- ----- -----
+  5    92  509 0123456789abcdef0123456789abcdef 7ajimaki^7            100 11.222.111.44:28960   -27329 25000
+''')
+        players = self.console.getPlayerList()
+        self.assertEqual('7ajimaki^7', players['5']['name'])
+        self.assertNotIn('steamid', players['5'])
+
+    def test_playerid_guid_authenticates_and_command_is_handled(self):
+        self.console.parseLine('1100:10 J;2310346600000000001;5;B3Tester')
+        self.console.parseLine('1100:20 say;2310346600000000001;5;B3Tester;\x15!list')
+        self.run_timers()
+        client = self.console.clients.getByCID('5')
+        self.assertIsNotNone(client)
+        self.assertEqual('2310346600000000001', client.guid)
+        self.assertEqual('B3Tester', client.name)
+        self.assertEqual(['!list'], [e.data for e in self.events('EVT_CLIENT_SAY')])
+
+    def test_valid_guids(self):
+        valid = self.console.isValidGuid
+        self.assertTrue(valid('2310346600000000001'))  # CoD4x playerid
+        self.assertTrue(valid('0123456789abcdef0123456789abcdef'))  # stock 1.7
+        self.assertFalse(valid('0'))  # bots
+        self.assertFalse(valid('000000'))
+        self.assertFalse(valid('12345'))
+        self.assertFalse(valid('abcdef'))
+        self.assertFalse(valid(''))
+        self.assertFalse(valid(None))

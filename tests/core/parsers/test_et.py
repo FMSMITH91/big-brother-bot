@@ -130,11 +130,21 @@ class Test_startup_and_clients(EtTestCase):
     CONNECTINFO = '1579:03ConnectInfo: 3: E24F9B2702B9E4A1223E905BF597FA92: ^w[^2AS^w]^2Lead: 3: 3: 24.153.180.106:2794'
 
     def test_startup(self):
-        self.console.startup()
+        from b3.cvar import Cvar
+        with patch.object(self.console, 'getCvar', return_value=Cvar('sv_punkbuster', value='1')):
+            self.console.startup()
         world = self.console.clients.getByCID('-1')
         self.assertIsNotNone(world)
         self.assertEqual('et:WORLD', world.guid)
         self.assertIsNotNone(self.console.PunkBuster)
+
+    def test_startup_without_punkbuster(self):
+        # vanilla ET 2.60b as LinuxGSM installs it: PunkBuster's empty player list made every sync drop all players
+        from b3.cvar import Cvar
+        for value in (Cvar('sv_punkbuster', value='0'), None):
+            with patch.object(self.console, 'getCvar', return_value=value):
+                self.console.startup()
+            self.assertIsNone(self.console.PunkBuster)
 
     def test_connectinfo_creates_client(self):
         self.console.parseLine(self.CONNECTINFO)
@@ -161,3 +171,83 @@ class Test_startup_and_clients(EtTestCase):
         self.console.parseLine('1579:04ClientUserinfoChangedGUID: 3 E24F9B2702B9E4A1223E905BF597FA92 n\\^1Joe\\t\\2\\c\\1')
         client = self.console.clients.getByCID('3')
         self.assertEqual('Joe', client.name)
+
+
+# rcon status of vanilla ET 2.60b (no guid column), from the round 3 live test on 2026-11-18
+STATUS_ET260 = """\
+map: oasis
+num score ping name            lastmsg address               qport rate
+--- ----- ---- --------------- ------- --------------------- ----- -----
+  5     0   48 B3Tester^7            0 192.0.2.15:27970       1773 25000
+"""
+
+
+class Test_vanilla_et260b(EtTestCase):
+    """
+    Round 3 live test (2026-11-18), vanilla ET 2.60b (LinuxGSM wetserver): every userinfo line raised
+    "Could not parse line 'cid'", so no player was ever created; a say from the unknown player crashed the admin plugin
+    (client None), and "ClientDisconnect: 7" raised "no such group". These are the lines the server wrote.
+    """
+
+    LINES = [
+        '1100:00 ClientConnect: 5',
+        '1100:03 ClientUserinfoChanged: 5 n\\B3Tester\\t\\1\\c\\0\\r\\0\\m\\0000000\\s\\0000000\\dn\\\\dr\\0'
+        '\\w\\0\\lw\\0\\sw\\0\\mu\\0\\ref\\0',
+        '1100:06 ClientBegin: 5',
+        '1100:09 Userinfo: \\g_password\\none\\cl_guid\\B3B3B3B3B3B3B3B3B3B3B3B3B3000001\\cl_wwwDownload\\1'
+        '\\name\\B3Tester\\rate\\25000\\snaps\\20\\cl_anonymous\\0\\cl_punkbuster\\0\\ip\\192.0.2.15:27970',
+    ]
+
+    def setUp(self):
+        EtTestCase.setUp(self)
+        self.console.write = Mock(side_effect=lambda cmd, *args, **kwargs: STATUS_ET260 if cmd == 'status' else '')
+        self.queued = []
+        self.console.queueEvent = lambda event, expire=10: self.queued.append(event)
+
+    def events(self, key):
+        return [e for e in self.queued if e.type == self.console.getEventID(key)]
+
+    def test_player_is_created_and_authenticated(self):
+        with patch.object(self.console, 'error') as error:
+            for line in self.LINES:
+                self.console.parseLine(line)
+        error.assert_not_called()
+        client = self.console.clients.getByCID('5')
+        self.assertIsNotNone(client)
+        self.assertEqual('B3Tester', client.name)
+        self.assertEqual('et:B3B3B3B3B3B3B3B3B3B3B3B3B3000001', client.guid)
+        self.assertEqual('192.0.2.15', client.ip)
+        self.assertTrue(client.authed)
+
+    def test_say_from_known_player(self):
+        for line in self.LINES:
+            self.console.parseLine(line)
+        self.console.parseLine('1100:12 say: B3Tester: !help')
+        says = self.events('EVT_CLIENT_SAY')
+        self.assertEqual(['!help'], [e.data for e in says])
+        self.assertIs(self.console.clients.getByCID('5'), says[0].client)
+
+    def test_say_from_unknown_player_makes_no_event(self):
+        self.console.parseLine('1100:12 say: Nobody: !help')
+        self.assertEqual([], self.events('EVT_CLIENT_SAY'))
+
+    def test_disconnect(self):
+        for line in self.LINES:
+            self.console.parseLine(line)
+        with patch.object(self.console, 'error') as error:
+            self.console.parseLine('1101:24 ClientDisconnect: 5')
+        error.assert_not_called()
+        self.assertIsNone(self.console.clients.getByCID('5'))
+
+    def test_userinfo_without_a_valid_guid(self):
+        self.console.parseLine('1100:00 ClientConnect: 6')
+        self.console.parseLine('1100:03 ClientUserinfoChanged: 6 n\\Other\\t\\1')
+        client = self.console.clients.getByCID('6')
+        self.assertIsNotNone(client)
+        self.assertEqual('', client.guid)
+
+    def test_status_without_guid_column(self):
+        players = self.console.getPlayerList()
+        self.assertEqual('B3Tester^7', players['5']['name'])
+        self.assertEqual('192.0.2.15', players['5']['ip'])
+        self.assertNotIn('guid', players['5'])
