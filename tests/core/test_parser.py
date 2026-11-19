@@ -307,6 +307,19 @@ class Test_critical(unittest.TestCase):
         shutdown_mock.assert_called_once_with()
         finalize_mock.assert_called_once_with()
 
+    def test_parser_critical_exit_code(self):
+        from unittest.mock import patch
+        import b3.exitcodes
+        import b3.output
+        parser = DummyParser()
+        parser.log = b3.output.OutputHandler('test_parser_critical_code')
+        parser.log.addHandler(logging.NullHandler())
+        with patch.object(parser, 'shutdown'), patch.object(parser, 'finalize'), patch('b3.parser.time.sleep'):
+            with self.assertRaises(SystemExit) as ctx:
+                parser.critical('database down', exitcode=b3.exitcodes.DATABASE)
+        self.assertEqual(233, ctx.exception.code)
+        self.assertEqual(233, parser.exitcode)
+
 
 class Test_testRcon(B3TestCase):
     """

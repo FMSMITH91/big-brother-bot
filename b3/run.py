@@ -27,6 +27,7 @@ __version__ = '1.8'
 
 import b3
 import b3.config
+import b3.exitcodes
 import os
 import sys
 import argparse
@@ -91,6 +92,10 @@ def run_autorestart(args=None):
                 break
             elif status == 224:
                 sys.stdout.write('B3 error (check console)\n')
+                sys.stdout.flush()
+                break
+            elif status in b3.exitcodes.FINAL:
+                sys.stdout.write('%s (check log file)\n' % b3.exitcodes.DESCRIPTIONS[status])
                 sys.stdout.flush()
                 break
             elif status == 256:
@@ -164,7 +169,7 @@ def run(options):
             config = b3.getAbsolutePath(options.config, True)
             if not os.path.isfile(config):
                 printexit = True
-                console_exit('ERROR: configuration file not found (%s).\n%s' % (config, config_help()))
+                console_exit('ERROR: configuration file not found (%s).\n%s' % (config, config_help()), b3.exitcodes.CONFIG)
         else:
             config = None
             for p in ('b3.%s', 'conf/b3.%s', 'b3/conf/b3.%s',
@@ -182,7 +187,7 @@ def run(options):
                 printexit = True
                 if offer_setup_wizard('B3 could not find a configuration file.'):
                     raise SystemExit(0)
-                console_exit('ERROR: could not find any valid configuration file.\n%s' % config_help())
+                console_exit('ERROR: could not find any valid configuration file.\n%s' % config_help(), b3.exitcodes.CONFIG)
 
         # LOADING MAIN CONFIGURATION
         main_config = b3.config.MainConfig(b3.config.load(config))
@@ -203,7 +208,7 @@ def run(options):
         print('Edit %s to fix this, then start B3 again: the comments in the file explain each setting.' % config)
         if offer_setup_wizard('', config):
             raise SystemExit(0)
-        raise SystemExit(1)
+        raise SystemExit(b3.exitcodes.CONFIG)
     except SystemExit as msg:
         if not printexit and main_is_frozen():
             if sys.stdout != sys.__stdout__:
@@ -217,7 +222,10 @@ def run(options):
             sys.stdout = sys.__stdout__
             sys.stderr = sys.__stderr__
         traceback.print_exc()
-        input("press any key to continue...")
+        if sys.stdin and sys.stdin.isatty():
+            input("press any key to continue...")
+        # without a terminal (service, container) waiting for a key raised EOFError and B3 exited with status 1
+        raise SystemExit(b3.exitcodes.UNHANDLED)
 
 
 def main():
@@ -230,12 +238,20 @@ def main():
     p.add_argument('-s', '--setup',  action='store_true', dest='setup', default=False, help='Create the b3.ini config file with the setup wizard')
     p.add_argument('-u', '--update', action='store_true', dest='update', default=False, help='Update B3 database to latest version')
     p.add_argument('-v', '--version', action='version', default=False, version=b3.getB3versionString(), help='Show B3 version and exit')
+    p.add_argument('--check-config', action='store_true', dest='check_config', default=False,
+                   help='Check b3.ini and the plugin configuration files without connecting, then exit '
+                        '(status 0 if valid, 230 otherwise)')
     p.add_argument('-a', '--autorestart', action='store_true', dest='autorestart', default=False, help=argparse.SUPPRESS)
 
     (options, args) = p.parse_known_args()
 
     if not options.config and len(args) == 1:
         options.config = args[0]
+
+    if options.check_config:
+        ## CONFIGURATION CHECK => CONSOLE
+        from b3.checkconfig import main as check_config
+        check_config(options.config)
 
     if options.setup:
         ## SETUP WIZARD => CONSOLE

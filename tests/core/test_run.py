@@ -48,7 +48,7 @@ class Test_first_start(unittest.TestCase):
         out = io.StringIO()
         with redirect_stdout(out), self.assertRaises(SystemExit) as ctx:
             b3.run.run(argparse.Namespace(config=config))
-        self.assertEqual(1, ctx.exception.code)
+        self.assertEqual(230, ctx.exception.code)  # b3.exitcodes.CONFIG
         self.assertIn('invalid parser specified in b3::parser (changeme)', out.getvalue())
         self.assertIn('Edit %s to fix this' % config, out.getvalue())
 
@@ -80,3 +80,48 @@ class Test_setup_option(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class Test_exit_codes(unittest.TestCase):
+    """
+    linuxgsm-panel request: one exit code per failure kind (b3/exitcodes.py), and the auto-restart loop must stop on
+    them instead of restarting B3 forever on a bad config or an unreachable database.
+    """
+
+    def test_codes_are_distinct(self):
+        import b3.exitcodes as ec
+        codes = [ec.OK, ec.CRITICAL, ec.RESTART, ec.SHUTDOWN, ec.UNHANDLED, ec.CONFIG, ec.GAME_LOG, ec.RCON, ec.DATABASE]
+        self.assertEqual(len(codes), len(set(codes)))
+        self.assertEqual((0, 230, 231, 232, 233), (ec.OK, ec.CONFIG, ec.GAME_LOG, ec.RCON, ec.DATABASE))
+
+    def test_autorestart_stops_on_final_codes(self):
+        from unittest.mock import patch
+        import b3.exitcodes as ec
+        for code in (ec.CONFIG, ec.GAME_LOG, ec.RCON, ec.DATABASE):
+            with patch('subprocess.call', return_value=code) as call, patch('b3.run.sleep'), \
+                    redirect_stdout(io.StringIO()) as out:
+                b3.run.run_autorestart([])
+            self.assertEqual(1, call.call_count, code)
+            self.assertIn(ec.DESCRIPTIONS[code], out.getvalue())
+
+    def test_autorestart_restarts_on_221(self):
+        from unittest.mock import patch
+        with patch('subprocess.call', side_effect=[221, 0]) as call, patch('b3.run.sleep'), \
+                redirect_stdout(io.StringIO()):
+            b3.run.run_autorestart([])
+        self.assertEqual(2, call.call_count)
+
+
+class Test_version_commit(unittest.TestCase):
+
+    def test_commit_from_environment(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, {'B3_COMMIT': '920D736648E2544714EE58A74E556FBBB3881892'}):
+            self.assertEqual('920d736648e2544714ee58a74e556fbbb3881892', b3.getB3commit())
+            self.assertTrue(b3.getB3versionString().endswith('v%s (commit 920d7366)' % b3.__version__))
+
+    def test_invalid_commit_is_ignored(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, {'B3_COMMIT': 'not-a-commit; rm -rf'}):
+            self.assertEqual('', b3.getB3commit())
+            self.assertNotIn('commit', b3.getB3versionString())
