@@ -224,16 +224,15 @@ def getB3commit():
 
 def getB3versionString():
     """
-    Return the B3 version as a string, with the short commit when known: "BigBrotherBot (b3) v2.0.1 (commit 920d7366)".
+    Return the B3 version as a string with the short commit: "BigBrotherBot (b3) v2.0.1 (commit 920d7366)", or
+    "(commit unknown)" when it cannot be found (never a guess).
     """
     sversion = re.sub(r'\^[0-9a-z]', '', version)
     if main_is_frozen():
         vinfo = getB3versionInfo()
         sversion = '%s [%s%s]' % (sversion, vinfo[1], vinfo[2])
     commit = getB3commit()
-    if commit:
-        sversion = '%s (commit %s)' % (sversion, commit[:8])
-    return sversion
+    return '%s (commit %s)' % (sversion, commit[:8] if commit else 'unknown')
 
 
 def getWritableFilePath(filepath, decode=False):
