@@ -124,4 +124,12 @@ class Test_version_commit(unittest.TestCase):
         from unittest.mock import patch
         with patch.dict(os.environ, {'B3_COMMIT': 'not-a-commit; rm -rf'}):
             self.assertEqual('', b3.getB3commit())
-            self.assertNotIn('commit', b3.getB3versionString())
+            self.assertTrue(b3.getB3versionString().endswith('(commit unknown)'))
+
+    def test_no_commit_anywhere_says_unknown(self):
+        # the panel's image: only b3/ and b3_run.py are copied, no .git and no b3/COMMIT
+        from unittest.mock import patch
+        env = {k: v for k, v in os.environ.items() if k != 'B3_COMMIT'}
+        with patch.dict(os.environ, env, clear=True), patch('b3.getB3Path', return_value=tempfile.mkdtemp()):
+            self.assertEqual('', b3.getB3commit())
+            self.assertTrue(b3.getB3versionString().endswith('v%s (commit unknown)' % b3.__version__))

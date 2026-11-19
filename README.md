@@ -70,7 +70,8 @@ python3 -m venv .venv
   problem (the first line is the main reason) and exits with 230. Run it before restarting B3 after a change.
 - `b3_run.py --version` prints the release and the git commit, for example
   `BigBrotherBot (b3) v2.0.1 (commit 920d7366)`. The commit comes from the `B3_COMMIT` environment variable, from
-  `b3/COMMIT` (written when the package is built from a git checkout), or from `git` when B3 runs from a checkout.
+  `b3/COMMIT` (written when the package is built from a git checkout), or from `git` when B3 runs from a checkout;
+  otherwise the line says `(commit unknown)`.
 - Exit codes (`b3/exitcodes.py`; a code never changes meaning):
 
   | Code | Meaning |
