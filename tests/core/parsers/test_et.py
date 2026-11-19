@@ -32,6 +32,7 @@ import unittest
 from b3.clients import Client
 from b3.config import XmlConfigParser
 from b3.parsers.et import EtParser
+from tests.core.parsers.q3_engine_helpers import fake_rcon
 
 
 log = logging.getLogger("test")
@@ -287,11 +288,6 @@ num score ping name                                lastmsg address              
 --- ----- ---- ----------------------------------- ------- --------------------- ----- ----- ---------------
   5     0   48 ^1Big Joe^7                               0 192.0.2.15:27960       1773 25000 123
 """
-DUMPUSER_ETL = ("userinfo\n--------\n"
-                "cl_guid                   B3B3B3B3B3B3B3B3B3B3B3B3B3000005\n"
-                "ip                        192.0.2.15:27960\n"
-                "name                      ^1Big Joe^7\n")
-
 
 class Test_etlegacy(EtTestCase):
     """
@@ -301,8 +297,9 @@ class Test_etlegacy(EtTestCase):
 
     def setUp(self):
         EtTestCase.setUp(self)
-        self.console.write = Mock(side_effect=lambda cmd, *args, **kwargs:
-                                  STATUS_ETL if cmd == 'status' else DUMPUSER_ETL if cmd == 'dumpuser 5' else '')
+        # dumpuser finds players by name only (ET: Legacy SV_GetPlayerByName)
+        self.console.write = Mock(side_effect=fake_rcon(STATUS_ETL, [{
+            'cl_guid': 'B3B3B3B3B3B3B3B3B3B3B3B3B3000005', 'ip': '192.0.2.15:27960', 'name': '^1Big Joe^7'}], width=26))
         self.queued = []
         self.console.queueEvent = lambda event, expire=10: self.queued.append(event)
         for line in ('0:01 ClientConnect: 5',

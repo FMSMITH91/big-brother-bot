@@ -760,54 +760,105 @@ class AbstractParser(b3.parser.Parser):
 
         return players
 
-    def queryClientUserInfoByCid(self, cid):
-        """
-        : dumpuser 5
-        Player 5 is not on the server
+    # a name may go into "dumpuser" only as printable ASCII without the characters the engine's command parser treats
+    # specially; the engine's Info_SetValueForKey never lets '"', ';' or '\' into a name anyway
+    _reDumpuserName = re.compile(r"[\x20-\x7e]{1,64}")
+    _dumpuserForbidden = ('"', ';', '\\', '//', '/*')
 
-        ]\rcon dumpuser 0
+    @staticmethod
+    def cleanName(name):
+        """
+        Return the name as the engine's Q_CleanStr makes it: a '^' followed by any other character than '^' is a colour
+        code and is dropped with that character, and only printable ASCII is kept. dumpuser matches this form.
+        """
+        out = []
+        i = 0
+        while i < len(name):
+            c = name[i]
+            if c == '^' and i + 1 < len(name) and name[i + 1] != '^':
+                i += 2
+                continue
+            if ' ' <= c <= '~':
+                out.append(c)
+            i += 1
+        return ''.join(out)
+
+    def getStatusRows(self):
+        """
+        Return {slot: row} from rcon status, players still connecting (CNCT) included.
+        """
+        data = self.write('status')
+        if not data:
+            return {}
+        regex = self.getStatusRegex(data)
+        regex = re.compile(regex.pattern.replace('(?P<ping>[0-9]+)', '(?P<ping>[0-9]+|CNCT|ZMBI)'), regex.flags)
+        rows = {}
+        for line in data.split('\n'):
+            m = regex.match(line.strip())
+            if m:
+                rows.setdefault(m.group('slot'), m.groupdict())
+        return rows
+
+    def queryClientUserInfoByCid(self, cid):
+        r"""
+        Return the userinfo of the player on this slot as "<cid> \key\value...", or None.
+
+        Quake 3 1.32, Wolfenstein: ET 2.60b and ET: Legacy look the dumpuser argument up by player NAME only (raw or
+        Q_CleanStr'd, SV_GetPlayerByName): "dumpuser 4" answers "Player 4 is not on the server". ioquake3 takes a name
+        or a slot. So the slot's name is read from status and sent, and the reply is accepted only when its name (and
+        its IP, when both sides show one) is that slot's: a player who copies someone's name never gets their guid.
+
+        ]\rcon dumpuser "Courgette"
         userinfo
         --------
         ip                  81.56.143.41
-        cg_cmdTimeNudge     0
-        cg_delag            0
-        cg_scorePlums       1
-        cl_voip             0
-        cg_predictItems     1
-        cl_anonymous        0
-        sex                 male
-        handicap            100
-        color2              7
-        color1              2
-        team_headmodel      sarge/classic
-        team_model          sarge/classic
-        headmodel           sarge/classic
-        model               sarge/classic
-        snaps               20
-        rate                25000
         name                Courgette
-        teamtask            0
         cl_guid             201AB4BBC40B4EC7445B49CE82D209EC
-        teamoverlay         0
         """
-        data = self.write('dumpuser %s' % cid)
+        cid = str(cid)
+        rows = self.getStatusRows()
+        row = rows.get(cid)
+        if not row:
+            self.debug('dumpuser: slot %s is not in status', cid)
+            return None
+        client = self.clients.getByCID(cid)
+        name = self.cleanName(client.exactName if client and client.exactName else row.get('name') or '')
+        others = [r for s, r in rows.items() if s != cid and self.cleanName(r.get('name') or '').lower() == name.lower()]
+        if (self._reDumpuserName.fullmatch(name) and name.strip() == name
+                and not any(f in name for f in self._dumpuserForbidden) and not others):
+            target = '"%s"' % name
+        else:
+            # no name the engine could tell apart: ioquake3 still takes the slot number
+            self.debug('dumpuser: slot %s has no unique sendable name (%r): asking by slot', cid, name)
+            target = cid
+
+        data = self.write('dumpuser %s' % target)
         if not data:
             return None
-
-        if data.split('\n')[0] != "userinfo":
-            self.debug("dumpuser %s returned : %s" % (cid, data))
+        if data.split('\n')[0].strip() != "userinfo":
+            self.debug("dumpuser %s returned : %s" % (target, data))
             return None
 
-        datatransformed = "%s " % cid
+        info = {}
         for line in data.split('\n'):
             line = line.strip()
             if not line or line == "userinfo" or line == "--------":
                 continue
             # the key is padded to 20 columns in Quake 3 and to 24 (+2) in ET: Legacy: split on the first blanks
             var, _, val = line.partition(' ')
-            datatransformed += "\\%s\\%s" % (var, val.strip())
+            info[var] = val.strip()
 
-        return datatransformed
+        # deny by default: the reply must be this slot's player
+        if self.cleanName(info.get('name', '')).lower() != name.lower():
+            self.warning('dumpuser %s answered for %r, not for slot %s (%r): ignored', target, info.get('name'), cid, name)
+            return None
+        m = re.match(r'^([0-9.]+)(?::[0-9-]+)?$', info.get('ip', ''))
+        reply_ip = m.group(1) if m else None
+        if row.get('ip') and reply_ip and reply_ip != row['ip']:
+            self.warning('dumpuser %s answered with IP %s, but slot %s is at %s: ignored', target, reply_ip, cid, row['ip'])
+            return None
+
+        return "%s " % cid + ''.join("\\%s\\%s" % (k, v) for k, v in info.items())
 
     def getStatusRegex(self, status):
         """

@@ -28,6 +28,7 @@ import unittest
 from unittest.mock import Mock, patch
 from b3.config import XmlConfigParser
 from b3.parsers.q3 import Q3Parser
+from tests.core.parsers.q3_engine_helpers import dumpuser_reply, fake_rcon
 
 
 class Q3TestCase(unittest.TestCase):
@@ -148,13 +149,75 @@ class Test_status(Q3TestCase):
 
 
 class Test_dumpuser(Q3TestCase):
+    """
+    linuxgsm-panel round D (F-D1): Quake 3 1.32, ET 2.60b and ET: Legacy look dumpuser up by name only, so
+    "dumpuser <slot>" never found a human player and no human was authorized.
+    """
+
+    COURGETTE = {'ip': '81.56.143.41:27960', 'name': 'Courgette', 'cl_guid': '201AB4BBC40B4EC7445B49CE82D209EC'}
+    NEWBIE = {'ip': '81.56.143.42:27960', 'name': 'Newbie', 'cl_guid': 'AAAABBBBCCCCDDDDEEEEFFFF00001111'}
+
+    def use(self, status=STATUS_Q3, players=(COURGETTE, NEWBIE), width=20):
+        self.sent = []
+        self.console.write = Mock(side_effect=fake_rcon(status, list(players), width, self.sent))
 
     def test_quake3_and_etlegacy_key_widths(self):
         for width in (20, 26):
-            self.console.write = Mock(return_value='userinfo\n--------\n' + ''.join(
-                '%s%s\n' % (k.ljust(width), v) for k, v in (('ip', '81.56.143.41:27960'), ('name', 'Big Joe'),
-                                                            ('cl_guid', '201AB4BBC40B4EC7445B49CE82D209EC'))))
-            info = self.console.parseUserInfo(self.console.queryClientUserInfoByCid('3'))
+            self.use(width=width)
+            info = self.console.parseUserInfo(self.console.queryClientUserInfoByCid('0'))
             self.assertEqual('201AB4BBC40B4EC7445B49CE82D209EC', info['cl_guid'], width)
-            self.assertEqual('Big Joe', info['name'], width)
-            self.assertEqual('3', info['cid'])
+            self.assertEqual('Courgette', info['name'], width)
+            self.assertEqual('0', info['cid'])
+
+    def test_asks_by_name_not_slot(self):
+        self.use()
+        self.console.queryClientUserInfoByCid('0')
+        self.assertIn('dumpuser "Courgette"', self.sent)
+        self.assertNotIn('dumpuser 0', self.sent)
+
+    def test_connecting_player(self):
+        self.use()
+        info = self.console.parseUserInfo(self.console.queryClientUserInfoByCid('1'))
+        self.assertEqual('AAAABBBBCCCCDDDDEEEEFFFF00001111', info['cl_guid'])
+
+    def test_slot_not_in_status(self):
+        self.use()
+        self.assertIsNone(self.console.queryClientUserInfoByCid('7'))
+        self.assertEqual([], [c for c in self.sent if c.startswith('dumpuser')])
+
+    def test_copied_name_never_gets_the_other_guid(self):
+        # slot 1 takes Courgette's name: the engine would answer with the first match, slot 0
+        status = STATUS_Q3.replace('Newbie^7   ', '^1Courgette^7')
+        self.use(status=status, players=(self.COURGETTE, dict(self.NEWBIE, name='^1Courgette')))
+        self.assertIsNone(self.console.queryClientUserInfoByCid('1'))
+        self.assertNotIn('dumpuser "Courgette"', self.sent)
+
+    def test_reply_for_another_name_is_ignored(self):
+        self.use()
+        self.console.write = Mock(side_effect=lambda cmd, *a, **k: STATUS_Q3 if cmd == 'status' else
+                                  dumpuser_reply(dict(self.COURGETTE, name='Courgette2')))
+        self.assertIsNone(self.console.queryClientUserInfoByCid('0'))
+
+    def test_reply_from_another_ip_is_ignored(self):
+        self.use(players=(dict(self.COURGETTE, ip='10.9.9.9:27960'),))
+        self.assertIsNone(self.console.queryClientUserInfoByCid('0'))
+
+    def test_unsafe_name_is_never_sent(self):
+        for name in ('Joe;quit', 'Joe"x', 'a\\b', 'x//y', 'x/*y'):
+            status = STATUS_Q3.replace('Courgette^7', (name + '^7').ljust(11))
+            self.use(status=status, players=(dict(self.COURGETTE, name=name),))
+            self.console.queryClientUserInfoByCid('0')
+            self.assertEqual(['dumpuser 0'], [c for c in self.sent if c.startswith('dumpuser')], name)
+
+    def test_clean_name_like_q_cleanstr(self):
+        self.assertEqual('Big ^oe', self.console.cleanName('^1Big ^^Joe^7'))
+        self.assertEqual('ab', self.console.cleanName('a\x01\xe9b'))
+
+    def test_client_connect_creates_and_authorizes(self):
+        self.use()
+        self.console.parseLine('0:01 ClientConnect: 0')
+        client = self.console.clients.getByCID('0')
+        self.assertIsNotNone(client)
+        self.assertEqual('81.56.143.41', client.ip)
+        self.assertEqual('201AB4BBC40B4EC7445B49CE82D209EC', client.guid)
+        self.assertTrue(client.authed)
