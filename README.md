@@ -72,6 +72,22 @@ python3 -m venv .venv
   `BigBrotherBot (b3) v2.0.1 (commit 920d7366)`. The commit comes from the `B3_COMMIT` environment variable, from
   `b3/COMMIT` (written when the package is built from a git checkout), or from `git` when B3 runs from a checkout;
   otherwise the line says `(commit unknown)`.
+- `health.json` (next to `b3.ini`; `health_file` in `[b3]` moves it, `off` disables it) is rewritten every
+  `health_interval` seconds (default 60, at least 5), when B3 is up and running, and when it stops. It is replaced
+  atomically and holds no password, IP address or player name. Fields (`schema` 1; times are UTC ISO 8601 or `null`):
+
+  | Field | Meaning |
+  |---|---|
+  | `healthy`, `reason` | `true` and `null`, or `false` and the first problem in plain words |
+  | `state`, `exit_code` | `starting`, `running` or `stopped`; the exit code once stopped |
+  | `written_at` | when the file was written: older than two intervals means B3 is hung or gone |
+  | `b3.version`, `b3.commit`, `b3.parser`, `b3.started_at` | what is running |
+  | `game_log.ok`, `last_read_at`, `last_line_at`, `lines_parsed` | the log is read (a read in the last 120 s); the last line seen |
+  | `rcon.ok`, `last_ok_at`, `last_error`, `last_error_at` | `null` until the first reply; `false` on a wrong password or an error |
+  | `database.ok` | the database connection is up |
+  | `players.humans`, `players.bots` | connected players |
+  | `last_error.message`, `last_error.at` | the last ERROR in `b3.log`, cleaned of IPs, URL passwords and secrets |
+
 - Exit codes (`b3/exitcodes.py`; a code never changes meaning):
 
   | Code | Meaning |

@@ -307,6 +307,7 @@ def term_signal_handler(console):
     def handler(signum, frame):
         console.bot("TERM signal received: shutting down")
         console.shutdown()
+        console.stopHealth(0)
         raise SystemExit(0)
     return handler
 
@@ -370,6 +371,7 @@ def start(mainconfig, options):
         console.start()
     except KeyboardInterrupt:
         console.shutdown()
+        console.stopHealth(0)
         print('Goodbye')
         return
     except SystemExit as msg:

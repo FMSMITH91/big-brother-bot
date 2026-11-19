@@ -99,6 +99,7 @@ def check_config(filename):
 
     _typed('b3', 'log_level', int, 'a number')
     _typed('b3', 'logsize', b3.functions.getBytes, 'a size such as 10MB')
+    _typed('b3', 'health_interval', int, 'a number of seconds')
     _typed('server', 'port', int, 'a port number')
     _typed('server', 'rcon_port', int, 'a port number')
     _typed('server', 'rcon_timeout', float, 'a number of seconds')
