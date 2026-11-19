@@ -212,8 +212,11 @@ xlrstats: @b3/conf/plugin_xlrstats.ini
                  'ClientUserinfo: 0 \\ip\\127.0.0.1:27961\\name\\%s\\racered\\2\\raceblue\\2\\rate\\25000'
                  '\\cl_guid\\%s\\gear\\GZAAVWT\\authl\\' % (PLAYER, GUID),
                  'ClientUserinfoChanged: 0 n\\%s\\t\\1\\r\\0\\tl\\0\\f0\\\\f1\\\\f2\\\\a0\\0\\a1\\0\\a2\\0' % PLAYER,
-                 'ClientBegin: 0',
-                 'say: 0 %s: !help' % PLAYER,
+                 'ClientBegin: 0')
+        # commands are refused until the player is authenticated (deny by default): the iourt43 auth-whois retries can
+        # take several seconds, so wait for it as a player in game would
+        self.wait_for(lambda: 'Client authorized' in self.b3_log_tail(400), 60, 'the player to be authorized')
+        self.log('say: 0 %s: !help' % PLAYER,
                  'say: 0 %s: !iamgod' % PLAYER,
                  'say: 0 %s: !leveltest' % PLAYER)
 
