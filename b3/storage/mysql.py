@@ -23,6 +23,7 @@
 # ################################################################### #
 
 import b3
+import b3.exitcodes
 import sys
 
 from b3.querybuilder import QueryBuilder
@@ -339,7 +340,7 @@ class MysqlStorage(DatabaseStorage):
                         self.console.critical("Missing MySQL database tables. You need to create the necessary tables for "
                                               "B3 to work. You can do so by importing the following SQL script into your "
                                               "database: %s. An attempt of creating tables automatically just failed: %s" %
-                                              (b3.getAbsolutePath("@b3/sql/mysql/b3.sql"), e))
+                                              (b3.getAbsolutePath("@b3/sql/mysql/b3.sql"), e), exitcode=b3.exitcodes.DATABASE)
                 self.widen_password_column()
             except Exception as e:
                 self.console.error('Database connection failed: working in remote mode: %s - %s', e, extract_tb(sys.exc_info()[2]))

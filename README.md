@@ -63,6 +63,31 @@ python3 -m venv .venv
 .venv/bin/python b3_run.py -c /path/to/b3.ini
 ```
 
+### Running B3 as a service
+
+- `b3_run.py --check-config -c b3.ini` checks `b3.ini` and the plugin configuration files without connecting to the
+  game server or the database. It prints `OK: <file>` and exits with 0, or prints one `ERROR: <reason>` line per
+  problem (the first line is the main reason) and exits with 230. Run it before restarting B3 after a change.
+- `b3_run.py --version` prints the release and the git commit, for example
+  `BigBrotherBot (b3) v2.0.1 (commit 920d7366)`. The commit comes from the `B3_COMMIT` environment variable, from
+  `b3/COMMIT` (written when the package is built from a git checkout), or from `git` when B3 runs from a checkout.
+- Exit codes (`b3/exitcodes.py`; a code never changes meaning):
+
+  | Code | Meaning |
+  |---|---|
+  | 0 | normal stop (also on SIGTERM), or `--check-config` found nothing wrong |
+  | 220 | fatal error with no more specific code |
+  | 221 | restart requested (`!restart`); the auto-restart mode starts B3 again |
+  | 222 | shutdown requested (`!die`) |
+  | 223 | unexpected error during startup |
+  | 230 | invalid configuration (`b3.ini` or a plugin configuration file) |
+  | 231 | the game log cannot be opened or read |
+  | 232 | the RCON connection cannot be set up |
+  | 233 | the database cannot be set up or reached at startup |
+
+  A wrong RCON password does not stop B3: it keeps reading the game log, and RCON also fails for a moment while the
+  server changes maps.
+
 Run the test suite with:
 
 ```bash

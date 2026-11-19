@@ -330,11 +330,12 @@ def clamp(value, minv=None, maxv=None):
     return value
 
 
-def console_exit(message=''):
+def console_exit(message='', code=None):
     """
     Terminate the current console application displaying the given message.
     Will make sure that the user is able to see the exit message.
     :param message: the message to prompt to the user
+    :param code: the exit status (default: 1, or 0 for the frozen build)
     """
     if main_is_frozen():
         if sys.stdout != sys.__stdout__:
@@ -342,9 +343,12 @@ def console_exit(message=''):
             sys.stderr = sys.__stderr__
         print(message)
         input("press any key to continue...")
-        raise SystemExit()
-    else:
+        raise SystemExit(code)
+    elif code is None:
         raise SystemExit(message)
+    else:
+        sys.stderr.write('%s\n' % message)
+        raise SystemExit(code)
 
 
 def clearscreen():

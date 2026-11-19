@@ -27,6 +27,7 @@ __version__ = '1.5.3'
 
 
 import b3
+import b3.exitcodes
 import b3.events
 import b3.parsers.punkbuster
 import re
@@ -225,8 +226,8 @@ class CodParser(AbstractParser):
         Called after the parser is created before run().
         """
         if not self.config.has_option('server','game_log'):
-            self.critical("Your main config file is missing the 'game_log' setting in section 'server'")
-            raise SystemExit(220)
+            self.critical("Your main config file is missing the 'game_log' setting in section 'server'", exitcode=b3.exitcodes.CONFIG)
+            raise SystemExit(b3.exitcodes.CONFIG)
 
         if self.IpsOnly:
             self.debug('Authentication method: Using IP instead of GUID!')

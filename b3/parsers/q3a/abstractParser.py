@@ -31,6 +31,7 @@ import string
 import time
 import types
 import b3
+import b3.exitcodes
 import b3.events
 import b3.clients
 import b3.functions
@@ -168,8 +169,8 @@ class AbstractParser(b3.parser.Parser):
         Called after the parser is created before run().
         """
         if not self.config.has_option('server', 'game_log'):
-            self.critical("Your main config file is missing the 'game_log' setting in section 'server'")
-            raise SystemExit(220)
+            self.critical("Your main config file is missing the 'game_log' setting in section 'server'", exitcode=b3.exitcodes.CONFIG)
+            raise SystemExit(b3.exitcodes.CONFIG)
 
         # add the world client
         self.clients.newClient('1022', guid='WORLD', name='World', hide=True, pbid='WORLD')

@@ -33,7 +33,7 @@ from setuptools import setup
 from setuptools.command.egg_info import egg_info as orig_egg_info
 
 # set by scripts/set_version.py (the release workflow sets it from the git tag)
-b3_version = '2.0.0dev'
+b3_version = '2.0.2dev'
 
 PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))  # directory where this file is in
 DIST_DIR = os.path.join(PROJECT_DIR, 'dist')  # directory where all the final builds will be found
@@ -64,8 +64,28 @@ class my_egg_info(orig_egg_info):
     """
 
     def run(self):
+        write_commit_file()
         orig_egg_info.run(self)
         shutil.copy('b3.egg-info/PKG-INFO', 'b3/PKG-INFO')
+
+
+def write_commit_file():
+    """
+    Record the git commit being built in b3/COMMIT, so `b3 --version` names it in an installed copy too
+    (B3_COMMIT in the environment wins, for builds from a tree without .git).
+    """
+    import re
+    import subprocess
+    commit = os.environ.get('B3_COMMIT', '').strip().lower()
+    if not commit and os.path.isdir(os.path.join(PROJECT_DIR, '.git')):
+        try:
+            commit = subprocess.check_output(['git', '-C', PROJECT_DIR, 'rev-parse', 'HEAD'],
+                                             stderr=subprocess.DEVNULL, timeout=10).decode('ascii').strip()
+        except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+            commit = ''
+    if re.fullmatch(r'[0-9a-f]{7,40}', commit):
+        with open(os.path.join(PROJECT_DIR, 'b3', 'COMMIT'), 'w', encoding='ascii') as f:
+            f.write(commit + '\n')
 
 
 cmdclass = {

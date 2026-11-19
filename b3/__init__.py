@@ -38,7 +38,7 @@ from configparser import NoOptionError
 from configparser import NoSectionError
 
 __author__ = 'ThorN'
-__version__ = '2.0.0dev'
+__version__ = '2.0.2dev'
 
 modulePath = pkg_handler.resource_directory(__name__)
 
@@ -197,14 +197,42 @@ def getB3versionInfo():
     return __version__, getPlatform(), right_cut(platform.architecture()[0], 'bit')
 
 
+def getB3commit():
+    """
+    Return the git commit B3 was built from (full hex), or '' when unknown.
+    Looked up in order: the B3_COMMIT environment variable, the b3/COMMIT file written by the build (setup.py),
+    then `git rev-parse HEAD` when B3 runs from a git checkout.
+    """
+    commit = os.environ.get('B3_COMMIT', '').strip().lower()
+    if not commit:
+        try:
+            with open(os.path.join(getB3Path(), 'COMMIT'), encoding='ascii') as f:
+                commit = f.read().strip().lower()
+        except (OSError, UnicodeDecodeError):
+            commit = ''
+    if not commit:
+        root = os.path.dirname(getB3Path())
+        if os.path.isdir(os.path.join(root, '.git')):
+            import subprocess
+            try:
+                commit = subprocess.check_output(['git', '-C', root, 'rev-parse', 'HEAD'], stderr=subprocess.DEVNULL,
+                                                 timeout=10).decode('ascii').strip()
+            except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+                commit = ''
+    return commit if re.fullmatch(r'[0-9a-f]{7,40}', commit) else ''
+
+
 def getB3versionString():
     """
-    Return the B3 version as a string.
+    Return the B3 version as a string, with the short commit when known: "BigBrotherBot (b3) v2.0.1 (commit 920d7366)".
     """
     sversion = re.sub(r'\^[0-9a-z]', '', version)
     if main_is_frozen():
         vinfo = getB3versionInfo()
         sversion = '%s [%s%s]' % (sversion, vinfo[1], vinfo[2])
+    commit = getB3commit()
+    if commit:
+        sversion = '%s (commit %s)' % (sversion, commit[:8])
     return sversion
 
 

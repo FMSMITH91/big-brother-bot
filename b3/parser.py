@@ -40,6 +40,7 @@ import glob
 
 import b3
 import b3.config
+import b3.exitcodes
 import b3.storage
 import b3.events
 import b3.output
@@ -204,7 +205,7 @@ class Parser(object):
 
         if not self.loadConfig(conf):
             print('CRITICAL ERROR : COULD NOT LOAD CONFIG')
-            raise SystemExit(220)
+            raise SystemExit(b3.exitcodes.CONFIG)
 
         # set game server encoding
         if self.config.has_option('server', 'encoding'):
@@ -310,10 +311,11 @@ class Parser(object):
         except (AttributeError, ImportError) as e:
             # exit if we don't manage to setup the storage module: B3 will stop working upon Admin
             # Plugin loading so it makes no sense to keep going with the console initialization
-            self.critical('Could not setup storage module: %s', e)
+            self.critical('Could not setup storage module: %s', e, exitcode=b3.exitcodes.DATABASE)
 
-        # establish a connection with the database
-        self.storage.connect()
+        # establish a connection with the database: without it at startup B3 cannot load the admin plugin's data
+        if self.storage.connect() is None:
+            self.critical('Could not connect to the database (see the error above)', exitcode=b3.exitcodes.DATABASE)
 
         if self.config.has_option('server', 'game_log'):
             # open log file
@@ -363,7 +365,7 @@ class Parser(object):
             else:
                 self.screen.write(">>> Cannot read file: %s\n" % os.path.abspath(f))
                 self.screen.flush()
-                self.critical("Cannot read file: %s", os.path.abspath(f))
+                self.critical("Cannot read file: %s", os.path.abspath(f), exitcode=b3.exitcodes.GAME_LOG)
 
         try:
             # setup rcon
@@ -371,7 +373,7 @@ class Parser(object):
         except Exception as err:
             self.screen.write(">>> Cannot setup RCON: %s\n" % err)
             self.screen.flush()
-            self.critical("Cannot setup RCON: %s" % err, exc_info=err)
+            self.critical("Cannot setup RCON: %s" % err, exc_info=err, exitcode=b3.exitcodes.RCON)
         
         if self.config.has_option('server', 'rcon_timeout'):
             custom_socket_timeout = self.config.getfloat('server', 'rcon_timeout')
@@ -722,7 +724,8 @@ class Parser(object):
         # check for AdminPlugin
         if not 'admin' in plugins:
             # critical will exit, admin plugin must be loaded!
-            self.critical('Plugin admin is essential and MUST be loaded! Cannot continue without admin plugin')
+            self.critical('Plugin admin is essential and MUST be loaded! Cannot continue without admin plugin',
+                          exitcode=b3.exitcodes.CONFIG)
 
         # at this point we have an OrderedDict of PluginData of plugins listed in b3.ini and which can be loaded correctly:
         # all the plugins which have not been installed correctly, but are specified in b3.ini, have been already excluded.
@@ -1344,7 +1347,7 @@ class Parser(object):
         """
         if not hasattr(self, 'input'):
             self.critical("Cannot read game log file: check that you have a correct "
-                          "value for the 'game_log' setting in your main config file")
+                          "value for the 'game_log' setting in your main config file", exitcode=b3.exitcodes.GAME_LOG)
 
         # Getting the stats of the game log (we are looking for the size)
         filestats = os.fstat(self.input.fileno())
@@ -1530,14 +1533,15 @@ class Parser(object):
         """
         self.log.exception(msg, *args, **kwargs)
 
-    def critical(self, msg, *args, **kwargs):
+    def critical(self, msg, *args, exitcode=b3.exitcodes.CRITICAL, **kwargs):
         """
         Log a CRITICAL message and shutdown B3.
+        :param exitcode: the process exit status, one of b3.exitcodes
         """
         self.log.critical(msg, *args, **kwargs)
         # set the exit code before shutting down: shutdown() ends the main loop which will then
         # exit with this code (see run()) when critical() is invoked from a thread other than the main one
-        self.exitcode = 220
+        self.exitcode = exitcode
         self.shutdown()
         self.finalize()
         time.sleep(2)
