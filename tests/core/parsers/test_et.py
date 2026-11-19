@@ -272,3 +272,69 @@ class Test_status_preamble(EtTestCase):
     def test_header_found_after_other_lines(self):
         status = 'hostname: x\nversion : ET 2.60b\nos: linux\nmap: oasis\n\n' + STATUS_ET260.split('\n', 1)[1]
         self.assertIs(self.console._regPlayerNoGuid, self.console.getStatusRegex(status))
+
+
+# ET: Legacy 2.86 (etlserver): status has more lines before the header and a lastConnectTime column; the game log has
+# no Userinfo line (the guid comes from dumpuser) and chat is "say: ^7<name>^7: ^2<text>" (g_cmds.c G_Say)
+STATUS_ETL = """\
+cpu server utilization: 3 %
+avg response time     : 0 ms
+server time           : 123456
+internal time         : 654321
+map                   : radar
+
+num score ping name                                lastmsg address               qport rate  lastConnectTime
+--- ----- ---- ----------------------------------- ------- --------------------- ----- ----- ---------------
+  5     0   48 ^1Big Joe^7                               0 192.0.2.15:27960       1773 25000 123
+"""
+DUMPUSER_ETL = ("userinfo\n--------\n"
+                "cl_guid                   B3B3B3B3B3B3B3B3B3B3B3B3B3000005\n"
+                "ip                        192.0.2.15:27960\n"
+                "name                      ^1Big Joe^7\n")
+
+
+class Test_etlegacy(EtTestCase):
+    """
+    linuxgsm-panel research (2026-11-18): the et parser read neither ET: Legacy's status rows (lastConnectTime column)
+    nor its chat lines (name wrapped in ^7, text starting with a colour code).
+    """
+
+    def setUp(self):
+        EtTestCase.setUp(self)
+        self.console.write = Mock(side_effect=lambda cmd, *args, **kwargs:
+                                  STATUS_ETL if cmd == 'status' else DUMPUSER_ETL if cmd == 'dumpuser 5' else '')
+        self.queued = []
+        self.console.queueEvent = lambda event, expire=10: self.queued.append(event)
+        for line in ('0:01 ClientConnect: 5',
+                     '0:01 ClientUserinfoChanged: 5 n\\^1Big Joe^7\\t\\1\\c\\0\\lc\\0\\r\\0\\m\\0000000'
+                     '\\s\\0000000\\u\\0',
+                     '0:02 ClientBegin: 5'):
+            self.console.parseLine(line)
+
+    def events(self, key):
+        return [e for e in self.queued if e.type == self.console.getEventID(key)]
+
+    def test_guid_from_dumpuser(self):
+        client = self.console.clients.getByCID('5')
+        self.assertEqual('et:B3B3B3B3B3B3B3B3B3B3B3B3B3000005', client.guid)
+        self.assertEqual('192.0.2.15', client.ip)
+        self.assertTrue(client.authed)
+
+    def test_status_with_last_connect_time(self):
+        players = self.console.getPlayerList()
+        self.assertEqual('^1Big Joe^7', players['5']['name'])
+        self.assertEqual('192.0.2.15', players['5']['ip'])
+        self.assertEqual('123', players['5']['lastconnect'])
+
+    def test_chat_lines(self):
+        client = self.console.clients.getByCID('5')
+        self.console.parseLine('0:03 say: ^7^1Big Joe^7^7: ^2!help')
+        self.console.parseLine('0:04 sayteam: ^7^1Big Joe^7^7: ^5!time')
+        self.console.parseLine('0:05 saybuddy: ^7^1Big Joe^7^7: ^3hi')
+        self.console.parseLine('0:06 sayteamnl: ^7^1Big Joe^7^7: ^5ok')
+        self.assertEqual([('!help', client)], [(e.data, e.client) for e in self.events('EVT_CLIENT_SAY')])
+        self.assertEqual(['!time', 'hi', 'ok'], [e.data for e in self.events('EVT_CLIENT_TEAM_SAY')])
+
+    def test_vanilla_chat_still_parsed(self):
+        self.console.parseLine('0:03 say: Big Joe: !help')
+        self.assertEqual(['!help'], [e.data for e in self.events('EVT_CLIENT_SAY')])

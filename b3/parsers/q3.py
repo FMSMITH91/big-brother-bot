@@ -192,12 +192,17 @@ class Q3Parser(AbstractParser):
     #   1     1    0 TheMexican^7        100 bot                       0 16384
     #   2     1    0 Sentenza^7           50 bot                       0 16384
     #   3     3   37 xlr8or^7              0 145.99.135.227:27960   3598 25000
+    # Quake 3 1.32 status (sv_ccmds.c SV_Status_f): the address is NET_AdrToString, "ip:port" ("bot" for bots), and
+    # the ping is CNCT or ZMBI while a player connects or after he left
+    # num score ping name            lastmsg address               qport rate
+    # --- ----- ---- --------------- ------- --------------------- ----- -----
+    #   0     5   48 Courgette^7           0 81.56.143.41:27960    12345 25000
     _regPlayer = re.compile(r'^(?P<slot>[0-9]+)\s+'
                             r'(?P<score>[0-9-]+)\s+'
-                            r'(?P<ping>[0-9]+)\s+'
+                            r'(?P<ping>[0-9]+|CNCT|ZMBI)\s+'
                             r'(?P<name>.*?)\s+'
                             r'(?P<last>[0-9]+)\s+'
-                            r'(?P<ip>[0-9.]+)\s+'
+                            r'(?:(?P<ip>[0-9.]+)(?::(?P<port>[0-9-]+))?|bot|loopback)\s+'
                             r'(?P<qport>[0-9]+)\s+'
                             r'(?P<rate>[0-9]+)$', re.IGNORECASE)
 
@@ -706,55 +711,6 @@ class Q3Parser(AbstractParser):
                 self.OnClientuserinfochanged(None, userinfostring)
             return self.clients.getByCID(cid)
 
-    def queryClientUserInfoByCid(self, cid):
-        """
-        : dumpuser 5
-        Player 5 is not on the server
-
-        ]\rcon dumpuser 0
-        userinfo
-        --------
-        ip                  81.56.143.41
-        cg_cmdTimeNudge     0
-        cg_delag            0
-        cg_scorePlums       1
-        cl_voip             0
-        cg_predictItems     1
-        cl_anonymous        0
-        sex                 male
-        handicap            100
-        color2              7
-        color1              2
-        team_headmodel      sarge/classic
-        team_model          sarge/classic
-        headmodel           sarge/classic
-        model               sarge/classic
-        snaps               20
-        rate                25000
-        name                Courgette
-        teamtask            0
-        cl_guid             201AB4BBC40B4EC7445B49CE82D209EC
-        teamoverlay         0
-        """
-        data = self.write('dumpuser %s' % cid)
-        if not data:
-            return None
-
-        if data.split('\n')[0] != "userinfo":
-            self.debug("dumpuser %s returned : %s" % (cid, data))
-            return None
-
-        datatransformed = "%s " % cid
-        for line in data.split('\n'):
-            if line.strip() == "userinfo" or line.strip() == "--------":
-                continue
-
-            var = line[:20].strip()
-            val = line[20:].strip()
-            datatransformed += "\\%s\\%s" % (var, val)
-
-        return datatransformed
-
     ####################################################################################################################
     #                                                                                                                  #
     #   B3 PARSER INTERFACE IMPLEMENTATION                                                                             #
@@ -921,8 +877,8 @@ class Q3Parser(AbstractParser):
         for line in data.split('\n'):
             m = re.match(self._regPlayer, line.strip())
             if m:
-                if m.group('ping') == 'ZMBI':
-                    # ignore them, let them not bother us with errors
+                if not m.group('ping').isdigit():
+                    # CNCT (connecting) or ZMBI (left): no ping yet
                     pass
                 else:
                     players[str(m.group('slot'))] = int(m.group('ping'))
