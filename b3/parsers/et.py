@@ -121,8 +121,15 @@ class EtParser(AbstractParser):
     # num score ping name            lastmsg address               qport rate
     # --- ----- ---- --------------- ------- --------------------- ----- -----
     #   5     0   48 B3Tester^7            0 192.0.2.15:27970       1773 25000
-    _regPlayerNoGuid = re.compile(AbstractParser._regPlayer.pattern.replace(r'(?P<guid>[0-9a-zA-Z]+)\s+', ''),
+    # ET: Legacy adds a lastConnectTime column at the end (sv_ccmds.c SV_Status_f)
+    _regPlayerNoGuid = re.compile(AbstractParser._regPlayer.pattern
+                                  .replace(r'(?P<guid>[0-9a-zA-Z]+)\s+', '')
+                                  .replace(r'(?P<rate>[0-9]+)$', r'(?P<rate>[0-9]+)(?:\s+(?P<lastconnect>[0-9]+))?$'),
                                   re.IGNORECASE)
+
+    # ET: Legacy logs chat as "say: ^7<name>^7: ^2<text>" (g_cmds.c G_Say): the name is wrapped in ^7 and the text
+    # starts with the colour of the chat kind
+    _reChatColor = re.compile(r'^\^[^^]')
 
     _reGuid = re.compile(r'^[0-9A-F]{32}$', re.IGNORECASE)
 
@@ -159,12 +166,52 @@ class EtParser(AbstractParser):
 
     def OnClientuserinfo(self, action, data, match=None):
         AbstractParser.OnClientuserinfo(self, action, data, match)
-        # vanilla ET: the guid arrives with the Userinfo line, after the client was created without one
         cid = data.split(' ', 1)[0]
         client = self.clients.getByCID(cid)
+        if client and not client.guid:
+            # the game log has no cl_guid (vanilla 2.60b and ET: Legacy print the Userinfo line only to the
+            # console): ask the server, as the q3 parser does
+            userinfo = self.queryClientUserInfoByCid(cid)
+            if userinfo:
+                AbstractParser.OnClientuserinfo(self, action, userinfo, match)
         if client and client.guid and not client.authed:
             client.auth()
         return None
+
+    def splitChat(self, data):
+        """
+        Return (client, text) for a chat line's data, or (None, None).
+        Vanilla ET: "<name>: <text>"; ET: Legacy: "^7<name>^7: ^2<text>".
+        """
+        if data.startswith('^7') and '^7: ' in data:
+            name, text = data[2:].split('^7: ', 1)
+            text = self._reChatColor.sub('', text, 1)
+        else:
+            msg = data.split(': ', 1)
+            if len(msg) != 2:
+                return None, None
+            name, text = msg
+        client = self.clients.getByExactName(name) or self.clients.getByName(self.stripColors(name))
+        if not client:
+            self.debug('No client found for chat line from %r', name)
+            return None, None
+        return client, text
+
+    def OnSay(self, action, data, match=None):
+        client, text = self.splitChat(data)
+        if not client:
+            return None
+        return self.getEvent('EVT_CLIENT_SAY', text, client)
+
+    def OnSayteam(self, action, data, match=None):
+        client, text = self.splitChat(data)
+        if not client:
+            return None
+        return self.getEvent('EVT_CLIENT_TEAM_SAY', text, client, client.team)
+
+    # ET: Legacy's fireteam chat and team chat without location
+    OnSaybuddy = OnSayteam
+    OnSayteamnl = OnSayteam
 
     def OnConnectinfo(self, action, data, match=None):
         # clients are stored with a game-prefixed guid (see below): compare against the same form

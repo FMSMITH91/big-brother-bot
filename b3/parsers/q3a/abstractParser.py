@@ -760,6 +760,55 @@ class AbstractParser(b3.parser.Parser):
 
         return players
 
+    def queryClientUserInfoByCid(self, cid):
+        """
+        : dumpuser 5
+        Player 5 is not on the server
+
+        ]\rcon dumpuser 0
+        userinfo
+        --------
+        ip                  81.56.143.41
+        cg_cmdTimeNudge     0
+        cg_delag            0
+        cg_scorePlums       1
+        cl_voip             0
+        cg_predictItems     1
+        cl_anonymous        0
+        sex                 male
+        handicap            100
+        color2              7
+        color1              2
+        team_headmodel      sarge/classic
+        team_model          sarge/classic
+        headmodel           sarge/classic
+        model               sarge/classic
+        snaps               20
+        rate                25000
+        name                Courgette
+        teamtask            0
+        cl_guid             201AB4BBC40B4EC7445B49CE82D209EC
+        teamoverlay         0
+        """
+        data = self.write('dumpuser %s' % cid)
+        if not data:
+            return None
+
+        if data.split('\n')[0] != "userinfo":
+            self.debug("dumpuser %s returned : %s" % (cid, data))
+            return None
+
+        datatransformed = "%s " % cid
+        for line in data.split('\n'):
+            line = line.strip()
+            if not line or line == "userinfo" or line == "--------":
+                continue
+            # the key is padded to 20 columns in Quake 3 and to 24 (+2) in ET: Legacy: split on the first blanks
+            var, _, val = line.partition(' ')
+            datatransformed += "\\%s\\%s" % (var, val.strip())
+
+        return datatransformed
+
     def getStatusRegex(self, status):
         """
         Return the regular expression matching a player line of this rcon status output.

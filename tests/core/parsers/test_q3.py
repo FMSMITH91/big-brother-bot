@@ -111,3 +111,50 @@ class Test_OnKill(Q3TestCase):
 
     def test_lava_is_a_suicide(self):
         self.assertIn(self.console.getEventID('EVT_CLIENT_SUICIDE'), self.queued_events('1:00 Kill: 1022 3 16: <world> killed Joe by MOD_LAVA'))
+
+
+# rcon status of Quake 3 1.32c (id's sv_ccmds.c SV_Status_f): the address is "ip:port", "bot" for a bot, and the
+# ping is CNCT while a player connects
+STATUS_Q3 = '''\
+map: q3dm17
+num score ping name            lastmsg address               qport rate
+--- ----- ---- --------------- ------- --------------------- ----- -----
+  0     5   48 Courgette^7           0 81.56.143.41:27960    12345 25000
+  1     0 CNCT Newbie^7              0 81.56.143.42:27960    23456 25000
+  2     3    0 Sarge^7               0 bot                       0 16384
+'''
+
+
+class Test_status(Q3TestCase):
+    """
+    linuxgsm-panel research (2026-11-18): the q3 status regex wanted a bare ip, but status prints "ip:port", so no row
+    matched: getPlayerPings returned nothing and sync never confirmed a player.
+    """
+
+    def setUp(self):
+        Q3TestCase.setUp(self)
+        self.console.write = Mock(side_effect=lambda cmd, *a, **k: STATUS_Q3 if cmd == 'status' else '')
+
+    def test_player_list(self):
+        players = self.console.getPlayerList()
+        self.assertEqual('81.56.143.41', players['0']['ip'])
+        self.assertEqual('27960', players['0']['port'])
+        self.assertEqual('Courgette^7', players['0']['name'])
+        self.assertEqual('CNCT', players['1']['ping'])
+        self.assertIn('2', players)
+
+    def test_pings_skip_connecting_players(self):
+        self.assertEqual({'0': 48, '2': 0}, self.console.getPlayerPings())
+
+
+class Test_dumpuser(Q3TestCase):
+
+    def test_quake3_and_etlegacy_key_widths(self):
+        for width in (20, 26):
+            self.console.write = Mock(return_value='userinfo\n--------\n' + ''.join(
+                '%s%s\n' % (k.ljust(width), v) for k, v in (('ip', '81.56.143.41:27960'), ('name', 'Big Joe'),
+                                                            ('cl_guid', '201AB4BBC40B4EC7445B49CE82D209EC'))))
+            info = self.console.parseUserInfo(self.console.queryClientUserInfoByCid('3'))
+            self.assertEqual('201AB4BBC40B4EC7445B49CE82D209EC', info['cl_guid'], width)
+            self.assertEqual('Big Joe', info['name'], width)
+            self.assertEqual('3', info['cid'])
