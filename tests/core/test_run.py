@@ -52,6 +52,35 @@ class Test_first_start(unittest.TestCase):
         self.assertIn('invalid parser specified in b3::parser (changeme)', out.getvalue())
         self.assertIn('Edit %s to fix this' % config, out.getvalue())
 
+    def test_bad_value_stops_with_the_config_status(self):
+        # linuxgsm-panel VPS proof: log_level: x exited 223 with a traceback; it is a configuration error (230)
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder)
+        config = os.path.join(folder, 'b3.ini')
+        with open(config, 'w') as f:
+            f.write("""[b3]
+parser: et
+database: sqlite://:memory:
+bot_name: b3
+bot_prefix: b3:
+time_format: %%H:%%M
+log_level: x
+logfile: b3.log
+[server]
+rcon_password: secret
+port: 27960
+game_log: games.log
+public_ip: 127.0.0.1
+[plugins]
+admin: @b3/conf/plugin_admin.ini
+""")
+        out = io.StringIO()
+        with redirect_stdout(out), self.assertRaises(SystemExit) as ctx:
+            b3.run.run(argparse.Namespace(config=config))
+        self.assertEqual(230, ctx.exception.code)
+        self.assertIn("b3::log_level must be a number (found 'x')", out.getvalue())
+        self.assertNotIn('Traceback', out.getvalue())
+
     def test_config_help_points_to_the_sample(self):
         text = b3.config_help()
         self.assertIn(b3.getAbsolutePath('@b3/conf/b3.distribution.ini'), text)
