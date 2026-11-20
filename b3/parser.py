@@ -43,6 +43,7 @@ import b3.config
 import b3.exitcodes
 import b3.health
 import b3.eventfeed
+import b3.control
 import b3.storage
 import b3.events
 import b3.output
@@ -128,6 +129,7 @@ class Parser(object):
     storage = None  # storage module instance
     health = None  # b3.health.Health: the health file writer (None when disabled)
     eventFeed = None  # b3.eventfeed.EventFeed: events.jsonl (None when disabled)
+    control = None  # b3.control.ControlServer: the local control socket (None unless b3::control_socket is set)
     type = None
     working = True  # whether B3 is running or not
     wrapper = None  # textwrapper instance
@@ -469,6 +471,8 @@ class Parser(object):
         self.bot("All plugins started")
         self.pluginsStarted()
         self.setupAliasPurge()
+        # the control socket opens once plugins are ready to act on its commands
+        self.control = b3.control.from_config(self)
         self.joinConnectedPlayers()
         self.bot("Starting event dispatching thread")
         _thread.start_new_thread(self.handleEvents, ())
@@ -1465,8 +1469,12 @@ class Parser(object):
 
     def stopHealth(self, exitcode=None):
         """
-        Write the health file one last time ("stopped", with the exit status) and stop updating it.
+        Close the control socket, write the health file one last time ("stopped", with the exit status) and stop
+        updating it.
         """
+        if self.control:
+            self.control.stop()
+            self.control = None
         if self.health:
             self.health.stop(exitcode)
 

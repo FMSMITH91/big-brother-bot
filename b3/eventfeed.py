@@ -114,6 +114,20 @@ class EventFeed(object):
             except Exception:
                 pass
 
+    def control(self, cmd, args, ok, error=None):
+        """
+        A line for a control socket request (b3/control.py), refused ones included.
+        """
+        doc = {'schema': SCHEMA, 'event': 'control_command', 'time': datetime.datetime.now(datetime.timezone.utc)
+               .strftime('%Y-%m-%dT%H:%M:%SZ'), 'command': cmd, 'args': args or {}, 'ok': bool(ok), 'error': error}
+        try:
+            self.append(json.dumps(doc, sort_keys=True, ensure_ascii=False))
+        except Exception as e:
+            try:
+                self.console.warning('Could not write to the event feed %s: %s', self.path, e)
+            except Exception:
+                pass
+
     def append(self, text):
         data = (text + '\n').encode('utf-8')
         with self.lock:

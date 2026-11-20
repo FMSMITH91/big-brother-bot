@@ -128,6 +128,7 @@ time_format: %%I:%%M%%p %%Z %%m/%%d/%%y
 time_zone: UTC
 log_level: 1
 health_interval: 5
+control_socket: @conf/b3.sock
 logfile: %(b3_log)s
 disabled_plugins:
 external_plugins_dir: @b3/extplugins
@@ -248,9 +249,23 @@ xlrstats: @b3/conf/plugin_xlrstats.ini
         self.assertNotIn('127.0.0.1', events_text)
         self.assertNotIn(GUID, events_text)
 
+        # the control socket (linuxgsm-panel request 5): answers a ping, refuses anything off the list
+        if hasattr(socket, 'AF_UNIX') and sys.platform != 'win32':
+            def control(request):
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.settimeout(10)
+                s.connect(os.path.join(os.path.dirname(self.config), 'b3.sock'))
+                s.sendall((json.dumps(request) + '\n').encode())
+                data = s.makefile().readline()
+                s.close()
+                return json.loads(data)
+            self.assertTrue(control({'id': 1, 'cmd': 'ping'})['ok'])
+            self.assertEqual('unknown_command', control({'cmd': 'rcon', 'args': {'line': 'quit'}})['error'])
+
         self.stop_bot()
         health = json.load(open(health_path))
         self.assertEqual(('stopped', 0), (health['state'], health['exit_code']))
+        self.assertFalse(os.path.exists(os.path.join(os.path.dirname(self.config), 'b3.sock')))
         db = sqlite3.connect(self.db)
         self.addCleanup(db.close)
         rows = db.execute('SELECT name, group_bits FROM clients WHERE guid = ?', (GUID,)).fetchall()
