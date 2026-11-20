@@ -79,6 +79,13 @@ class Test_check_config(CheckConfigCase):
             self.assertIn('missing configuration value', problems[0])
             self.assertIn(line.split(':')[0], problems[0])
 
+    def test_control_socket_path(self):
+        self.assertEqual([], check_config(self.write(GOOD.replace('[server]', 'control_socket: @conf/b3.sock\n[server]'))))
+        long = '/' + 'x' * 120 + '/b3.sock'
+        self.assertIn('too long', check_config(self.write(GOOD.replace('[server]', 'control_socket: %s\n[server]' % long)))[0])
+        self.assertIn('folder does not exist',
+                      check_config(self.write(GOOD.replace('[server]', 'control_socket: /nonexistent/b3.sock\n[server]')))[0])
+
     def test_missing_game_log(self):
         problems = check_config(self.write(GOOD.replace('game_log: games.log\n', '')))
         self.assertEqual(['missing configuration value server::game_log (the et parser reads the game log)'], problems)

@@ -109,6 +109,15 @@ def check_config(filename):
     _typed('server', 'rcon_port', int, 'a port number')
     _typed('server', 'rcon_timeout', float, 'a number of seconds')
 
+    if config.has_option('b3', 'control_socket'):
+        sock = (config.get('b3', 'control_socket') or '').strip()
+        if sock.lower() not in ('', 'off', 'no', 'none', 'false', '0'):
+            full = b3.getAbsolutePath(sock, True)
+            if len(full.encode('utf-8')) > 100:
+                problems.append('b3::control_socket path is too long for a Unix socket (at most 100 bytes): %s' % full)
+            elif not os.path.isdir(os.path.dirname(full)):
+                problems.append('b3::control_socket folder does not exist: %s' % os.path.dirname(full))
+
     if config.has_option('b3', 'parser'):
         try:
             parser = b3.loadParser(config.get('b3', 'parser'))

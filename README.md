@@ -102,6 +102,28 @@ python3 -m venv .venv
   `admin_command`), `time` (UTC ISO 8601), `target` and `admin` (`{"id": database id, "cid": slot, "name": clean name}`
   or `null`), `reason`, `duration_minutes`, and for admin commands `command` and `args` (left out for commands whose
   name contains `pass` or `login`). No IP address, guid or password is written.
+- The control socket (`control_socket` in `[b3]`, e.g. `@conf/b3.sock`; off unless set; Linux and other Unix systems
+  only) lets a program running as the same account act through B3. It is a Unix socket, never a network port, created
+  mode 0600, and B3 also checks the caller's uid. Send one JSON object per connection (at most 4 KB, one line); B3
+  answers one JSON line and closes:
+
+  ```
+  {"id": 7, "cmd": "unban", "args": {"client_id": 12, "reason": "appeal accepted"}}
+  {"id": 7, "ok": true, "result": {"client_id": 12, "bans_lifted": 1}}
+  {"id": 8, "ok": false, "error": "invalid_args", "message": "client_id must be a positive integer"}
+  ```
+
+  | `cmd` | `args` | `result` |
+  |---|---|---|
+  | `ping` | none | `version`, `commit` |
+  | `list_penalties` | `client_id` (database id, integer) | `client_id`, `penalties`: active bans, tempbans, warnings, kicks and notices (`id`, `type`, `reason`, `keyword`, `admin_id`, `time_add`, `time_expire`, `duration`) |
+  | `unban` | `client_id`, `reason` (optional) | `client_id`, `bans_lifted` |
+  | `kick` | `cid` (slot, as a string), `reason` (optional) | `cid`, `client_id` |
+  | `warn` | `cid`, `reason` | `cid`, `client_id` |
+
+  Errors: `bad_json`, `too_large`, `invalid_request`, `unknown_command`, `invalid_args`, `not_found`, `forbidden`,
+  `failed`. A reason is at most 100 characters with no control character or colour code; unknown fields are refused.
+  Every request, refused ones included, is logged in `b3.log` and as a `control_command` line in `events.jsonl`.
 - Exit codes (`b3/exitcodes.py`; a code never changes meaning):
 
   | Code | Meaning |
