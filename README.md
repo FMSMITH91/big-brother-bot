@@ -168,8 +168,8 @@ variables in `.github/workflows/tests.yml`).
 
 GitHub Actions runs on every pull request:
 
-- **tests**: core and plugin tests on Python 3.9–3.14 with MySQL 8 and PostgreSQL 16, the MySQL tests against
-  MariaDB 11, the end-to-end smoke test, and a coverage report (kept as a build artifact).
+- **tests**: core and plugin tests on Python 3.9–3.15 with MySQL 8 and PostgreSQL 16, the MySQL tests against
+  MariaDB 11, the end-to-end tests (`tests/functional`) on 3.9, 3.14 and 3.15, and a coverage report (kept as a build artifact).
 - **lint**: ruff (syntax errors, undefined or redefined names), `scripts/check_syntax.py`, and `pip-audit` (known
   vulnerabilities in the dependencies).
 - **codeql**: GitHub's security scanner (results in the repository's *Security* tab), also weekly.
