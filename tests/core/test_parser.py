@@ -354,3 +354,40 @@ class Test_testRcon(B3TestCase):
         warning.assert_called_once()
         self.assertIn('no response', warning.call_args[0][0])
         bot.assert_not_called()
+
+
+class Test_alias_purge(unittest.TestCase):
+    """
+    b3::purge_aliases_days (privacy, off by default): purge now and schedule a daily purge.
+    """
+
+    def parser(self, value=None):
+        from unittest.mock import Mock
+        parser = DummyParser()
+        parser.config = Mock()
+        parser.config.has_option.return_value = value is not None
+        parser.config.get.return_value = value
+        parser.storage = Mock()
+        parser.storage.purgeAliases.return_value = 0
+        parser._cron = Mock()
+        parser.bot = parser.warning = parser.error = Mock()
+        return parser
+
+    def test_off_by_default(self):
+        for value in (None, '', '0'):
+            parser = self.parser(value)
+            parser.setupAliasPurge()
+            self.assertFalse(parser.storage.purgeAliases.called, value)
+            self.assertFalse(parser._cron.add.called, value)
+
+    def test_purges_now_and_daily(self):
+        parser = self.parser('365')
+        parser.setupAliasPurge()
+        parser.storage.purgeAliases.assert_called_once_with(365)
+        tab = parser._cron.add.call_args[0][0]
+        self.assertEqual((0, 17, 4), (tab.second, tab.minute, tab.hour))
+
+    def test_bad_value_is_ignored(self):
+        parser = self.parser('a year')
+        parser.setupAliasPurge()
+        self.assertFalse(parser.storage.purgeAliases.called)
