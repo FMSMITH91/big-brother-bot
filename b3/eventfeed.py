@@ -114,6 +114,20 @@ class EventFeed(object):
             except Exception:
                 pass
 
+    def record(self, kind, **fields):
+        """
+        A line for a B3 event of its own (config_reload...). Never raises.
+        """
+        doc = dict(fields, schema=SCHEMA, event=kind,
+                   time=datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+        try:
+            self.append(json.dumps(doc, sort_keys=True, ensure_ascii=False))
+        except Exception as e:
+            try:
+                self.console.warning('Could not write to the event feed %s: %s', self.path, e)
+            except Exception:
+                pass
+
     def control(self, cmd, args, ok, error=None):
         """
         A line for a control socket request (b3/control.py), refused ones included.

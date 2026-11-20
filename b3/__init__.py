@@ -312,6 +312,16 @@ def term_signal_handler(console):
     return handler
 
 
+def hup_signal_handler(console):
+    """
+    Return the SIGHUP handler: ask the main loop to reload the plugin configurations.
+    """
+    def handler(signum, frame):
+        console.bot('HUP signal received: reloading the plugin configurations')
+        console.requestReload()
+    return handler
+
+
 def start(mainconfig, options):
     """
     Main B3 startup.
@@ -366,6 +376,13 @@ def start(mainconfig, options):
         signal.signal(signal.SIGTERM, term_signal_handler(console))
     except Exception:
         pass
+
+    if hasattr(signal, 'SIGHUP'):
+        try:
+            # SIGHUP: reload the plugin configuration files without a restart (the main loop does it)
+            signal.signal(signal.SIGHUP, hup_signal_handler(console))
+        except Exception:
+            pass
 
     try:
         console.start()

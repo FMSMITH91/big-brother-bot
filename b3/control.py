@@ -15,6 +15,7 @@ Commands (an allow-list; every argument is validated, unknown fields are refused
     unban           client_id, reason?        -> {"client_id", "bans_lifted"}
     kick            cid, reason?              -> {"cid", "client_id"}
     warn            cid, reason               -> {"cid", "client_id"}
+    reload_plugins                            -> {"reloaded": [...], "failed": {name: reason}}
 Every request is logged in b3.log and in the event feed (control_command), refused ones included.
 """
 
@@ -75,6 +76,7 @@ def _cid(value):
 # command -> {argument: (validator, required)}
 SCHEMA = {
     'ping': {},
+    'reload_plugins': {},
     'list_penalties': {'client_id': (_client_id, True)},
     'unban': {'client_id': (_client_id, True), 'reason': (_reason, False)},
     'kick': {'cid': (_cid, True), 'reason': (_reason, False)},
@@ -265,6 +267,9 @@ class ControlServer(object):
 
     def cmd_ping(self):
         return {'version': b3.__version__, 'commit': b3.getB3commit() or None}
+
+    def cmd_reload_plugins(self):
+        return self.console.reloadPluginConfigs()
 
     def stored_client(self, client_id):
         from b3.clients import Client
