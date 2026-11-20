@@ -238,6 +238,16 @@ xlrstats: @b3/conf/plugin_xlrstats.ini
         self.assertNotIn(RCON_PASSWORD, open(health_path).read())
         self.assertNotIn('127.0.0.1', open(health_path).read())
 
+        # the event feed (linuxgsm-panel request 6): the admin commands, without IP or guid
+        events_path = os.path.join(os.path.dirname(self.config), 'events.jsonl')
+        with open(events_path, encoding='utf-8') as f:
+            events = [json.loads(line) for line in f]
+        self.assertIn(('admin_command', 'iamgod', PLAYER),
+                      [(e['event'], e['command'], e['admin']['name']) for e in events])
+        events_text = open(events_path, encoding='utf-8').read()
+        self.assertNotIn('127.0.0.1', events_text)
+        self.assertNotIn(GUID, events_text)
+
         self.stop_bot()
         health = json.load(open(health_path))
         self.assertEqual(('stopped', 0), (health['state'], health['exit_code']))

@@ -100,7 +100,9 @@ class FakeConsole(b3.parser.Parser):
         """
         if not hasattr(event, 'type'):
             return False
-        elif event.type in self._handlers:
+        if self.eventFeed:
+            self.eventFeed.handle(event)  # as Parser.queueEvent
+        if event.type in self._handlers:
             self.verbose('Queueing event %s %s', self.Events.getName(event.type), event.data)
             self._handleEvent(event)
             return True
