@@ -31,10 +31,17 @@ class Test_parse_request(unittest.TestCase):
         self.assertEqual(error, ctx.exception.error, ctx.exception.message)
 
     def test_valid(self):
-        self.assertEqual((7, 'unban', {'client_id': 12, 'reason': 'appeal'}),
+        self.assertEqual((7, 'unban', {'client_id': 12, 'reason': 'appeal'}, None),
                          self.ok({'id': 7, 'cmd': 'unban', 'args': {'client_id': 12, 'reason': 'appeal'}}))
-        self.assertEqual((None, 'ping', {}), self.ok({'cmd': 'ping'}))
-        self.assertEqual(('a', 'kick', {'cid': '3'}), self.ok({'id': 'a', 'cmd': 'kick', 'args': {'cid': '3'}}))
+        self.assertEqual((None, 'ping', {}, None), self.ok({'cmd': 'ping'}))
+        self.assertEqual(('a', 'kick', {'cid': '3'}, 'panel:alice'),
+                         self.ok({'id': 'a', 'actor': 'panel:alice', 'cmd': 'kick', 'args': {'cid': '3'}}))
+
+    def test_actor(self):
+        self.refused({'cmd': 'ping', 'actor': 'x' * 65}, 'invalid_request')
+        self.refused({'cmd': 'ping', 'actor': ''}, 'invalid_request')
+        self.refused({'cmd': 'ping', 'actor': 'a\nb'}, 'invalid_request')
+        self.refused({'cmd': 'ping', 'actor': 7}, 'invalid_request')
 
     def test_allow_list(self):
         self.refused({'cmd': 'rcon', 'args': {'line': 'quit'}}, 'unknown_command')
@@ -131,8 +138,14 @@ class Test_server(B3TestCase):
         reply = self.call({'id': 2, 'cmd': 'kick', 'args': {'cid': '3', 'reason': 'afk'}})
         self.assertTrue(reply['ok'], reply)
         self.assertIsNone(self.console.clients.getByCID('3'))  # FakeConsole.kick disconnects
-        self.assertEqual(('kick', {'cid': '3', 'reason': 'afk'}, True),
-                         (self.feed()[0]['command'], self.feed()[0]['args'], self.feed()[0]['ok']))
+        self.assertEqual(('kick', {'cid': '3', 'reason': 'afk'}, True, None),
+                         (self.feed()[0]['command'], self.feed()[0]['args'], self.feed()[0]['ok'], self.feed()[0]['actor']))
+
+    def test_actor_is_recorded(self):
+        with patch.object(self.console, 'bot') as bot:
+            self.assertTrue(self.call({'actor': 'panel:alice', 'cmd': 'ping'})['ok'])
+        self.assertEqual('panel:alice', self.feed()[0]['actor'])
+        self.assertEqual('"panel:alice"', bot.call_args[0][4])
 
     def test_kick_unknown_slot(self):
         reply = self.call({'cmd': 'kick', 'args': {'cid': '9'}})

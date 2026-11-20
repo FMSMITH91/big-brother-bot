@@ -73,6 +73,27 @@ class Test_eventfeed(B3TestCase):
         self.assertEqual([None, None], [lines[1]['args'], lines[2]['args']])
         self.assertNotIn('hunter2', open(self.path).read())
 
+    def test_args_only_for_allow_listed_commands(self):
+        class Command(object):
+            def __init__(self, name):
+                self.command = name
+        self.console.createEvent('EVT_ADMIN_COMMAND', 'Admin Command')
+        for name, args in (('rcon', 'rconpassword newsecret'), ('pacvar', 'sv_password x'), ('makereg', 'joe'),
+                           ('register', 'pw'), ('somepluginthing', 'whatever')):
+            self.queue('EVT_ADMIN_COMMAND', (Command(name), args, None), self.admin)
+        self.queue('EVT_ADMIN_COMMAND', (Command('TempBan'), 'joe 1h spam', None), self.admin)
+        lines = self.lines()
+        self.assertEqual([None] * 5, [l['args'] for l in lines[:5]])
+        self.assertEqual('joe 1h spam', lines[5]['args'])
+
+    def test_configured_passwords_are_scrubbed(self):
+        self.console._rconPassword = 'Rc0nS3cret'
+        self.queue('EVT_CLIENT_KICK', {'reason': 'typed Rc0nS3cret in chat', 'admin': None}, self.joe)
+        self.console.eventFeed.control('kick', {'cid': '3', 'reason': 'leaked Rc0nS3cret'}, True)
+        text = open(self.path).read()
+        self.assertNotIn('Rc0nS3cret', text)
+        self.assertEqual(2, text.count('******'))
+
     def test_no_ip_or_guid(self):
         self.queue('EVT_CLIENT_BAN', {'reason': 'x', 'admin': self.admin}, self.joe)
         text = open(self.path).read()

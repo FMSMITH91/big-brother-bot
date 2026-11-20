@@ -6,7 +6,7 @@ account asks B3 to act, so it does not edit B3's tables behind its back.
 Off by default: b3::control_socket names the socket (e.g. @conf/b3.sock). The socket is mode 0600 and B3 also checks the
 peer's uid (SO_PEERCRED, Linux) is its own. One JSON request per connection, at most 4 KB, answered with one JSON line:
 
-    {"id": 7, "cmd": "unban", "args": {"client_id": 12, "reason": "appeal accepted"}}
+    {"id": 7, "actor": "panel:alice", "cmd": "unban", "args": {"client_id": 12, "reason": "appeal accepted"}}
     {"id": 7, "ok": true, "result": {...}}  /  {"id": 7, "ok": false, "error": "invalid_args", "message": "..."}
 
 Commands (an allow-list; every argument is validated, unknown fields are refused, nothing is half-done):
@@ -98,13 +98,17 @@ def parse_request(raw):
         raise Refused('bad_json', 'the request is not a JSON object')
     if not isinstance(req, dict):
         raise Refused('bad_json', 'the request is not a JSON object')
-    unknown = set(req) - {'id', 'cmd', 'args'}
+    unknown = set(req) - {'id', 'cmd', 'args', 'actor'}
     if unknown:
         raise Refused('invalid_request', 'unknown fields: %s' % ', '.join(sorted(unknown)))
     rid = req.get('id')
     if rid is not None and (isinstance(rid, bool) or not isinstance(rid, (int, str)) or
                             (isinstance(rid, str) and len(rid) > 64)):
         raise Refused('invalid_request', 'id must be an integer or a short string')
+    actor = req.get('actor')
+    if actor is not None and (not isinstance(actor, str) or not 0 < len(actor) <= 64 or
+                              any(ord(c) < 32 or ord(c) == 127 for c in actor)):
+        raise Refused('invalid_request', 'actor must be a printable string of at most 64 characters')
     cmd = req.get('cmd')
     if not isinstance(cmd, str) or cmd not in SCHEMA:
         raise Refused('unknown_command', 'cmd must be one of: %s' % ', '.join(sorted(SCHEMA)))
@@ -122,7 +126,7 @@ def parse_request(raw):
                 raise Refused('invalid_args', '%s is required' % name)
             continue
         clean[name] = check(args[name])
-    return rid, cmd, clean
+    return rid, cmd, clean, actor
 
 
 def peer_uid(conn):
@@ -219,7 +223,7 @@ class ControlServer(object):
                 break
             raw += chunk
         try:
-            rid, cmd, args = parse_request(raw.strip())
+            rid, cmd, args, actor = parse_request(raw.strip())
         except Refused as e:
             self.audit(None, None, None, False, e.error, uid)
             self.reply(conn, None, error=e)
@@ -227,14 +231,14 @@ class ControlServer(object):
         try:
             result = self.run(cmd, args)
         except Refused as e:
-            self.audit(cmd, args, rid, False, e.error, uid)
+            self.audit(cmd, args, rid, False, e.error, uid, actor)
             self.reply(conn, rid, error=e)
             return
         except Exception as e:
-            self.audit(cmd, args, rid, False, 'failed', uid)
+            self.audit(cmd, args, rid, False, 'failed', uid, actor)
             self.reply(conn, rid, error=Refused('failed', 'the command failed: %s' % e.__class__.__name__))
             raise
-        self.audit(cmd, args, rid, True, None, uid)
+        self.audit(cmd, args, rid, True, None, uid, actor)
         self.reply(conn, rid, result=result)
 
     def reply(self, conn, rid, result=None, error=None):
@@ -249,16 +253,17 @@ class ControlServer(object):
         except OSError:
             pass
 
-    def audit(self, cmd, args, rid, ok, error, uid):
+    def audit(self, cmd, args, rid, ok, error, uid, actor=None):
         """
-        Log every request (OWASP Logging Cheat Sheet: admin actions and validation/authorization failures).
+        Log every request (OWASP Logging Cheat Sheet: admin actions and validation/authorization failures). actor is the
+        caller's own label (e.g. "panel:alice"): recorded, never used to decide anything.
         """
         shown = json.dumps(args, sort_keys=True) if args else '{}'
-        self.console.bot('Control socket: %s %s (uid %s): %s', cmd or '(refused request)', shown, uid,
-                         'ok' if ok else 'refused: %s' % error)
+        self.console.bot('Control socket: %s %s (uid %s, actor %s): %s', cmd or '(refused request)', shown, uid,
+                         json.dumps(actor), 'ok' if ok else 'refused: %s' % error)
         feed = getattr(self.console, 'eventFeed', None)
         if feed:
-            feed.control(cmd, args, ok, error)
+            feed.control(cmd, args, ok, error, actor)
 
     # ---- the commands ------------------------------------------------------------------------------------------------
 

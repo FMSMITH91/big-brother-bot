@@ -100,15 +100,17 @@ python3 -m venv .venv
   unban, kick, warning and admin command. At `events_max_size` (default 1MB) it is renamed `events.jsonl.1` (one copy
   kept); mode 640 (`events_file_mode`). Fields (`schema` 1): `event` (`ban`, `tempban`, `unban`, `kick`, `warn`,
   `admin_command`), `time` (UTC ISO 8601), `target` and `admin` (`{"id": database id, "cid": slot, "name": clean name}`
-  or `null`), `reason`, `duration_minutes`, and for admin commands `command` and `args` (left out for commands whose
-  name contains `pass` or `login`). No IP address, guid or password is written.
+  or `null`), `reason`, `duration_minutes`, and for admin commands `command` and `args` (the arguments,
+  kept only for the ordinary admin commands listed in `ARGS_KEPT` in `b3/eventfeed.py`; `null` for `rcon`, cvar setters,
+  password commands and anything else). The configured RCON and database passwords are replaced in every text field.
+  No IP address, guid or password is written.
 - The control socket (`control_socket` in `[b3]`, e.g. `@conf/b3.sock`; off unless set; Linux and other Unix systems
   only) lets a program running as the same account act through B3. It is a Unix socket, never a network port, created
   mode 0600, and B3 also checks the caller's uid. Send one JSON object per connection (at most 4 KB, one line); B3
   answers one JSON line and closes:
 
   ```
-  {"id": 7, "cmd": "unban", "args": {"client_id": 12, "reason": "appeal accepted"}}
+  {"id": 7, "actor": "panel:alice", "cmd": "unban", "args": {"client_id": 12, "reason": "appeal accepted"}}
   {"id": 7, "ok": true, "result": {"client_id": 12, "bans_lifted": 1}}
   {"id": 8, "ok": false, "error": "invalid_args", "message": "client_id must be a positive integer"}
   ```
@@ -122,7 +124,8 @@ python3 -m venv .venv
   | `warn` | `cid`, `reason` | `cid`, `client_id` |
 
   Errors: `bad_json`, `too_large`, `invalid_request`, `unknown_command`, `invalid_args`, `not_found`, `forbidden`,
-  `failed`. A reason is at most 100 characters with no control character or colour code; unknown fields are refused.
+  `failed`. `actor` (optional, printable, at most 64 characters) is the caller's own label, recorded in the logs and
+  never used to grant anything. A reason is at most 100 characters with no control character or colour code; unknown fields are refused.
   Every request, refused ones included, is logged in `b3.log` and as a `control_command` line in `events.jsonl`.
   `reload_plugins` (no arguments) reloads the plugin configurations, as SIGHUP does, and answers
   `{"reloaded": [...], "failed": {plugin: reason}}`.
