@@ -5,7 +5,8 @@ panel can raise alerts and keep an audit trail without reading b3.log or B3's ta
 
 b3::events_file (path, "off" to disable), b3::events_max_size (default 1MB: then events.jsonl becomes events.jsonl.1,
 one copy kept), b3::events_file_mode (default 640). No IP address, guid or password is ever written; the arguments of
-password commands (login, setpassword...) are left out.
+commands are kept only for the admin commands of ARGS_KEPT (null for rcon, cvar setters, password commands...), and the
+configured RCON and database passwords are replaced in every text field.
 """
 
 import datetime
@@ -32,9 +33,19 @@ EVENTS = {
 }
 
 
-def _is_secret_command(name):
-    name = (name or '').lower()
-    return 'pass' in name or 'login' in name
+# admin commands whose arguments are kept in the feed (an allow-list: a player name, a reason, a duration, a group, a
+# map). Any other command (rcon, cvar setters, password commands, plugin commands...) gets "args": null.
+ARGS_KEPT = frozenset((
+    'ban', 'b', 'permban', 'pb', 'tempban', 'tb', 'kick', 'k', 'kickall', 'warn', 'w', 'warnclear', 'wc',
+    'warnremove', 'wr', 'warntest', 'warninfo', 'wi', 'unban', 'clear', 'kcl', 'notice', 'spank', 'spankall', 'slap',
+    'nuke', 'mute', 'kill', 'putgroup', 'ungroup', 'mask', 'unmask', 'map', 'maprotate', 'nextmap', 'lookup', 'l',
+    'find', 'aliases', 'alias', 'seen', 'leveltest', 'lt', 'admins', 'list', 'status', 'help', 'h', 'baninfo', 'bi',
+    'lastbans', 'time', 'iamgod', 'regtest', 'rules', 'r', 'scream', 'say', 'longlist', 'poke', 'spam', 'pause',
+))
+
+
+def _keeps_args(name):
+    return (name or '').lower() in ARGS_KEPT
 
 
 class EventFeed(object):
@@ -48,10 +59,24 @@ class EventFeed(object):
 
     # ---- building a line ---------------------------------------------------------------------------------------------
 
+    def secrets(self):
+        """
+        The configured RCON and database passwords: replaced in every text field as a backstop.
+        """
+        found = [getattr(self.console, '_rconPassword', None)]
+        try:
+            dsn = b3.functions.splitDSN(self.console.config.get('b3', 'database'))
+            found.append(dsn.get('password') if dsn else None)
+        except Exception:
+            pass
+        return [s for s in found if s and len(s) >= 3]
+
     def text(self, value):
         if value is None:
             return None
         text = ' '.join(self.console.stripColors(str(value)).split())
+        for secret in self.secrets():
+            text = text.replace(secret, '******')
         return text[:MAX_TEXT]
 
     def person(self, client):
@@ -75,7 +100,7 @@ class EventFeed(object):
             command, args = (data[0], data[1]) if isinstance(data, (tuple, list)) and len(data) >= 2 else (None, None)
             name = getattr(command, 'command', None)
             doc['command'] = name
-            doc['args'] = None if _is_secret_command(name) else self.text(args)
+            doc['args'] = self.text(args) if _keeps_args(name) else None
             return doc
 
         doc['target'] = self.person(event.client)
@@ -128,12 +153,15 @@ class EventFeed(object):
             except Exception:
                 pass
 
-    def control(self, cmd, args, ok, error=None):
+    def control(self, cmd, args, ok, error=None, actor=None):
         """
-        A line for a control socket request (b3/control.py), refused ones included.
+        A line for a control socket request (b3/control.py), refused ones included. actor is the caller's own label,
+        not checked by B3.
         """
+        args = {k: self.text(v) if isinstance(v, str) else v for k, v in (args or {}).items()}
         doc = {'schema': SCHEMA, 'event': 'control_command', 'time': datetime.datetime.now(datetime.timezone.utc)
-               .strftime('%Y-%m-%dT%H:%M:%SZ'), 'command': cmd, 'args': args or {}, 'ok': bool(ok), 'error': error}
+               .strftime('%Y-%m-%dT%H:%M:%SZ'), 'command': cmd, 'args': args, 'ok': bool(ok), 'error': error,
+               'actor': actor}
         try:
             self.append(json.dumps(doc, sort_keys=True, ensure_ascii=False))
         except Exception as e:
