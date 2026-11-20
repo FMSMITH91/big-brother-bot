@@ -23,6 +23,7 @@
 # ################################################################### #
 
 from textwrap import dedent
+from unittest.mock import patch
 from tests.plugins.spawnkill import SpawnkillTestCase
 
 class Test_events(SpawnkillTestCase):
@@ -149,16 +150,64 @@ class Test_events(SpawnkillTestCase):
         self.assertEqual(1, self.console.storage.numPenalties(self.mike, 'TempBan'))
 
     def test_client_spawn_hit_slap(self):
-        # TODO: implement test case
-        pass
+        # GIVEN
+        self.init(dedent(r"""
+            [hit]
+            maxlevel: admin
+            delay: 10
+            penalty: slap
+            duration: 3m
+            reason: do not shoot to spawning players!
+        """))
+        self.mike.connects("1")
+        self.bill.connects("2")
+        self.mike.setvar(self.p, 'spawntime', self.console.time() - 5)
+        self.bill.setvar(self.p, 'spawntime', self.console.time() - 5)
+        # WHEN
+        with patch.object(self.console, 'inflictCustomPenalty') as inflict:
+            self.mike.damages(self.bill)
+        # THEN
+        inflict.assert_called_once_with('slap', self.mike, 'do not shoot to spawning players!')
 
     def test_client_spawn_hit_nuke(self):
-        # TODO: implement test case
-        pass
+        # GIVEN
+        self.init(dedent(r"""
+            [hit]
+            maxlevel: admin
+            delay: 10
+            penalty: nuke
+            duration: 3m
+            reason: do not shoot to spawning players!
+        """))
+        self.mike.connects("1")
+        self.bill.connects("2")
+        self.mike.setvar(self.p, 'spawntime', self.console.time() - 5)
+        self.bill.setvar(self.p, 'spawntime', self.console.time() - 5)
+        # WHEN
+        with patch.object(self.console, 'inflictCustomPenalty') as inflict:
+            self.mike.damages(self.bill)
+        # THEN
+        inflict.assert_called_once_with('nuke', self.mike, 'do not shoot to spawning players!')
 
     def test_client_spawn_hit_kill(self):
-        # TODO: implement test case
-        pass
+        # GIVEN
+        self.init(dedent(r"""
+            [hit]
+            maxlevel: admin
+            delay: 10
+            penalty: kill
+            duration: 3m
+            reason: do not shoot to spawning players!
+        """))
+        self.mike.connects("1")
+        self.bill.connects("2")
+        self.mike.setvar(self.p, 'spawntime', self.console.time() - 5)
+        self.bill.setvar(self.p, 'spawntime', self.console.time() - 5)
+        # WHEN
+        with patch.object(self.console, 'inflictCustomPenalty') as inflict:
+            self.mike.damages(self.bill)
+        # THEN
+        inflict.assert_called_once_with('kill', self.mike, 'do not shoot to spawning players!')
 
     ####################################################################################################################
     #                                                                                                                  #
@@ -264,13 +313,61 @@ class Test_events(SpawnkillTestCase):
         self.assertEqual(1, self.console.storage.numPenalties(self.mike, 'TempBan'))
 
     def test_client_spawn_kill_slap(self):
-        # TODO: implement test case
-        pass
+        # GIVEN
+        self.init(dedent(r"""
+            [kill]
+            maxlevel: admin
+            delay: 10
+            penalty: slap
+            duration: 3m
+            reason: spawnkilling is not allowed on this server!
+        """))
+        self.mike.connects("1")
+        self.bill.connects("2")
+        self.mike.setvar(self.p, 'spawntime', self.console.time() - 5)
+        self.bill.setvar(self.p, 'spawntime', self.console.time() - 5)
+        # WHEN
+        with patch.object(self.console, 'inflictCustomPenalty') as inflict:
+            self.mike.kills(self.bill)
+        # THEN
+        inflict.assert_called_once_with('slap', self.mike, 'spawnkilling is not allowed on this server!')
 
     def test_client_spawn_kill_nuke(self):
-        # TODO: implement test case
-        pass
+        # GIVEN
+        self.init(dedent(r"""
+            [kill]
+            maxlevel: admin
+            delay: 10
+            penalty: nuke
+            duration: 3m
+            reason: spawnkilling is not allowed on this server!
+        """))
+        self.mike.connects("1")
+        self.bill.connects("2")
+        self.mike.setvar(self.p, 'spawntime', self.console.time() - 5)
+        self.bill.setvar(self.p, 'spawntime', self.console.time() - 5)
+        # WHEN
+        with patch.object(self.console, 'inflictCustomPenalty') as inflict:
+            self.mike.kills(self.bill)
+        # THEN
+        inflict.assert_called_once_with('nuke', self.mike, 'spawnkilling is not allowed on this server!')
 
     def test_client_spawn_kill_kill(self):
-        # TODO: implement test case
-        pass
+        # GIVEN
+        self.init(dedent(r"""
+            [kill]
+            maxlevel: admin
+            delay: 10
+            penalty: kill
+            duration: 3m
+            reason: spawnkilling is not allowed on this server!
+        """))
+        self.mike.connects("1")
+        self.bill.connects("2")
+        self.mike.setvar(self.p, 'spawntime', self.console.time() - 5)
+        self.bill.setvar(self.p, 'spawntime', self.console.time() - 5)
+        # WHEN
+        with patch.object(self.console, 'inflictCustomPenalty') as inflict:
+            self.mike.kills(self.bill)
+        # THEN
+        inflict.assert_called_once_with('kill', self.mike, 'spawnkilling is not allowed on this server!')

@@ -27,6 +27,9 @@ jobs:
       # no compile warnings, and every file parses with the oldest supported Python (3.9)
       - name: syntax
         run: python scripts/check_syntax.py .
+      # every test can fail: no test function whose body is only `pass`
+      - name: no empty tests
+        run: python scripts/check_tests.py tests
       # known vulnerabilities in the dependencies
       - name: pip-audit
         run: pip-audit -r requirements.txt -r optional-requirements.txt --progress-spinner off
