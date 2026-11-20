@@ -142,14 +142,23 @@ class Test_privacy(HealthCase):
 
 class Test_file(HealthCase):
 
-    def test_atomic_and_umask_permissions(self):
-        old = os.umask(0o027)
+    def test_atomic_and_mode(self):
+        old = os.umask(0o022)
         try:
             self.health.write()
+            self.assertEqual(0o640, stat.S_IMODE(os.stat(self.path).st_mode))
+            self.health.mode = 0o644
+            self.health.write()
+            self.assertEqual(0o644, stat.S_IMODE(os.stat(self.path).st_mode))
         finally:
             os.umask(old)
-        self.assertEqual(0o640, stat.S_IMODE(os.stat(self.path).st_mode))
         self.assertEqual(['health.json'], os.listdir(self.dir))  # no temporary file left behind
+
+    def test_parse_mode(self):
+        self.assertEqual(0o640, b3.health.parse_mode('640'))
+        self.assertEqual(0o644, b3.health.parse_mode('0o644'))
+        for bad in ('755', 'rw', '', '1777'):
+            self.assertRaises(ValueError, b3.health.parse_mode, bad)
 
     def test_unwritable_folder_only_warns(self):
         health = Health(self.console, os.path.join(self.dir, 'missing', 'health.json'))

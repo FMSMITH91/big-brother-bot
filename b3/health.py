@@ -3,8 +3,8 @@
 The health file: a small JSON document B3 rewrites every `health_interval` seconds (and when it starts and stops) so a
 front-end can show "healthy" or the real reason without reading b3.log.
 
-Written next to b3.ini by default (b3::health_file, "off" to disable), atomically (temporary file + rename), with the
-process umask's permissions like b3.log: it never holds a password, an IP address or a player name. See README "Running B3 as a service".
+Written next to b3.ini by default (b3::health_file, "off" to disable), atomically (temporary file + rename), mode 0640
+by default (b3::health_file_mode; the umask can narrow it further): it never holds a password, an IP address or a player name. See README "Running B3 as a service".
 """
 
 import datetime
@@ -21,6 +21,8 @@ import b3.functions
 
 SCHEMA = 1
 DEFAULT_INTERVAL = 60
+# user read/write, group read: a panel reading it as the same account or group (b3::health_file_mode changes it)
+DEFAULT_MODE = 0o640
 MIN_INTERVAL = 5
 # replies of the Quake 3 engine family to a wrong or missing RCON password
 BAD_RCON_REPLIES = ('Bad rconpassword.', 'Invalid password.', 'No rconpassword set on the server.')
@@ -78,10 +80,11 @@ class Health(object):
     Collects B3's state and writes the health file.
     """
 
-    def __init__(self, console, path, interval=DEFAULT_INTERVAL):
+    def __init__(self, console, path, interval=DEFAULT_INTERVAL, mode=DEFAULT_MODE):
         self.console = console
         self.path = path
         self.interval = max(MIN_INTERVAL, interval)
+        self.mode = mode & 0o666  # never executable
         self.lock = threading.Lock()
         self.state = 'starting'
         self.started_at = time.time()
@@ -230,10 +233,10 @@ class Health(object):
             data = json.dumps(self.snapshot(), indent=1, sort_keys=True)
             folder = os.path.dirname(self.path) or '.'
             tmp = os.path.join(folder, '.health.%s.tmp' % token_hex(8))
-            # created like b3.log: the permissions come from the process umask (no chmod wider than that), O_EXCL so a
-            # file or link planted under the temporary name is never written through
+            # created with self.mode (narrowed further by the umask); O_EXCL so a file or link planted under the
+            # temporary name is never written through
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0)
-            fd = os.open(tmp, flags, 0o666)
+            fd = os.open(tmp, flags, self.mode)
             try:
                 with os.fdopen(fd, 'w', encoding='utf-8') as f:
                     f.write(data + '\n')
@@ -277,6 +280,17 @@ class Health(object):
             log.removeHandler(self._handler)
 
 
+def parse_mode(text):
+    """
+    Parse an octal file mode ("640", "0640", "0o644") limited to read/write bits.
+    :raise ValueError: if it is not one
+    """
+    value = int(str(text).strip().lower().replace('0o', '', 1) or 'x', 8)
+    if value & ~0o666:
+        raise ValueError(text)
+    return value
+
+
 def from_config(console):
     """
     Return a started Health for this console, or None when b3::health_file is "off".
@@ -293,6 +307,12 @@ def from_config(console):
             interval = int(config.get('b3', 'health_interval'))
         except ValueError:
             console.warning('b3::health_interval must be a number of seconds: using %s', DEFAULT_INTERVAL)
-    health = Health(console, b3.getAbsolutePath(path, True), interval)
+    mode = DEFAULT_MODE
+    if config.has_option('b3', 'health_file_mode'):
+        try:
+            mode = parse_mode(config.get('b3', 'health_file_mode'))
+        except ValueError:
+            console.warning('b3::health_file_mode must be an octal mode such as 640: using %o', DEFAULT_MODE)
+    health = Health(console, b3.getAbsolutePath(path, True), interval, mode)
     health.start()
     return health
