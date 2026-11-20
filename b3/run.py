@@ -192,6 +192,11 @@ def run(options):
         # LOADING MAIN CONFIGURATION
         main_config = b3.config.MainConfig(b3.config.load(config))
         analysis = main_config.analyze()
+        if not analysis:
+            # the same checks as --check-config (setting types, settings read without a default, plugin files), so a
+            # bad value stops B3 with the configuration status (230) instead of a traceback (223)
+            from b3.checkconfig import check_config
+            analysis = check_config(config)
         if analysis:
             raise b3.config.ConfigFileNotValid('invalid configuration file specified')
 

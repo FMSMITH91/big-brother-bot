@@ -67,7 +67,8 @@ python3 -m venv .venv
 
 - `b3_run.py --check-config -c b3.ini` checks `b3.ini` and the plugin configuration files without connecting to the
   game server or the database. It prints `OK: <file>` and exits with 0, or prints one `ERROR: <reason>` line per
-  problem (the first line is the main reason) and exits with 230. Run it before restarting B3 after a change.
+  problem (the first line is the main reason) and exits with 230. Run it before restarting B3 after a change. B3 runs
+  the same checks when it starts and stops with 230 on any problem.
 - `b3_run.py --version` prints the release and the git commit, for example
   `BigBrotherBot (b3) v2.0.1 (commit 920d7366)`. The commit comes from the `B3_COMMIT` environment variable, from
   `b3/COMMIT` (written when the package is built from a git checkout), or from `git` when B3 runs from a checkout;
