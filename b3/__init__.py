@@ -38,7 +38,7 @@ from configparser import NoOptionError
 from configparser import NoSectionError
 
 __author__ = 'ThorN'
-__version__ = '2.0.2dev'
+__version__ = '2.0.3dev'
 
 modulePath = pkg_handler.resource_directory(__name__)
 

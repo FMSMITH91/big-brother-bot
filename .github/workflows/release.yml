@@ -50,6 +50,9 @@ jobs:
       - name: Install build tools
         run: "pip install --only-binary :all: --require-hashes -r .github/ci-requirements.txt"
       - name: Build sdist and wheel
+        env:
+          # the wheel is built from the sdist, which has no .git: setup.py records this commit in b3/COMMIT
+          B3_COMMIT: ${{ github.sha }}
         run: python -m build --no-isolation --outdir dist .
       # (the file names use the normalized version: 1.12dev5 becomes 1.12.dev5)
       - name: Check the wheel has every B3 file
@@ -62,6 +65,7 @@ jobs:
           /tmp/b3venv/bin/pip install dist/*.whl
           cd /tmp
           /tmp/b3venv/bin/b3_run --version | grep -F "v$VERSION"
+          /tmp/b3venv/bin/b3_run --version | grep -F "(commit ${GITHUB_SHA:0:8})"
       - uses: actions/upload-artifact@v4
         with:
           name: python-packages

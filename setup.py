@@ -33,7 +33,7 @@ from setuptools import setup
 from setuptools.command.egg_info import egg_info as orig_egg_info
 
 # set by scripts/set_version.py (the release workflow sets it from the git tag)
-b3_version = '2.0.2dev'
+b3_version = '2.0.3dev'
 
 PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))  # directory where this file is in
 DIST_DIR = os.path.join(PROJECT_DIR, 'dist')  # directory where all the final builds will be found
@@ -153,6 +153,7 @@ setup(
     # word lists...): the old one-level patterns left out everything below b3/plugins/<plugin>/
     package_data={'': [
         'PKG-INFO',
+        'COMMIT',  # written by write_commit_file(): `b3_run --version` names the commit
         'conf/**/*',
         'docs/*.*',
         'extplugins/**/*',

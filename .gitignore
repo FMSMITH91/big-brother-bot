@@ -14,6 +14,7 @@ b3.egg-info
 build
 dist
 releases/*
-b3/docs/user_documentation/_build/*b3/COMMIT
+b3/docs/user_documentation/_build/*
+b3/COMMIT
 .coverage
 .coverage.*
