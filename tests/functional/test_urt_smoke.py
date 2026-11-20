@@ -262,6 +262,13 @@ xlrstats: @b3/conf/plugin_xlrstats.ini
             self.assertTrue(control({'id': 1, 'cmd': 'ping'})['ok'])
             self.assertEqual('unknown_command', control({'cmd': 'rcon', 'args': {'line': 'quit'}})['error'])
 
+            # SIGHUP (linuxgsm-panel request 4): the plugin configurations are reloaded and B3 keeps running
+            import signal
+            self.process.send_signal(signal.SIGHUP)
+            self.wait_for(lambda: 'Plugin configurations reloaded: ' in self.b3_log_tail(400), 30, 'the SIGHUP reload')
+            self.assertIsNone(self.process.poll())
+            self.assertIn('xlrstats', control({'cmd': 'reload_plugins'})['result']['reloaded'])
+
         self.stop_bot()
         health = json.load(open(health_path))
         self.assertEqual(('stopped', 0), (health['state'], health['exit_code']))

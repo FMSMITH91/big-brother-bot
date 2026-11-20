@@ -132,6 +132,7 @@ class Parser(object):
     control = None  # b3.control.ControlServer: the local control socket (None unless b3::control_socket is set)
     type = None
     working = True  # whether B3 is running or not
+    _reloadRequested = False  # set by SIGHUP: the main loop reloads the plugin configurations
     wrapper = None  # textwrapper instance
 
     deadPrefix = '[DEAD]^7'  # say dead prefix
@@ -664,14 +665,51 @@ class Parser(object):
 
     def reloadConfigs(self):
         """
-        Reload all config files
+        Reload all config files (!reconfig)
         """
         # reload main config
         self.config.load(self.config.fileName)
-        for k in self._plugins:
-            self.bot('Reload configuration file for plugin %s', k)
-            self._plugins[k].loadConfig()
+        report = self.reloadPluginConfigs()
         self.updateDocumentation()
+        return report
+
+    def reloadPluginConfigs(self):
+        """
+        Re-read every plugin's configuration file and apply it (onLoadConfig). A plugin whose new file cannot be read or
+        applied keeps its previous configuration. b3.ini itself is not re-applied: its changes need a restart.
+        Called on SIGHUP, by !reconfig and by the control socket's reload_plugins.
+        :return: {"reloaded": [plugin names], "failed": {plugin name: reason}}
+        """
+        reloaded, failed = [], {}
+        for name, plugin in list(self._plugins.items()):
+            previous = plugin.config
+            try:
+                if previous is None and not getattr(plugin, 'requiresConfigFile', False):
+                    continue  # nothing to re-read
+                if plugin.loadConfig() is False:
+                    raise ValueError('the configuration file could not be loaded')
+                plugin.onLoadConfig()
+                reloaded.append(name)
+            except Exception as e:
+                failed[name] = ' '.join(('%s: %s' % (e.__class__.__name__, e)).split())[:200]
+                self.error('Reload of the %s plugin configuration failed, keeping the previous one: %s', name, e)
+                plugin.config = previous
+                try:
+                    plugin.onLoadConfig()
+                except Exception as e2:
+                    self.error('Could not re-apply the previous %s plugin configuration: %s', name, e2)
+        self.bot('Plugin configurations reloaded: %s%s', ', '.join(reloaded) or 'none',
+                 ('; kept the previous one for: %s' % ', '.join(sorted(failed))) if failed else '')
+        report = {'reloaded': reloaded, 'failed': failed}
+        if self.eventFeed:
+            self.eventFeed.record('config_reload', **report)
+        return report
+
+    def requestReload(self):
+        """
+        Ask the main loop to reload the plugin configurations (safe to call from a signal handler).
+        """
+        self._reloadRequested = True
 
     def loadPlugins(self):
         """
@@ -1218,6 +1256,12 @@ class Parser(object):
         log_time_start = None
         log_time_last = 0
         while self.working:
+            if self._reloadRequested:
+                self._reloadRequested = False
+                try:
+                    self.reloadPluginConfigs()
+                except Exception as e:
+                    self.error('Plugin configuration reload failed: %s', e)
             if self._paused:
                 if not self._pauseNotice:
                     self.bot('PAUSED - not parsing any lines: B3 will be out of sync')

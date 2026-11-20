@@ -154,6 +154,12 @@ class Test_server(B3TestCase):
         listed = self.call({'cmd': 'list_penalties', 'args': {'client_id': self.joe.id}})
         self.assertEqual([], listed['result']['penalties'])
 
+    def test_reload_plugins(self):
+        self.console.reloadPluginConfigs = lambda: {'reloaded': ['admin'], 'failed': {}}
+        reply = self.call({'cmd': 'reload_plugins'})
+        self.assertEqual({'reloaded': ['admin'], 'failed': {}}, reply['result'])
+        self.assertEqual('invalid_args', self.call({'cmd': 'reload_plugins', 'args': {'all': True}})['error'])
+
     def test_unban_unknown_client(self):
         self.assertEqual('not_found', self.call({'cmd': 'unban', 'args': {'client_id': 999}})['error'])
 

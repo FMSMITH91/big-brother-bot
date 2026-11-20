@@ -124,6 +124,12 @@ python3 -m venv .venv
   Errors: `bad_json`, `too_large`, `invalid_request`, `unknown_command`, `invalid_args`, `not_found`, `forbidden`,
   `failed`. A reason is at most 100 characters with no control character or colour code; unknown fields are refused.
   Every request, refused ones included, is logged in `b3.log` and as a `control_command` line in `events.jsonl`.
+  `reload_plugins` (no arguments) reloads the plugin configurations, as SIGHUP does, and answers
+  `{"reloaded": [...], "failed": {plugin: reason}}`.
+- `SIGHUP` (and `!reconfig`) re-reads every plugin's configuration file and applies it without a restart. A plugin whose
+  new file cannot be read or applied keeps its previous configuration; the result is logged in `b3.log` and as a
+  `config_reload` line in `events.jsonl`. Changes to `b3.ini` itself (game server, database, log, health, control
+  socket settings) need a restart.
 - Exit codes (`b3/exitcodes.py`; a code never changes meaning):
 
   | Code | Meaning |
