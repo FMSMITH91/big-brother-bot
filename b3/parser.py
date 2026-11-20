@@ -42,6 +42,7 @@ import b3
 import b3.config
 import b3.exitcodes
 import b3.health
+import b3.eventfeed
 import b3.storage
 import b3.events
 import b3.output
@@ -126,6 +127,7 @@ class Parser(object):
     screen = None
     storage = None  # storage module instance
     health = None  # b3.health.Health: the health file writer (None when disabled)
+    eventFeed = None  # b3.eventfeed.EventFeed: events.jsonl (None when disabled)
     type = None
     working = True  # whether B3 is running or not
     wrapper = None  # textwrapper instance
@@ -239,6 +241,8 @@ class Parser(object):
 
         # the health file (b3::health_file): started now so a failure later in the startup is reported in it
         self.health = b3.health.from_config(self)
+        # the event feed (b3::events_file): penalties and admin commands, one JSON line each
+        self.eventFeed = b3.eventfeed.from_config(self)
 
         # setup ip addresses
         if self.gameName in 'bf3':
@@ -1299,7 +1303,9 @@ class Parser(object):
         """
         if not hasattr(event, 'type'):
             return False
-        elif event.type in self._handlers:  # queue only if there are handlers to listen for this event
+        if self.eventFeed:
+            self.eventFeed.handle(event)
+        if event.type in self._handlers:  # queue only if there are handlers to listen for this event
             self.verbose('Queueing event %s : %s', self.getEventName(event.type), event.data)
             try:
                 time.sleep(0.001)  # wait a bit so event doesnt get jumbled

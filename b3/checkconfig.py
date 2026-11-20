@@ -15,6 +15,7 @@ import b3
 import b3.config
 import b3.exitcodes
 import b3.functions
+from b3.health import parse_mode
 
 
 def _plugin_class(name, path, external_dir):
@@ -101,7 +102,8 @@ def check_config(filename):
     _typed('b3', 'logsize', b3.functions.getBytes, 'a size such as 10MB')
     _typed('b3', 'health_interval', int, 'a number of seconds')
     _typed('b3', 'purge_aliases_days', int, 'a number of days (0 or empty: off)')
-    from b3.health import parse_mode
+    _typed('b3', 'events_max_size', b3.functions.getBytes, 'a size such as 1MB')
+    _typed('b3', 'events_file_mode', parse_mode, 'an octal mode such as 640 (read/write bits only)')
     _typed('b3', 'health_file_mode', parse_mode, 'an octal mode such as 640 (read/write bits only)')
     _typed('server', 'port', int, 'a port number')
     _typed('server', 'rcon_port', int, 'a port number')

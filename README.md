@@ -96,6 +96,12 @@ python3 -m venv .venv
   tables) not seen for that many days, when B3 starts and every day at 04:17. Clients, penalties and each client's last
   known name and IP are kept. The RCON and database passwords never reach `b3.log`, the console or `health.json`,
   even at the most verbose log level (tested in `tests/functional`).
+- `events.jsonl` (next to `b3.ini`; `events_file` moves it, `off` disables it) gets one JSON line per ban, tempban,
+  unban, kick, warning and admin command. At `events_max_size` (default 1MB) it is renamed `events.jsonl.1` (one copy
+  kept); mode 640 (`events_file_mode`). Fields (`schema` 1): `event` (`ban`, `tempban`, `unban`, `kick`, `warn`,
+  `admin_command`), `time` (UTC ISO 8601), `target` and `admin` (`{"id": database id, "cid": slot, "name": clean name}`
+  or `null`), `reason`, `duration_minutes`, and for admin commands `command` and `args` (left out for commands whose
+  name contains `pass` or `login`). No IP address, guid or password is written.
 - Exit codes (`b3/exitcodes.py`; a code never changes meaning):
 
   | Code | Meaning |
