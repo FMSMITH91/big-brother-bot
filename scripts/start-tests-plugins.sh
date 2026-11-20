@@ -4,5 +4,5 @@
 set -ev
 for d in tests/plugins/*/; do
     case "$(basename "$d")" in fakeplugins|__pycache__) continue ;; esac
-    python -m pytest "$d"
+    python -m pytest -rsx "$d"
 done

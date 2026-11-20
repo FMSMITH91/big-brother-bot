@@ -4,3 +4,6 @@ omit =
 	b3/lib/*
 	b3/tools/*
 	b3/fake
+[report]
+# the measured total (core and plugins together) was 60% on 2026-11-20: fail when it drops below 58%
+fail_under = 58

@@ -23,7 +23,7 @@
 # ################################################################### #
 
 __author__ = 'ThorN'
-__version__ = '1.4'
+__version__ = '1.5'
 
 import b3
 import b3.events
@@ -144,18 +144,20 @@ class PingwatchPlugin(b3.plugin.Plugin):
 
         for cid, ping in list(self.console.getPlayerPings().items()):
             # loop through all the connected clients
-            # self.console.verbose('ping %s = %s', cid, ping)
-            if ping <= self._maxPing:
-                continue
-
             client = self.console.clients.getByCID(cid)
             if not client:
+                continue
+
+            if ping <= self._maxPing:
+                # back to normal: the next spike starts a new watch
+                if client.isvar(self, 'highping'):
+                    client.delvar(self, 'highping')
                 continue
 
             if not client.isvar(self, 'highping'):
                 self.console.verbose('set ping watch %s = %s', cid, ping)
                 client.setvar(self, 'highping', self.console.time())
-                return
+                continue  # keep checking the other players
 
             self.console.verbose('set high ping check %s = %s (%s)', cid, ping, client.var(self, 'highping', 0).value)
             if self.console.time() - client.var(self, 'highping', 0).value > self._maxPingDuration:
