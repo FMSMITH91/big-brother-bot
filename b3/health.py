@@ -3,8 +3,8 @@
 The health file: a small JSON document B3 rewrites every `health_interval` seconds (and when it starts and stops) so a
 front-end can show "healthy" or the real reason without reading b3.log.
 
-Written next to b3.ini by default (b3::health_file, "off" to disable), atomically (temporary file + rename), readable
-by others (0644): it never holds a password, an IP address or a player name. See README "Running B3 as a service".
+Written next to b3.ini by default (b3::health_file, "off" to disable), atomically (temporary file + rename), with the
+process umask's permissions like b3.log: it never holds a password, an IP address or a player name. See README "Running B3 as a service".
 """
 
 import datetime
@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import re
-import tempfile
+from secrets import token_hex
 import threading
 import time
 
@@ -229,11 +229,14 @@ class Health(object):
         try:
             data = json.dumps(self.snapshot(), indent=1, sort_keys=True)
             folder = os.path.dirname(self.path) or '.'
-            fd, tmp = tempfile.mkstemp(prefix='.health.', suffix='.tmp', dir=folder)
+            tmp = os.path.join(folder, '.health.%s.tmp' % token_hex(8))
+            # created like b3.log: the permissions come from the process umask (no chmod wider than that), O_EXCL so a
+            # file or link planted under the temporary name is never written through
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0)
+            fd = os.open(tmp, flags, 0o666)
             try:
                 with os.fdopen(fd, 'w', encoding='utf-8') as f:
                     f.write(data + '\n')
-                os.chmod(tmp, 0o644)
                 os.replace(tmp, self.path)
             except BaseException:
                 try:

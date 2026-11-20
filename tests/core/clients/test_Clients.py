@@ -156,3 +156,42 @@ class TestClients_lookupByName(B3TestCase):
 
     def test_no_match(self):
         self.assertListEqual([], self.names('nobody'))
+
+
+class Test_newClient_once(B3TestCase):
+    """
+    The UrT smoke test failed now and then: the log reader and the event thread both created the joining player, so
+    they were authenticated on one object and their commands were checked on the other.
+    """
+
+    def setUp(self):
+        B3TestCase.setUp(self)
+        self.console.startup()
+
+    def test_same_player_is_not_created_twice(self):
+        first = self.console.clients.newClient('3', name='Joe', guid='AAAABBBBCCCCDDDD', ip='1.2.3.4')
+        second = self.console.clients.newClient('3', name='Joe', guid='AAAABBBBCCCCDDDD', ip='1.2.3.4')
+        self.assertIs(first, second)
+        self.assertIs(first, self.console.clients.getByCID('3'))
+
+    def test_other_player_on_the_slot_replaces_it(self):
+        first = self.console.clients.newClient('3', name='Joe', guid='AAAABBBBCCCCDDDD', ip='1.2.3.4')
+        second = self.console.clients.newClient('3', name='Ann', guid='EEEEFFFF00001111', ip='1.2.3.5')
+        self.assertIsNot(first, second)
+        self.assertIs(second, self.console.clients.getByCID('3'))
+
+    def test_concurrent_creation(self):
+        import threading
+        made = []
+        start = threading.Event()
+
+        def join():
+            start.wait()
+            made.append(self.console.clients.newClient('4', name='Bob', guid='1234123412341234', ip='1.2.3.6'))
+        threads = [threading.Thread(target=join) for _ in range(8)]
+        for t in threads:
+            t.start()
+        start.set()
+        for t in threads:
+            t.join(10)
+        self.assertEqual(1, len(set(id(c) for c in made)))

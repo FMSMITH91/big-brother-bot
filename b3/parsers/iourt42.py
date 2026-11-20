@@ -1336,9 +1336,13 @@ class Iourt42Parser(Iourt41Parser):
             """
             Patch the newClient method in the Clients class to handle UrT 4.2 specific client instances.
             """
-            client = Iourt42Client(console=self.console, cid=cid, timeAdd=self.console.time(), **kwargs)
-            self[client.cid] = client
-            self.resetIndex()
+            with self.newClientLock:
+                existing = self.sameClient(cid, kwargs)
+                if existing is not None:
+                    return existing
+                client = Iourt42Client(console=self.console, cid=cid, timeAdd=self.console.time(), **kwargs)
+                self[client.cid] = client
+                self.resetIndex()
 
             self.console.debug('Urt42 Client Connected: [%s] %s - %s (%s)',  self[client.cid].cid, self[client.cid].name,
                                                                              self[client.cid].guid, self[client.cid].data)

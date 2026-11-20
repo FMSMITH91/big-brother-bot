@@ -74,7 +74,8 @@ python3 -m venv .venv
   otherwise the line says `(commit unknown)`.
 - `health.json` (next to `b3.ini`; `health_file` in `[b3]` moves it, `off` disables it) is rewritten every
   `health_interval` seconds (default 60, at least 5), when B3 is up and running, and when it stops. It is replaced
-  atomically and holds no password, IP address or player name. Fields (`schema` 1; times are UTC ISO 8601 or `null`):
+  atomically, with the same permissions as `b3.log` (the process umask), and holds no password, IP address or player
+  name. Fields (`schema` 1; times are UTC ISO 8601 or `null`):
 
   | Field | Meaning |
   |---|---|

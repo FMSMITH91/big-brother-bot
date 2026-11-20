@@ -142,9 +142,13 @@ class Test_privacy(HealthCase):
 
 class Test_file(HealthCase):
 
-    def test_atomic_and_readable(self):
-        self.health.write()
-        self.assertEqual(0o644, stat.S_IMODE(os.stat(self.path).st_mode))
+    def test_atomic_and_umask_permissions(self):
+        old = os.umask(0o027)
+        try:
+            self.health.write()
+        finally:
+            os.umask(old)
+        self.assertEqual(0o640, stat.S_IMODE(os.stat(self.path).st_mode))
         self.assertEqual(['health.json'], os.listdir(self.dir))  # no temporary file left behind
 
     def test_unwritable_folder_only_warns(self):

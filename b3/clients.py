@@ -1683,15 +1683,35 @@ class Clients(dict):
         self._guidIndex    = {}
         self._exactNameIndex = {}
 
+    # newClient can run at once in the log reader and in the event thread (a sync on a new round): both saw no client on
+    # the slot and created one, so the player was authenticated on one object and their commands were checked on the
+    # other ("Please try your command after you have been authenticated")
+    newClientLock = threading.RLock()
+
+    def sameClient(self, cid, kwargs):
+        """
+        Return the client already on this slot when it is the same player (same guid), else None.
+        """
+        existing = self.get(cid)
+        guid = kwargs.get('guid')
+        if existing is not None and guid and existing.guid == guid and not existing.hide:
+            self.console.debug('Client [%s] %s is already connected: not created twice', cid, existing.name)
+            return existing
+        return None
+
     def newClient(self, cid, **kwargs):
         """
         Create a new client.
         :param cid: The client slot number
         :param kwargs: The client attributes
         """
-        client = Client(console=self.console, cid=cid, timeAdd=self.console.time(), **kwargs)
-        self[client.cid] = client
-        self.resetIndex()
+        with self.newClientLock:
+            existing = self.sameClient(cid, kwargs)
+            if existing is not None:
+                return existing
+            client = Client(console=self.console, cid=cid, timeAdd=self.console.time(), **kwargs)
+            self[client.cid] = client
+            self.resetIndex()
         self.console.debug('Client connected: [%s] %s - %s (%s)', self[client.cid].cid,
                            self[client.cid].name, self[client.cid].guid, self[client.cid].data)
         self.console.queueEvent(self.console.getEvent('EVT_CLIENT_CONNECT', data=client, client=client))
