@@ -31,7 +31,7 @@ import time
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-RCON_PASSWORD = 'secret'
+RCON_PASSWORD = 'Rc0n-7d3e9-Pw'  # distinctive, so the leak checks below cannot match by chance
 HEADER = b'\xff\xff\xff\xff'
 CVARS = {
     'mapname': 'ut4_turnpike', 'g_gametype': '4', 'sv_hostname': 'Test Server', 'fs_game': 'q3ut4',
@@ -126,7 +126,7 @@ bot_name: b3
 bot_prefix: ^0(^2b3^0)^7:
 time_format: %%I:%%M%%p %%Z %%m/%%d/%%y
 time_zone: UTC
-log_level: 9
+log_level: 1
 health_interval: 5
 logfile: %(b3_log)s
 disabled_plugins:
@@ -249,6 +249,11 @@ xlrstats: @b3/conf/plugin_xlrstats.ini
         with open(self.b3_log, encoding='utf-8', errors='replace') as f:
             b3_log = f.read()
         self.assertNotIn('Traceback', b3_log)
+        # the RCON password never reaches b3.log or the console, even at the most verbose log level (it is in every
+        # RCON packet B3 sends)
+        self.assertIn('RCON sending', b3_log)
+        self.assertNotIn(RCON_PASSWORD, b3_log)
+        self.assertNotIn(RCON_PASSWORD, self.output())
 
 
 if __name__ == '__main__':

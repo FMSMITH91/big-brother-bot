@@ -322,6 +322,13 @@ class Parser(object):
         if self.storage.connect() is None:
             self.critical('Could not connect to the database (see the error above)', exitcode=b3.exitcodes.DATABASE)
 
+        # data.b3_schema_version / b3_version / b3_commit: which table layout and which B3 use this database
+        if hasattr(self.storage, 'writeSchemaInfo'):
+            try:
+                self.storage.writeSchemaInfo()
+            except Exception as e:
+                self.warning('Could not record the schema version in the database: %s', e)
+
         if self.config.has_option('server', 'game_log'):
             # open log file
             game_log = self.config.get('server', 'game_log')
@@ -457,6 +464,7 @@ class Parser(object):
         self.cron.add(self._eventsStats_cronTab)
         self.bot("All plugins started")
         self.pluginsStarted()
+        self.setupAliasPurge()
         self.joinConnectedPlayers()
         self.bot("Starting event dispatching thread")
         _thread.start_new_thread(self.handleEvents, ())
@@ -520,6 +528,32 @@ class Parser(object):
         Overwrite this in parsers to take actions once plugins are ready
         """
         pass
+
+    def setupAliasPurge(self):
+        """
+        b3::purge_aliases_days (off by default): delete the name and IP aliases not seen for that many days, now and
+        every day at 04:17.
+        """
+        if not self.config.has_option('b3', 'purge_aliases_days'):
+            return
+        try:
+            days = int(self.config.get('b3', 'purge_aliases_days') or 0)
+        except ValueError:
+            self.warning('b3::purge_aliases_days must be a number of days: aliases are not purged')
+            return
+        if days < 1 or not hasattr(self.storage, 'purgeAliases'):
+            return
+
+        def purge():
+            try:
+                cutoff = self.storage.purgeAliases(days)
+                self.bot('Purged the name and IP aliases not seen since %s (b3::purge_aliases_days = %s)',
+                         time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(cutoff)), days)
+            except Exception as e:
+                self.error('Could not purge old aliases: %s', e)
+
+        purge()
+        self.cron.add(b3.cron.CronTab(purge, second=0, minute=17, hour=4))
 
     def joinConnectedPlayers(self):
         """

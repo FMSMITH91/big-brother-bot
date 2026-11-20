@@ -42,6 +42,11 @@ from b3.storage.cursor import Cursor as DBCursor
 from contextlib import contextmanager
 from time import time
 
+# The layout of B3's own tables (b3/sql/*/b3.sql), stored as data.b3_schema_version so other programs can tell which
+# layout they read. Raise it whenever a table or column of b3.sql changes.
+SCHEMA_VERSION = 1
+
+
 class DatabaseStorage(Storage):
 
     _lock = None
@@ -638,6 +643,34 @@ class DatabaseStorage(Storage):
         finally:
             self._lock.release()
         return dbcursor
+
+    def writeSchemaInfo(self):
+        """
+        Record in the data table which table layout and which B3 this database is used with:
+        b3_schema_version (SCHEMA_VERSION), b3_version and b3_commit (empty when unknown).
+        """
+        info = {'b3_schema_version': str(SCHEMA_VERSION), 'b3_version': b3.__version__, 'b3_commit': b3.getB3commit()}
+        # databases made before B3 1.8.1 may not have the table yet
+        self.query('CREATE TABLE IF NOT EXISTS data (data_key VARCHAR(255) NOT NULL PRIMARY KEY, '
+                   'data_value VARCHAR(255) NOT NULL)').close()
+        for key, value in info.items():
+            self.query('DELETE FROM data WHERE data_key = %s', (key,)).close()
+            self.query('INSERT INTO data (data_key, data_value) VALUES (%s, %s)', (key, value)).close()
+        return info
+
+    def purgeAliases(self, days):
+        """
+        Delete the name aliases and IP aliases not seen for more than the given number of days.
+        :param days: the age in days (must be at least 1)
+        :return: the cut-off time (Unix time)
+        """
+        days = int(days)
+        if days < 1:
+            raise ValueError('days must be at least 1')
+        cutoff = int(time()) - days * 86400
+        for table in ('aliases', 'ipaliases'):
+            self.query('DELETE FROM %s WHERE time_edit < %%s' % table, (cutoff,)).close()
+        return cutoff
 
     def query(self, query, bindata=None):
         """

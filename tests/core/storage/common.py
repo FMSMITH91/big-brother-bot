@@ -34,6 +34,44 @@ from mockito import any as ANY
 
 class StorageAPITest(object):
 
+    def test_writeSchemaInfo(self):
+        # linuxgsm-panel request 7: which table layout and which B3 use this database (written twice: no duplicate)
+        import b3
+        from b3.storage.common import SCHEMA_VERSION
+        self.storage.writeSchemaInfo()
+        self.storage.writeSchemaInfo()
+        rows = {}
+        cursor = self.storage.query("SELECT data_key, data_value FROM data WHERE data_key LIKE 'b3_%%'")
+        while not cursor.EOF:
+            row = cursor.getRow()
+            rows[row['data_key']] = row['data_value']
+            cursor.moveNext()
+        cursor.close()
+        self.assertEqual(str(SCHEMA_VERSION), rows['b3_schema_version'])
+        self.assertEqual(b3.__version__, rows['b3_version'])
+        self.assertIn('b3_commit', rows)
+
+    def test_purgeAliases(self):
+        # privacy option b3::purge_aliases_days: only aliases older than the cut-off go
+        import time
+        now = int(time.time())
+        old, recent = now - 400 * 86400, now - 10 * 86400
+        for table, column in (('aliases', 'alias'), ('ipaliases', 'ip')):
+            for value, when in (('old', old), ('new', recent)):
+                self.storage.query('INSERT INTO %s (num_used, %s, client_id, time_add, time_edit) '
+                                   'VALUES (%%s, %%s, %%s, %%s, %%s)' % (table, column),
+                                   (1, value, 7, when, when)).close()
+        self.assertRaises(ValueError, self.storage.purgeAliases, 0)
+        self.storage.purgeAliases(365)
+        for table, column in (('aliases', 'alias'), ('ipaliases', 'ip')):
+            cursor = self.storage.query('SELECT %s FROM %s WHERE client_id = %%s' % (column, table), (7,))
+            left = []
+            while not cursor.EOF:
+                left.append(cursor.getRow()[column])
+                cursor.moveNext()
+            cursor.close()
+            self.assertEqual(['new'], left, table)
+
     storage = None
         
     def test_setClient(self):

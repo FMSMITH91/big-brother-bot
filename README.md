@@ -89,6 +89,13 @@ python3 -m venv .venv
   | `players.humans`, `players.bots` | connected players |
   | `last_error.message`, `last_error.at` | the last ERROR in `b3.log`, cleaned of IPs, URL passwords and secrets |
 
+- The database records which table layout and which B3 use it, in the `data` table, at every start:
+  `b3_schema_version` (`1`: the tables of `b3/sql/*/b3.sql` in this fork; raised whenever they change), `b3_version`
+  and `b3_commit`.
+- Privacy: `purge_aliases_days` in `[b3]` (off by default) deletes the name and IP aliases (`aliases` and `ipaliases`
+  tables) not seen for that many days, when B3 starts and every day at 04:17. Clients, penalties and each client's last
+  known name and IP are kept. The RCON and database passwords never reach `b3.log`, the console or `health.json`,
+  even at the most verbose log level (tested in `tests/functional`).
 - Exit codes (`b3/exitcodes.py`; a code never changes meaning):
 
   | Code | Meaning |

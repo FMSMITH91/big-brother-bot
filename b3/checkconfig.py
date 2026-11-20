@@ -100,6 +100,7 @@ def check_config(filename):
     _typed('b3', 'log_level', int, 'a number')
     _typed('b3', 'logsize', b3.functions.getBytes, 'a size such as 10MB')
     _typed('b3', 'health_interval', int, 'a number of seconds')
+    _typed('b3', 'purge_aliases_days', int, 'a number of days (0 or empty: off)')
     from b3.health import parse_mode
     _typed('b3', 'health_file_mode', parse_mode, 'an octal mode such as 640 (read/write bits only)')
     _typed('server', 'port', int, 'a port number')
