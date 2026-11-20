@@ -41,6 +41,7 @@ import glob
 import b3
 import b3.config
 import b3.exitcodes
+import b3.health
 import b3.storage
 import b3.events
 import b3.output
@@ -124,6 +125,7 @@ class Parser(object):
     remoteLog = False
     screen = None
     storage = None  # storage module instance
+    health = None  # b3.health.Health: the health file writer (None when disabled)
     type = None
     working = True  # whether B3 is running or not
     wrapper = None  # textwrapper instance
@@ -234,6 +236,9 @@ class Parser(object):
 
         sys.stdout = b3.output.STDOutLogger(self.log)
         sys.stderr = b3.output.STDErrLogger(self.log)
+
+        # the health file (b3::health_file): started now so a failure later in the startup is reported in it
+        self.health = b3.health.from_config(self)
 
         # setup ip addresses
         if self.gameName in 'bf3':
@@ -456,6 +461,8 @@ class Parser(object):
         self.bot("Starting event dispatching thread")
         _thread.start_new_thread(self.handleEvents, ())
         self.bot("Start reading game events")
+        if self.health:
+            self.health.running()
         self.run()
 
     def die(self):
@@ -545,7 +552,9 @@ class Parser(object):
         self.output.flush()
         self.screen.write('Testing RCON     : ')
         self.screen.flush()
-        badRconReplies = ['Bad rconpassword.', 'Invalid password.']
+        badRconReplies = list(b3.health.BAD_RCON_REPLIES)
+        if self.health:
+            self.health.record_rcon(reply=res) if res else self.health.record_rcon(error='no response')
         if res in badRconReplies:
             self.error('Testing RCON: bad RCON password: B3 will not be able to act on the server')
             self.screen.write('>>> Oops: Bad RCON password\n'
@@ -1173,6 +1182,8 @@ class Parser(object):
                     self._pauseNotice = True
             else:
                 lines = self.read()
+                if self.health:
+                    self.health.record_read()
                 if lines:
                     for line in lines:
                         line = str(line).strip()
@@ -1197,6 +1208,8 @@ class Parser(object):
                                 log_time_last = log_time_current
 
                             self.console(line)
+                            if self.health:
+                                self.health.record_line()
 
                             try:
                                 self.parseLine(line)
@@ -1212,6 +1225,7 @@ class Parser(object):
         self.bot('Stop reading')
 
         with self.exiting:
+            self.stopHealth(self.exitcode)
             self.input.close()
             self.output.close()
 
@@ -1313,7 +1327,14 @@ class Parser(object):
         Write a message to Rcon/Console
         """
         if self.output:
-            res = self.output.write(msg, maxRetries=maxRetries, socketTimeout=socketTimeout)
+            try:
+                res = self.output.write(msg, maxRetries=maxRetries, socketTimeout=socketTimeout)
+            except Exception as e:
+                if self.health:
+                    self.health.record_rcon(error=e)
+                raise
+            if self.health:
+                self.health.record_rcon(reply=res)
             self.output.flush()
             return res
 
@@ -1401,6 +1422,13 @@ class Parser(object):
                     self.storage.shutdown()
         except Exception as e:
             self.error(e)
+
+    def stopHealth(self, exitcode=None):
+        """
+        Write the health file one last time ("stopped", with the exit status) and stop updating it.
+        """
+        if self.health:
+            self.health.stop(exitcode)
 
     def finalize(self):
         """
@@ -1544,6 +1572,7 @@ class Parser(object):
         self.exitcode = exitcode
         self.shutdown()
         self.finalize()
+        self.stopHealth(exitcode)
         time.sleep(2)
         raise SystemExit(self.exitcode)
 

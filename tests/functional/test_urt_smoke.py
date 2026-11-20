@@ -18,6 +18,7 @@ answering UDP rcon, feed it game log lines and check what it sends back to the s
 Run it on its own: python -m pytest tests/functional
 """
 
+import json
 import os
 import re
 import socket
@@ -126,6 +127,7 @@ bot_prefix: ^0(^2b3^0)^7:
 time_format: %%I:%%M%%p %%Z %%m/%%d/%%y
 time_zone: UTC
 log_level: 9
+health_interval: 5
 logfile: %(b3_log)s
 disabled_plugins:
 external_plugins_dir: @b3/extplugins
@@ -226,7 +228,19 @@ xlrstats: @b3/conf/plugin_xlrstats.ini
         self.assertTrue(any('Available commands' in t for t in tells), tells)
         self.assertTrue(any('You are now a ^2Super Admin' in t for t in tells), tells)
 
+        # the health file next to b3.ini (linuxgsm-panel request 2): running and healthy, then stopped with status 0
+        health_path = os.path.join(os.path.dirname(self.config), 'health.json')
+        self.wait_for(lambda: json.load(open(health_path))['players']['humans'] == 1, 30, 'health.json to show the player')
+        health = json.load(open(health_path))
+        self.assertEqual('running', health['state'], health)
+        self.assertTrue(health['healthy'], health)
+        self.assertEqual({'humans': 1, 'bots': 0}, health['players'])
+        self.assertNotIn(RCON_PASSWORD, open(health_path).read())
+        self.assertNotIn('127.0.0.1', open(health_path).read())
+
         self.stop_bot()
+        health = json.load(open(health_path))
+        self.assertEqual(('stopped', 0), (health['state'], health['exit_code']))
         db = sqlite3.connect(self.db)
         self.addCleanup(db.close)
         rows = db.execute('SELECT name, group_bits FROM clients WHERE guid = ?', (GUID,)).fetchall()
